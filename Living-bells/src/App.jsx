@@ -98,6 +98,18 @@ function App() {
     }
   }
 
+  async function addActivity(payload) {
+    try {
+      setSync('Saving activity...')
+      const saved = await api.createActivity(payload)
+      setActivities(current => [saved, ...current.filter(item => item.id !== saved.id)])
+      setModal(null)
+      setSync('Backend connected')
+    } catch (error) {
+      setSync(error.message || 'Could not save activity')
+    }
+  }
+
   async function addExpense(payload) {
     try {
       setSync('Saving expense...')
@@ -130,24 +142,25 @@ function App() {
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
-        {!loading && page === 'dashboard' && <Dashboard attendance={attendance} expenses={expenses} spend={totalSpend} money={money} open={setModal} go={setPage} />}
+        {!loading && page === 'dashboard' && <Dashboard attendance={attendance} expenses={expenses} activitiesCount={activities.length} spend={totalSpend} money={money} open={setModal} go={setPage} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th></tr></thead><tbody>{attendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Record expense" onAdd={() => setModal('expense')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th></tr></thead><tbody>{expenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td></tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
-        {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setPage('forms')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th></tr></thead><tbody>{activities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td></tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
+        {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th></tr></thead><tbody>{activities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td></tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
         {!loading && page === 'reports' && <div className="report-grid"><Card title="Attendance"><strong className="big">{attendance.reduce((sum, item) => sum + item.total, 0).toLocaleString()}</strong><p>Combined recorded attendance.</p></Card><Card title="Expenses"><strong className="big">{money(totalSpend)}</strong><p>Combined expenses in this workspace.</p></Card></div>}
         {!loading && page === 'forms' && <div className="form-grid"><Action icon="◉" title="Attendance form" text="Children, teenagers, youth, adults, men and women." onClick={() => setModal('attendance')} /><Action icon="₦" title="Expense form" text="Amount, category, description and date." onClick={() => setModal('expense')} /></div>}
       </section>
     </main>
 
+    {modal === 'activity' && <ActivityForm close={() => setModal(null)} save={addActivity} />}
     {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} />}
     {modal === 'expense' && <ExpenseForm close={() => setModal(null)} save={addExpense} />}
   </div>
 }
 
-function Dashboard({ attendance, expenses, spend, money, open, go }) {
+function Dashboard({ attendance, expenses, activitiesCount, spend, money, open, go }) {
   return <>
-    <div className="stats"><Stat icon="◉" name="Attendance" value={attendance[0]?.total || 0} note="Latest service" /><Stat icon="₦" name="Expenses" value={money(spend)} note="Recorded this period" /><Stat icon="▣" name="Activities" value={attendance.length} note="Attendance records" /><Stat icon="⌁" name="Reports" value="Live" note="From database" /></div>
-    <div className="quick"><Action icon="◉" title="Record attendance" text="Capture children, teens, youth, adults and men and women." onClick={() => open('attendance')} /><Action icon="₦" title="Record expense" text="Track church spending clearly." onClick={() => open('expense')} /><Action icon="□" title="Open forms" text="Structured recurring records." onClick={() => go('forms')} /></div>
+    <div className="stats"><Stat icon="◉" name="Attendance" value={attendance[0]?.total || 0} note="Latest service" /><Stat icon="₦" name="Expenses" value={money(spend)} note="Recorded this period" /><Stat icon="▣" name="Activities" value={activitiesCount} note="Church programs" /><Stat icon="⌁" name="Reports" value="Live" note="From database" /></div>
+    <div className="quick"><Action icon="◉" title="Record attendance" text="Capture children, teens, youth, adults and men and women." onClick={() => open('attendance')} /><Action icon="₦" title="Record expense" text="Track church spending clearly." onClick={() => open('expense')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} /><Action icon="□" title="Open forms" text="Structured recurring records." onClick={() => go('forms')} /></div>
     <div className="dash-grid"><Card title="Attendance trend"><div className="bars">{attendance.slice(0, 7).reverse().map(r => <div className="bar-col" key={r.id}><b>{r.total}</b><div className="bar" style={{ height: Math.max(25, Math.min(100, r.total / 4)) + '%' }} /><small>{r.date.slice(0, 6)}</small></div>)}</div>{!attendance.length && <p>No attendance data yet.</p>}</Card><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
   </>
 }
@@ -160,6 +173,16 @@ function title(p) { return ({ attendance: 'Attendance', expenses: 'Expenses', ac
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', expenses: 'Track church spending in one place.', activities: 'Keep church programs organized.', reports: 'Turn records into useful summaries.', forms: 'Structured forms for recurring church records.' })[p] }
 
 function Modal({ title, children, close }) { return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">Living Bells</span><h2>{title}</h2></div><button className="close" onClick={close}>×</button></div>{children}</div></div> }
+function ActivityForm({ close, save }) {
+  const [form, setForm] = useState({ name: '', type: 'Service', date: new Date().toISOString().slice(0, 10) })
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
+  return <Modal title="Record activity" close={close}>
+    <label>Activity name<input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sunday Worship Service" /></label>
+    <label>Type<select value={form.type} onChange={e => set('type', e.target.value)}>{['Service', 'Meeting', 'Outreach', 'Youth', 'Children', 'Choir', 'Other'].map(x => <option key={x}>{x}</option>)}</select></label>
+    <label>Date<input type="date" value={form.date} onChange={e => set('date', e.target.value)} /></label>
+    <button className="primary wide" disabled={!form.name || !form.date} onClick={() => save(form)}>Save activity</button>
+  </Modal>
+}
 function AttendanceForm({ close, save }) {
   const [service, setService] = useState('Sunday Service'), [date, setDate] = useState(new Date().toISOString().slice(0, 10)), [groups, setGroups] = useState(Object.fromEntries(['Children', 'Teenagers', 'Youth', 'Adults'].map(x => [x, { male: '', female: '' }])))
   const update = (g, s, v) => setGroups(x => ({ ...x, [g]: { ...x[g], [s]: v } })), total = Object.values(groups).reduce((a, g) => a + Number(g.male || 0) + Number(g.female || 0), 0)
