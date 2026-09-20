@@ -119,6 +119,20 @@ function App() {
   }
 
   async function addAttendance(payload) {
+    if (user.demo) {
+      const total = Object.values(payload.groups || {}).reduce((sum, group) => sum + Number(group.male || 0) + Number(group.female || 0), 0)
+      const demoRecord = {
+        id: `demo-attendance-${Date.now()}`,
+        service: payload.service,
+        date: formatDate(payload.date),
+        total,
+      }
+      setAttendance(current => [demoRecord, ...current])
+      setModal(null)
+      setSync('Demo mode')
+      return
+    }
+
     try {
       setSync('Saving attendance...')
       const saved = await api.createAttendance(payload)
@@ -131,6 +145,14 @@ function App() {
   }
 
   async function addActivity(payload) {
+    if (user.demo) {
+      const demoRecord = { ...payload, id: `demo-activity-${Date.now()}` }
+      setActivities(current => [demoRecord, ...current])
+      setModal(null)
+      setSync('Demo mode')
+      return
+    }
+
     try {
       setSync('Saving activity...')
       const saved = await api.createActivity(payload)
@@ -143,6 +165,20 @@ function App() {
   }
 
   async function addExpense(payload) {
+    if (user.demo) {
+      const demoRecord = {
+        id: `demo-expense-${Date.now()}`,
+        title: payload.title,
+        category: payload.category,
+        amount: Number(payload.amount || 0),
+        date: formatDate(payload.date),
+      }
+      setExpenses(current => [demoRecord, ...current])
+      setModal(null)
+      setSync('Demo mode')
+      return
+    }
+
     try {
       setSync('Saving expense...')
       const saved = await api.createExpense(payload)
