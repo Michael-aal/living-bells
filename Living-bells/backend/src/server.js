@@ -3,12 +3,16 @@ import express from 'express'
 import cors from 'cors'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import crypto from 'node:crypto'
 import { prisma } from './db.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
 const ADMIN_REGISTRATION_KEY = process.env.ADMIN_REGISTRATION_KEY || ''
+const APP_URL = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
+const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
+const EMAIL_FROM = process.env.EMAIL_FROM || ''
 
 app.use(cors())
 app.use(express.json())
@@ -25,6 +29,45 @@ function authenticate(req, res, next) {
   catch { return res.status(401).json({ message: 'Invalid or expired token' }) }
 }
 
+function createRawToken() {
+  return crypto.randomBytes(32).toString('hex')
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+async function sendEmail({ to, subject, html }) {
+  if (!RESEND_API_KEY || !EMAIL_FROM) throw new Error('Email service is not configured')
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
+  })
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Email provider error: ${response.status} ${body}`)
+  }
+}
+
+async function sendVerificationEmail(user, rawToken) {
+  const url = `${APP_URL}/?verify=${encodeURIComponent(rawToken)}`
+  await sendEmail({
+    to: user.email,
+    subject: 'Verify your Living Bells email',
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>Welcome to Living Bells, ${user.name}</h2><p>Please verify your email address to activate your account.</p><p><a href="${url}" style="display:inline-block;padding:12px 18px;background:#6d28d9;color:#fff;text-decoration:none;border-radius:8px">Verify email</a></p><p>This link expires in 24 hours.</p></div>`,
+  })
+}
+
+async function sendResetEmail(user, rawToken) {
+  const url = `${APP_URL}/?reset=${encodeURIComponent(rawToken)}`
+  await sendEmail({
+    to: user.email,
+    subject: 'Reset your Living Bells password',
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>Password reset</h2><p>Hi ${user.name}, use the button below to choose a new Living Bells password.</p><p><a href="${url}" style="display:inline-block;padding:12px 18px;background:#6d28d9;color:#fff;text-decoration:none;border-radius:8px">Reset password</a></p><p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p></div>`,
+  })
+}
+
 app.post('/api/auth/register', async (req, res, next) => {
   try {
     const { name, email, password, role = 'STAFF', adminKey } = req.body
@@ -35,9 +78,71 @@ app.post('/api/auth/register', async (req, res, next) => {
     if (!['STAFF', 'ADMIN'].includes(normalizedRole)) return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
     if (normalizedRole === 'ADMIN' && (!ADMIN_REGISTRATION_KEY || adminKey !== ADMIN_REGISTRATION_KEY)) return res.status(403).json({ message: 'A valid admin registration key is required' })
     if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) return res.status(409).json({ message: 'An account with this email already exists' })
+
     const passwordHash = await bcrypt.hash(String(password), 12)
-    const user = await prisma.user.create({ data: { name: name.trim(), email: normalizedEmail, passwordHash, role: normalizedRole } })
-    res.status(201).json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+    const rawToken = createRawToken()
+    const user = await prisma.user.create({
+      data: {
+        name: name.trim(),
+        email: normalizedEmail,
+        passwordHash,
+        role: normalizedRole,
+        emailVerifyTokenHash: hashToken(rawToken),
+        emailVerifyExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    })
+
+    try {
+      await sendVerificationEmail(user, rawToken)
+    } catch (emailError) {
+      await prisma.user.delete({ where: { id: user.id } })
+      throw emailError
+    }
+
+    res.status(201).json({
+      message: 'Account created. Check your email to verify your account before signing in.',
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: false },
+    })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/verify-email', async (req, res, next) => {
+  try {
+    const rawToken = String(req.body.token || '')
+    if (!rawToken) return res.status(400).json({ message: 'Verification token is required' })
+
+    const user = await prisma.user.findFirst({
+      where: {
+        emailVerifyTokenHash: hashToken(rawToken),
+        emailVerifyExpiresAt: { gt: new Date() },
+      },
+    })
+    if (!user) return res.status(400).json({ message: 'This verification link is invalid or expired' })
+
+    const verifiedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerifiedAt: new Date(), emailVerifyTokenHash: null, emailVerifyExpiresAt: null },
+    })
+    res.json({ message: 'Email verified successfully. You can now sign in.', user: { id: verifiedUser.id, name: verifiedUser.name, email: verifiedUser.email, role: verifiedUser.role, emailVerified: true } })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/resend-verification', async (req, res, next) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase()
+    if (!email) return res.status(400).json({ message: 'Email is required' })
+
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (user && !user.emailVerifiedAt) {
+      const rawToken = createRawToken()
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifyTokenHash: hashToken(rawToken), emailVerifyExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+      })
+      await sendVerificationEmail(user, rawToken)
+    }
+
+    res.json({ message: 'If that account exists and is not verified, a verification email has been sent.' })
   } catch (error) { next(error) }
 })
 
@@ -46,15 +151,59 @@ app.post('/api/auth/login', async (req, res, next) => {
     const email = String(req.body.email || '').trim().toLowerCase(), password = String(req.body.password || '')
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ message: 'Invalid email or password' })
-    res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+    if (!user.emailVerifiedAt) return res.status(403).json({ message: 'Please verify your email before signing in', code: 'EMAIL_NOT_VERIFIED' })
+    res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: true } })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/forgot-password', async (req, res, next) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase()
+    if (!email) return res.status(400).json({ message: 'Email is required' })
+
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (user && user.emailVerifiedAt) {
+      const rawToken = createRawToken()
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { resetTokenHash: hashToken(rawToken), resetTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+      })
+      await sendResetEmail(user, rawToken)
+    }
+
+    res.json({ message: 'If an account with that email exists, a password reset link has been sent.' })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/auth/reset-password', async (req, res, next) => {
+  try {
+    const rawToken = String(req.body.token || '')
+    const password = String(req.body.password || '')
+    if (!rawToken || !password) return res.status(400).json({ message: 'Reset token and new password are required' })
+    if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' })
+
+    const user = await prisma.user.findFirst({
+      where: { resetTokenHash: hashToken(rawToken), resetTokenExpiresAt: { gt: new Date() } },
+    })
+    if (!user) return res.status(400).json({ message: 'This password reset link is invalid or expired' })
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(password, 12),
+        resetTokenHash: null,
+        resetTokenExpiresAt: null,
+      },
+    })
+    res.json({ message: 'Password reset successfully. You can now sign in.' })
   } catch (error) { next(error) }
 })
 
 app.get('/api/auth/me', authenticate, async (req, res, next) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) }, select: { id: true, name: true, email: true, role: true } })
+    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) }, select: { id: true, name: true, email: true, role: true, emailVerifiedAt: true } })
     if (!user) return res.status(401).json({ message: 'User account not found' })
-    res.json(user)
+    res.json({ ...user, emailVerified: Boolean(user.emailVerifiedAt) })
   } catch (error) { next(error) }
 })
 
