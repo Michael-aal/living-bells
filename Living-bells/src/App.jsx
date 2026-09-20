@@ -61,6 +61,33 @@ function App() {
     let cancelled = false
     async function loadData() {
       setLoading(true)
+
+      if (user.demo) {
+        const demoAttendance = [
+          { id: 'demo-attendance-1', service: 'Sunday Worship Service', date: '20 Sep 2026', total: 184 },
+          { id: 'demo-attendance-2', service: 'Youth Fellowship', date: '18 Sep 2026', total: 72 },
+          { id: 'demo-attendance-3', service: 'Midweek Service', date: '16 Sep 2026', total: 126 },
+        ]
+        const demoExpenses = [
+          { id: 'demo-expense-1', title: 'Generator fuel', category: 'Utilities', amount: 45000, date: '19 Sep 2026' },
+          { id: 'demo-expense-2', title: 'Choir materials', category: 'Choir', amount: 28000, date: '17 Sep 2026' },
+          { id: 'demo-expense-3', title: 'Community outreach', category: 'Evangelism', amount: 65000, date: '14 Sep 2026' },
+        ]
+        const demoActivities = [
+          { id: 'demo-activity-1', name: 'Sunday Worship Service', type: 'Service', date: '2026-09-20' },
+          { id: 'demo-activity-2', name: 'Youth Fellowship', type: 'Youth', date: '2026-09-18' },
+          { id: 'demo-activity-3', name: 'Community Outreach', type: 'Outreach', date: '2026-09-14' },
+          { id: 'demo-activity-4', name: 'Choir Practice', type: 'Choir', date: '2026-09-12' },
+        ]
+
+        setAttendance(demoAttendance)
+        setExpenses(demoExpenses)
+        setActivities(demoActivities)
+        setSync('Demo mode')
+        setLoading(false)
+        return
+      }
+
       setSync('Connecting...')
       try {
         const data = await api.dashboard()
