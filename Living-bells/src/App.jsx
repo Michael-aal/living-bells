@@ -355,12 +355,13 @@ function ReviewForm({ staff, close, save }) {
   sunday.setDate(today.getDate() - today.getDay())
   const [form, setForm] = useState({ reviewDate: sunday.toISOString().slice(0, 10), rating: 'GOOD', comment: '' })
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
+  const isSunday = new Date(`${form.reviewDate}T00:00:00`).getDay() === 0
   return <Modal title={`Sunday review · ${staff.name}`} close={close}>
     <p className="review-intro">Give this staff member a Sunday review based on their records, consistency and assigned responsibilities.</p>
     <label>Sunday date<input type="date" value={form.reviewDate} onChange={e => set('reviewDate', e.target.value)} /></label>
     <label>Overall rating<select value={form.rating} onChange={e => set('rating', e.target.value)}>{['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BAD'].map(x => <option key={x} value={x}>{x[0] + x.slice(1).toLowerCase()}</option>)}</select></label>
     <label>Admin comment<textarea value={form.comment} onChange={e => set('comment', e.target.value)} placeholder="Add a short review..." rows="4" /></label>
-    <button className="primary wide" disabled={!form.reviewDate} onClick={() => save(form)}>Save Sunday review</button>
+    <button className="primary wide" disabled={!form.reviewDate || !isSunday} onClick={() => save(form)}>Save Sunday review</button>{!isSunday && <small className="form-error">Choose a Sunday date for the weekly review.</small>}
   </Modal>
 }
 function ExpenseForm({ close, save }) {
