@@ -34,6 +34,11 @@ function requireAdmin(req, res, next) {
   next()
 }
 
+function requireStaff(req, res, next) {
+  if (req.user?.role !== 'STAFF') return res.status(403).json({ message: 'Only staff accounts can record church operations' })
+  next()
+}
+
 function createRawToken() {
   return crypto.randomBytes(32).toString('hex')
 }
@@ -239,7 +244,7 @@ app.get('/api/activities', async (_req, res, next) => {
   catch (error) { next(error) }
 })
 
-app.post('/api/activities', async (req, res, next) => {
+app.post('/api/activities', requireStaff, async (req, res, next) => {
   try {
     const { name, type, date } = req.body
     if (!name || !date) return res.status(400).json({ message: 'name and date are required' })
@@ -253,7 +258,7 @@ app.get('/api/attendance', async (_req, res, next) => {
   catch (error) { next(error) }
 })
 
-app.post('/api/attendance', async (req, res, next) => {
+app.post('/api/attendance', requireStaff, async (req, res, next) => {
   try {
     const { activityId, service, date, groups = {} } = req.body
     const id = Number(activityId)
@@ -306,7 +311,7 @@ app.get('/api/expenses', async (_req, res, next) => {
   catch (error) { next(error) }
 })
 
-app.post('/api/expenses', async (req, res, next) => {
+app.post('/api/expenses', requireStaff, async (req, res, next) => {
   try {
     const { activityId, description, title, category = 'General', amount, date } = req.body
     if (!(description || title) || amount === undefined || !date) {
