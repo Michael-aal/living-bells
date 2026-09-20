@@ -12,6 +12,14 @@ enum UserRole {
   ADMIN
 }
 
+enum ReviewRating {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  BAD
+}
+
 model User {
   id                   Int       @id @default(autoincrement())
   name                 String
@@ -25,6 +33,12 @@ model User {
   resetTokenExpiresAt  DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+
+  recordedActivities   Activity[]   @relation("ActivityRecorder")
+  recordedAttendances  Attendance[] @relation("AttendanceRecorder")
+  recordedExpenses     Expense[]    @relation("ExpenseRecorder")
+  adminReviews         SundayReview[] @relation("ReviewAdmin")
+  staffReviews         SundayReview[] @relation("ReviewStaff")
 }
 
 model Activity {
@@ -32,17 +46,21 @@ model Activity {
   name         String
   type         String?
   date         DateTime
+  recordedById Int?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   attendance   Attendance?
   expenses     Expense[]
+  recordedBy   User?        @relation("ActivityRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@index([date])
+  @@index([recordedById])
 }
 
 model Attendance {
   id              Int      @id @default(autoincrement())
   activityId      Int      @unique
+  recordedById    Int?
   childrenMale    Int      @default(0)
   childrenFemale  Int      @default(0)
   teenagersMale   Int      @default(0)
@@ -54,20 +72,44 @@ model Attendance {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   activity        Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  recordedBy      User?    @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([recordedById])
 }
 
 model Expense {
-  id          Int      @id @default(autoincrement())
-  activityId  Int?
-  description String
-  category    String
-  amount      Decimal  @db.Decimal(12, 2)
-  date        DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  activity    Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  id           Int      @id @default(autoincrement())
+  activityId   Int?
+  recordedById Int?
+  description  String
+  category     String
+  amount       Decimal  @db.Decimal(12, 2)
+  date         DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  activity     Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  recordedBy   User?     @relation("ExpenseRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@index([date])
   @@index([category])
   @@index([activityId])
+  @@index([recordedById])
+}
+
+model SundayReview {
+  id         Int          @id @default(autoincrement())
+  staffId    Int
+  adminId    Int
+  reviewDate DateTime
+  rating     ReviewRating
+  comment    String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  staff User @relation("ReviewStaff", fields: [staffId], references: [id], onDelete: Cascade)
+  admin User @relation("ReviewAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@unique([staffId, reviewDate])
+  @@index([reviewDate])
+  @@index([staffId])
 }
