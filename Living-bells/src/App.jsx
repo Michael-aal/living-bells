@@ -43,6 +43,9 @@ function App() {
   const [attendance, setAttendance] = useState([])
   const [expenses, setExpenses] = useState([])
   const [activities, setActivities] = useState([])
+  const [staff, setStaff] = useState([])
+  const [selectedStaff, setSelectedStaff] = useState(null)
+  const [reviews, setReviews] = useState([])
   const [modal, setModal] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sync, setSync] = useState('Connecting...')
@@ -73,6 +76,11 @@ function App() {
           { id: 'demo-expense-2', title: 'Choir materials', category: 'Choir', amount: 28000, date: '17 Sep 2026' },
           { id: 'demo-expense-3', title: 'Community outreach', category: 'Evangelism', amount: 65000, date: '14 Sep 2026' },
         ]
+        const demoStaff = [
+          { id: 'demo-staff-1', name: 'John Doe', email: 'john@livingbells.demo', role: 'STAFF', emailVerified: true, recordCount: 24, reviewCount: 3 },
+          { id: 'demo-staff-2', name: 'Mary James', email: 'mary@livingbells.demo', role: 'STAFF', emailVerified: true, recordCount: 18, reviewCount: 3 },
+          { id: 'demo-staff-3', name: 'Peter Paul', email: 'peter@livingbells.demo', role: 'STAFF', emailVerified: true, recordCount: 11, reviewCount: 2 },
+        ]
         const demoActivities = [
           { id: 'demo-activity-1', name: 'Sunday Worship Service', type: 'Service', date: '2026-09-20' },
           { id: 'demo-activity-2', name: 'Youth Fellowship', type: 'Youth', date: '2026-09-18' },
@@ -83,6 +91,8 @@ function App() {
         setAttendance(demoAttendance)
         setExpenses(demoExpenses)
         setActivities(demoActivities)
+        setStaff(user.role === 'ADMIN' ? demoStaff : [])
+        setReviews([])
         setSync('Demo mode')
         setLoading(false)
         return
@@ -91,10 +101,12 @@ function App() {
       setSync('Connecting...')
       try {
         const data = await api.dashboard()
+        const staffData = user.role === 'ADMIN' ? await api.staff() : []
         if (cancelled) return
         setAttendance((data.attendance || []).map(normalizeAttendance))
         setExpenses((data.expenses || []).map(normalizeExpense))
         setActivities(data.activities || [])
+        setStaff(staffData)
         setSync('Backend connected')
       } catch (error) {
         if (!cancelled) setSync(error.message || 'Backend unavailable')
@@ -107,6 +119,25 @@ function App() {
     return () => { cancelled = true }
   }, [user])
 
+  useEffect(() => {
+    if (!user || user.role !== 'ADMIN' || !selectedStaff) return
+    let cancelled = false
+    async function loadReviews() {
+      try {
+        if (user.demo) {
+          setReviews([])
+          return
+        }
+        const data = await api.staffReviews(selectedStaff.id)
+        if (!cancelled) setReviews(data || [])
+      } catch (error) {
+        if (!cancelled) setSync(error.message || 'Could not load staff reviews')
+      }
+    }
+    loadReviews()
+    return () => { cancelled = true }
+  }, [user, selectedStaff])
+
   if (!user) return <Auth onAuthenticated={setUser} />
 
   function logout() {
@@ -116,6 +147,9 @@ function App() {
     setAttendance([])
     setExpenses([])
     setActivities([])
+    setStaff([])
+    setSelectedStaff(null)
+    setReviews([])
   }
 
   async function addAttendance(payload) {
@@ -190,6 +224,28 @@ function App() {
     }
   }
 
+  async function saveReview(payload) {
+    if (!selectedStaff) return
+    if (user.demo) {
+      const review = { id: `demo-review-${Date.now()}`, staff: selectedStaff, admin: user, ...payload }
+      setReviews(current => [review, ...current.filter(item => item.reviewDate !== payload.reviewDate)])
+      setStaff(current => current.map(item => item.id === selectedStaff.id ? { ...item, reviewCount: (item.reviewCount || 0) + 1 } : item))
+      setModal(null)
+      setSync('Demo mode')
+      return
+    }
+    try {
+      setSync('Saving Sunday review...')
+      const saved = await api.createStaffReview(selectedStaff.id, payload)
+      setReviews(current => [saved, ...current.filter(item => item.reviewDate !== saved.reviewDate)])
+      setStaff(current => current.map(item => item.id === selectedStaff.id ? { ...item, reviewCount: Math.max(item.reviewCount || 0, 1) } : item))
+      setModal(null)
+      setSync('Backend connected')
+    } catch (error) {
+      setSync(error.message || 'Could not save review')
+    }
+  }
+
   const isAdmin = user.role === 'ADMIN'
   const dashboardLabel = isAdmin ? 'Admin dashboard' : 'Staff dashboard'
 
@@ -205,7 +261,7 @@ function App() {
       <span className="label">Workspace</span>
       {[
         ['dashboard', '⌂', 'Dashboard'], ['attendance', '◉', 'Attendance'], ['expenses', '₦', 'Expenses'],
-        ['activities', '▣', 'Activities'], ['reports', '⌁', 'Reports'], ['forms', '□', 'Forms']
+        ['activities', '▣', 'Activities'], ['reports', '⌁', 'Reports'], ...(isAdmin ? [['staff', '♙', 'Staff']] : []), ['forms', '□', 'Forms']
       ].map(([id, icon, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}><i>{icon}</i>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
     </aside>
@@ -220,9 +276,10 @@ function App() {
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
         {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
-        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th></tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
-        {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Record expense" onAdd={() => setModal('expense')} isAdmin={isAdmin} onPrint={() => printReport('Expense report')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th></tr></thead><tbody>{visibleExpenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td></tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
-        {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')} isAdmin={isAdmin} onPrint={() => printReport('Activities report')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th></tr></thead><tbody>{visibleActivities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td></tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
+        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
+        {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Record expense" onAdd={() => setModal('expense')} isAdmin={isAdmin} onPrint={() => printReport('Expense report')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleExpenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td></tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
+        {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')} isAdmin={isAdmin} onPrint={() => printReport('Activities report')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleActivities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td>{isAdmin && <td>{item.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
+        {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} demo={user.demo} />}
         {!loading && page === 'reports' && <div className="report-grid"><Card title="Attendance"><strong className="big">{attendance.reduce((sum, item) => sum + item.total, 0).toLocaleString()}</strong><p>Combined recorded attendance.</p></Card><Card title="Expenses"><strong className="big">{money(totalSpend)}</strong><p>Combined expenses in this workspace.</p></Card></div>}
         {!loading && page === 'forms' && !isAdmin && <div className="form-grid"><Action icon="◉" title="Attendance form" text="Children, teenagers, youth, adults, men and women." onClick={() => setModal('attendance')} /><Action icon="₦" title="Expense form" text="Amount, category, description and date." onClick={() => setModal('expense')} /></div>}
         {!loading && page === 'forms' && isAdmin && <section className="card full"><span className="eyebrow">Admin view</span><h2>Staff recording forms</h2><p>Admins monitor records and print reports. Recording actions are reserved for staff accounts.</p></section>}
@@ -232,7 +289,8 @@ function App() {
     {modal === 'activity' && <ActivityForm close={() => setModal(null)} save={addActivity} />}
     {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} />}
     {modal === 'expense' && <ExpenseForm close={() => setModal(null)} save={addExpense} />}
-    <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['expenses','₦'],['activities','▣'],['reports','⌁']].map(([id, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
+    {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
+    <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['expenses','₦'],['activities','▣'],['reports','⌁'],...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
   </div>
 }
 
@@ -251,6 +309,21 @@ function Records({ title, eyebrow, action, onAdd, isAdmin, onPrint, children }) 
 function title(p) { return ({ attendance: 'Attendance', expenses: 'Expenses', activities: 'Activities', reports: 'Reports', forms: 'Forms' })[p] || 'Dashboard' }
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', expenses: 'Track church spending in one place.', activities: 'Keep church programs organized.', reports: 'Turn records into useful summaries.', forms: 'Structured forms for recurring church records.' })[p] }
 
+
+function StaffPage({ staff, selectedStaff, setSelectedStaff, reviews, onReview, onPrint }) {
+  const ratingLabel = value => ({ EXCELLENT: 'Excellent', GOOD: 'Good', FAIR: 'Fair', POOR: 'Poor', BAD: 'Bad' }[value] || value || '—')
+  return <div className="staff-layout">
+    <section className="card full">
+      <div className="card-head"><div><span className="eyebrow">Administration</span><h2>Staff management</h2><p className="card-subtitle">Monitor staff activity and complete the Sunday review for each staff member.</p></div><button className="secondary print-button" onClick={onPrint}>🖨 Print</button></div>
+      <div className="table-wrap"><table><thead><tr><th>Staff</th><th>Email</th><th>Status</th><th>Records</th><th>Reviews</th><th></th></tr></thead><tbody>{staff.map(item => <tr key={item.id} className={selectedStaff?.id === item.id ? 'selected-row' : ''}><td><b>{item.name}</b></td><td>{item.email}</td><td><span className="pill">{item.emailVerified ? 'Active' : 'Pending'}</span></td><td><b>{item.recordCount || 0}</b></td><td>{item.reviewCount || 0}</td><td><button className="secondary small-button" onClick={() => setSelectedStaff(item)}>Review</button></td></tr>)}</tbody></table>{!staff.length && <p>No staff members found.</p>}</div>
+    </section>
+    {selectedStaff && <section className="card full">
+      <div className="card-head"><div><span className="eyebrow">Sunday review</span><h2>{selectedStaff.name}</h2><p className="card-subtitle">{selectedStaff.email} · {selectedStaff.recordCount || 0} operational records</p></div><button className="primary" onClick={onReview}>+ Sunday review</button></div>
+      <div className="review-history">{reviews.map(review => <div className="review-card" key={review.id}><div><b>{formatDate(review.reviewDate)}</b><span className={`review-rating rating-${String(review.rating || '').toLowerCase()}`}>{ratingLabel(review.rating)}</span></div><p>{review.comment || 'No comment added.'}</p><small>Reviewed by {review.admin?.name || 'Admin'}</small></div>)}{!reviews.length && <p>No Sunday review has been recorded for this staff member yet.</p>}</div>
+    </section>}
+  </div>
+}
+
 function Modal({ title, children, close }) { return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">Living Bells</span><h2>{title}</h2></div><button className="close" onClick={close}>×</button></div>{children}</div></div> }
 function ActivityForm({ close, save }) {
   const [form, setForm] = useState({ name: '', type: 'Service', date: new Date().toISOString().slice(0, 10) })
@@ -266,6 +339,20 @@ function AttendanceForm({ close, save }) {
   const [service, setService] = useState('Sunday Service'), [date, setDate] = useState(new Date().toISOString().slice(0, 10)), [groups, setGroups] = useState(Object.fromEntries(['Children', 'Teenagers', 'Youth', 'Adults'].map(x => [x, { male: '', female: '' }])))
   const update = (g, s, v) => setGroups(x => ({ ...x, [g]: { ...x[g], [s]: v } })), total = Object.values(groups).reduce((a, g) => a + Number(g.male || 0) + Number(g.female || 0), 0)
   return <Modal title="Record attendance" close={close}><label>Service<input value={service} onChange={e => setService(e.target.value)} /></label><label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><div className="attendance-form"><div className="frow header"><span>Group</span><span>Male</span><span>Female</span></div>{Object.entries(groups).map(([g, v]) => <div className="frow" key={g}><b>{g}</b><input type="number" min="0" value={v.male} onChange={e => update(g, 'male', e.target.value)} placeholder="0" /><input type="number" min="0" value={v.female} onChange={e => update(g, 'female', e.target.value)} placeholder="0" /></div>)}</div><div className="total">Total attendance <b>{total}</b></div><button className="primary wide" onClick={() => save({ service, date, groups })} disabled={!service || !date}>Save attendance</button></Modal>
+}
+function ReviewForm({ staff, close, save }) {
+  const today = new Date()
+  const sunday = new Date(today)
+  sunday.setDate(today.getDate() - today.getDay())
+  const [form, setForm] = useState({ reviewDate: sunday.toISOString().slice(0, 10), rating: 'GOOD', comment: '' })
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
+  return <Modal title={`Sunday review · ${staff.name}`} close={close}>
+    <p className="review-intro">Give this staff member a Sunday review based on their records, consistency and assigned responsibilities.</p>
+    <label>Sunday date<input type="date" value={form.reviewDate} onChange={e => set('reviewDate', e.target.value)} /></label>
+    <label>Overall rating<select value={form.rating} onChange={e => set('rating', e.target.value)}>{['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BAD'].map(x => <option key={x} value={x}>{x[0] + x.slice(1).toLowerCase()}</option>)}</select></label>
+    <label>Admin comment<textarea value={form.comment} onChange={e => set('comment', e.target.value)} placeholder="Add a short review..." rows="4" /></label>
+    <button className="primary wide" disabled={!form.reviewDate} onClick={() => save(form)}>Save Sunday review</button>
+  </Modal>
 }
 function ExpenseForm({ close, save }) {
   const [d, setD] = useState({ title: '', category: 'General', amount: '', date: new Date().toISOString().slice(0, 10) }), set = (k, v) => setD(x => ({ ...x, [k]: v }))
