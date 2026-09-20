@@ -33,6 +33,26 @@ export default function Auth({ onAuthenticated }) {
     setLoading(true)
     try {
       if (mode === 'login') {
+        const demoAccounts = {
+          'admin@demo.livingbells.app': { password: 'LivingBellsDemo2026!', role: 'ADMIN', name: 'Demo Admin' },
+          'staff@demo.livingbells.app': { password: 'LivingBellsDemo2026!', role: 'STAFF', name: 'Demo Staff' },
+        }
+        const demo = demoAccounts[form.email.trim().toLowerCase()]
+
+        if (demo && form.password === demo.password) {
+          const demoUser = {
+            id: demo.role === 'ADMIN' ? 'demo-admin' : 'demo-staff',
+            name: demo.name,
+            email: form.email.trim().toLowerCase(),
+            role: demo.role,
+            demo: true,
+          }
+          localStorage.setItem('living_bells_token', 'demo-token')
+          localStorage.setItem('living_bells_user', JSON.stringify(demoUser))
+          onAuthenticated(demoUser)
+          return
+        }
+
         const result = await api.login(form)
         localStorage.setItem('living_bells_token', result.token)
         localStorage.setItem('living_bells_user', JSON.stringify(result.user))
