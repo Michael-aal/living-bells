@@ -127,9 +127,12 @@ function App() {
     }
   }
 
+  const isAdmin = user.role === 'ADMIN'
+  const dashboardLabel = isAdmin ? 'Admin dashboard' : 'Staff dashboard'
+
   return <div className="shell">
     <aside className="sidebar">
-      <div className="brand"><div className="logo">L</div><div><b>Living Bells</b><small>Church operations</small></div></div>
+      <div className="brand"><div className="logo">L</div><div><b>Living Bells</b><small>{dashboardLabel}</small></div></div>
       <span className="label">Workspace</span>
       {[
         ['dashboard', '⌂', 'Dashboard'], ['attendance', '◉', 'Attendance'], ['expenses', '₦', 'Expenses'],
@@ -142,12 +145,12 @@ function App() {
       <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><button className="avatar" title="Sign out" onClick={logout}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button></header>
       <section className="content">
         <div className="heading">
-          <div><span className="eyebrow">Church operations</span><h1>{page === 'dashboard' ? 'Good evening 👋' : title(page)}</h1><p>{subtitle(page)}</p></div>
+          <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard 👋' : 'Staff dashboard 👋') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
           <div className="actions"><button className="secondary" onClick={() => setPage('reports')}>View reports</button><button className="primary" onClick={() => setModal('attendance')}>+ Record</button></div>
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
-        {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} open={setModal} go={setPage} />}
+        {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th></tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Record expense" onAdd={() => setModal('expense')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th></tr></thead><tbody>{visibleExpenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td></tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
         {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th></tr></thead><tbody>{visibleActivities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td></tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
@@ -163,10 +166,10 @@ function App() {
   </div>
 }
 
-function Dashboard({ attendance, expenses, activitiesCount, spend, money, open, go }) {
+function Dashboard({ attendance, expenses, activitiesCount, spend, money, open, go, isAdmin }) {
   return <>
     <div className="stats"><Stat icon="◉" name="Attendance" value={attendance[0]?.total || 0} note="Latest service" /><Stat icon="₦" name="Expenses" value={money(spend)} note="Recorded this period" /><Stat icon="▣" name="Activities" value={activitiesCount} note="Church programs" /><Stat icon="⌁" name="Reports" value="Live" note="From database" /></div>
-    <div className="quick"><Action icon="◉" title="Record attendance" text="Capture children, teens, youth, adults and men and women." onClick={() => open('attendance')} /><Action icon="₦" title="Record expense" text="Track church spending clearly." onClick={() => open('expense')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} /><Action icon="□" title="Open forms" text="Structured recurring records." onClick={() => go('forms')} /></div>
+    <div className="quick"><Action icon="◉" title="Record attendance" text="Capture children, teens, youth, adults and men and women." onClick={() => open('attendance')} /><Action icon="₦" title="Record expense" text="Track church spending clearly." onClick={() => open('expense')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} />{isAdmin && <Action icon="□" title="Open forms" text="Structured recurring records." onClick={() => go('forms')} />}</div>
     <div className="dash-grid"><Card title="Attendance trend"><div className="bars">{attendance.slice(0, 7).reverse().map(r => <div className="bar-col" key={r.id}><b>{r.total}</b><div className="bar" style={{ height: Math.max(25, Math.min(100, r.total / 4)) + '%' }} /><small>{r.date.slice(0, 6)}</small></div>)}</div>{!attendance.length && <p>No attendance data yet.</p>}</Card><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
   </>
 }
