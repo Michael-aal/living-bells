@@ -52,4 +52,7 @@ export const api = {
   createAttendance: payload => apiRequest('/api/attendance', { method: 'POST', body: JSON.stringify(payload) }),
   expenses: () => apiRequest('/api/expenses'),
   createExpense: payload => apiRequest('/api/expenses', { method: 'POST', body: JSON.stringify(payload) }),
+  staff: () => apiRequest('/api/admin/staff'),
+  staffReviews: staffId => apiRequest(`/api/admin/staff/${staffId}/reviews`),
+  createStaffReview: (staffId, payload) => apiRequest(`/api/admin/staff/${staffId}/reviews`, { method: 'POST', body: JSON.stringify(payload) }),
 }
