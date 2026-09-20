@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import './App.css'
+import Auth from './Auth'
 
 const API = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -15,6 +16,7 @@ const seedExpenses = [
 ]
 
 function App() {
+  const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem('living_bells_user') || 'null') } catch { return null } })
   const [page, setPage] = useState('dashboard')
   const [attendance, setAttendance] = useState(seedAttendance)
   const [expenses, setExpenses] = useState(seedExpenses)
@@ -22,6 +24,8 @@ function App() {
   const [sync, setSync] = useState(API ? 'Live API' : 'Demo mode')
   const money = n => '₦' + Number(n).toLocaleString('en-NG')
   const totalSpend = useMemo(() => expenses.reduce((a, e) => a + e.amount, 0), [expenses])
+  if (!user) return <Auth onAuthenticated={setUser} />
+  function logout() { localStorage.removeItem('living_bells_token'); localStorage.removeItem('living_bells_user'); setUser(null) }
 
   async function post(path, payload) {
     if (!API) return
@@ -54,7 +58,7 @@ function App() {
     </aside>
 
     <main>
-      <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><div className="search">⌕ <span>Search records...</span></div><div className="avatar">ST</div></header>
+      <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><div className="search">⌕ <span>Search records...</span></div><button className="avatar" title="Sign out" onClick={logout}>{user.name?.slice(0, 2).toUpperCase() || "ST"}</button></header>
       <section className="content">
         <div className="heading">
           <div><span className="eyebrow">Church operations</span><h1>{page==='dashboard'?'Good evening 👋':title(page)}</h1><p>{subtitle(page)}</p></div>
