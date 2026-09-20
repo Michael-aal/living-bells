@@ -34,6 +34,9 @@ export default function Auth({ onAuthenticated }) {
     try {
       if (mode === 'login') {
         const demoAccounts = {
+          'admin@livingbells.demo': { password: 'AdminBells2026!', role: 'ADMIN', name: 'Demo Admin' },
+          'staff@livingbells.demo': { password: 'StaffBells2026!', role: 'STAFF', name: 'Demo Staff' },
+          // Keep the original demo credentials working so existing testers are not locked out.
           'admin@demo.livingbells.app': { password: 'LivingBellsDemo2026!', role: 'ADMIN', name: 'Demo Admin' },
           'staff@demo.livingbells.app': { password: 'LivingBellsDemo2026!', role: 'STAFF', name: 'Demo Staff' },
         }
