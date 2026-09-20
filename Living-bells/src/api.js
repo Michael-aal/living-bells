@@ -6,12 +6,34 @@ function authHeaders() {
 }
 
 export async function apiRequest(path, options = {}) {
-  const response = await fetch(BASE + path, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) },
-  })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.message || 'API request failed')
+  let response
+
+  try {
+    response = await fetch(BASE + path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) },
+    })
+  } catch {
+    throw new Error('Cannot reach the Living Bells API. Start the backend on port 5000 or use a demo account.')
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  const data = contentType.includes('application/json')
+    ? await response.json().catch(() => ({}))
+    : {}
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('living_bells_token')
+      localStorage.removeItem('living_bells_user')
+      throw new Error(data.message || 'Your session has expired. Please sign in again.')
+    }
+    if (response.status === 403) {
+      throw new Error(data.message || 'You do not have permission to perform this action.')
+    }
+    throw new Error(data.message || 'API request failed (' + response.status + ')')
+  }
+
   return data
 }
 
