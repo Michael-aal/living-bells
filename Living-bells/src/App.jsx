@@ -46,9 +46,14 @@ function App() {
   const [modal, setModal] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sync, setSync] = useState('Connecting...')
+  const [query, setQuery] = useState('')
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
   const totalSpend = useMemo(() => expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0), [expenses])
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleAttendance = useMemo(() => !normalizedQuery ? attendance : attendance.filter(item => `${item.service} ${item.date}`.toLowerCase().includes(normalizedQuery)), [attendance, normalizedQuery])
+  const visibleExpenses = useMemo(() => !normalizedQuery ? expenses : expenses.filter(item => `${item.title} ${item.category} ${item.date}`.toLowerCase().includes(normalizedQuery)), [expenses, normalizedQuery])
+  const visibleActivities = useMemo(() => !normalizedQuery ? activities : activities.filter(item => `${item.name} ${item.type || ''} ${formatDate(item.date)}`.toLowerCase().includes(normalizedQuery)), [activities, normalizedQuery])
 
   useEffect(() => {
     if (!user) return
@@ -134,7 +139,7 @@ function App() {
     </aside>
 
     <main>
-      <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><div className="search">⌕ <span>Search records...</span></div><button className="avatar" title="Sign out" onClick={logout}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button></header>
+      <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><button className="avatar" title="Sign out" onClick={logout}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button></header>
       <section className="content">
         <div className="heading">
           <div><span className="eyebrow">Church operations</span><h1>{page === 'dashboard' ? 'Good evening 👋' : title(page)}</h1><p>{subtitle(page)}</p></div>
@@ -142,10 +147,10 @@ function App() {
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
-        {!loading && page === 'dashboard' && <Dashboard attendance={attendance} expenses={expenses} activitiesCount={activities.length} spend={totalSpend} money={money} open={setModal} go={setPage} />}
-        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th></tr></thead><tbody>{attendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
-        {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Record expense" onAdd={() => setModal('expense')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th></tr></thead><tbody>{expenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td></tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
-        {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th></tr></thead><tbody>{activities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td></tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
+        {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} open={setModal} go={setPage} />}
+        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th></tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
+        {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Record expense" onAdd={() => setModal('expense')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th></tr></thead><tbody>{visibleExpenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td></tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
+        {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th></tr></thead><tbody>{visibleActivities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td></tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
         {!loading && page === 'reports' && <div className="report-grid"><Card title="Attendance"><strong className="big">{attendance.reduce((sum, item) => sum + item.total, 0).toLocaleString()}</strong><p>Combined recorded attendance.</p></Card><Card title="Expenses"><strong className="big">{money(totalSpend)}</strong><p>Combined expenses in this workspace.</p></Card></div>}
         {!loading && page === 'forms' && <div className="form-grid"><Action icon="◉" title="Attendance form" text="Children, teenagers, youth, adults, men and women." onClick={() => setModal('attendance')} /><Action icon="₦" title="Expense form" text="Amount, category, description and date." onClick={() => setModal('expense')} /></div>}
       </section>
@@ -154,6 +159,7 @@ function App() {
     {modal === 'activity' && <ActivityForm close={() => setModal(null)} save={addActivity} />}
     {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} />}
     {modal === 'expense' && <ExpenseForm close={() => setModal(null)} save={addExpense} />}
+    <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['expenses','₦'],['activities','▣'],['reports','⌁']].map(([id, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
   </div>
 }
 
