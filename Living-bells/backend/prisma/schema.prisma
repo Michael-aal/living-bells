@@ -13,13 +13,18 @@ enum UserRole {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole @default(STAFF)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  email                String    @unique
+  passwordHash         String
+  role                 UserRole  @default(STAFF)
+  emailVerifiedAt      DateTime?
+  emailVerifyTokenHash String?   @unique
+  emailVerifyExpiresAt DateTime?
+  resetTokenHash       String?   @unique
+  resetTokenExpiresAt  DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }
 
 model Activity {
@@ -39,10 +44,10 @@ model Attendance {
   childrenFemale  Int      @default(0)
   teenagersMale   Int      @default(0)
   teenagersFemale Int      @default(0)
-  youthMale      Int      @default(0)
-  youthFemale    Int      @default(0)
-  adultsMale     Int      @default(0)
-  adultsFemale   Int      @default(0)
+  youthMale       Int      @default(0)
+  youthFemale     Int      @default(0)
+  adultsMale      Int      @default(0)
+  adultsFemale    Int      @default(0)
   createdAt       DateTime @default(now())
   activity        Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
 }
@@ -57,4 +62,3 @@ model Expense {
   createdAt   DateTime @default(now())
   activity    Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
 }
-
