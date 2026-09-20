@@ -33,8 +33,11 @@ model Activity {
   type         String?
   date         DateTime
   createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   attendance   Attendance?
   expenses     Expense[]
+
+  @@index([date])
 }
 
 model Attendance {
@@ -49,6 +52,7 @@ model Attendance {
   adultsMale      Int      @default(0)
   adultsFemale    Int      @default(0)
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   activity        Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
 }
 
@@ -60,5 +64,10 @@ model Expense {
   amount      Decimal  @db.Decimal(12, 2)
   date        DateTime
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   activity    Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+  @@index([category])
+  @@index([activityId])
 }
