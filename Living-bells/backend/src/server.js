@@ -29,6 +29,11 @@ function authenticate(req, res, next) {
   catch { return res.status(401).json({ message: 'Invalid or expired token' }) }
 }
 
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'ADMIN') return res.status(403).json({ message: 'Admin access is required' })
+  next()
+}
+
 function createRawToken() {
   return crypto.randomBytes(32).toString('hex')
 }
@@ -221,16 +226,16 @@ app.get('/health', async (_req, res) => {
 app.get('/api/dashboard', async (_req, res, next) => {
   try {
     const [attendance, expenses, activities] = await Promise.all([
-      prisma.attendance.findMany({ include: { activity: true }, orderBy: { createdAt: 'desc' } }),
-      prisma.expense.findMany({ include: { activity: true }, orderBy: { date: 'desc' } }),
-      prisma.activity.findMany({ orderBy: { date: 'desc' } }),
+      prisma.attendance.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } }),
+      prisma.expense.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
+      prisma.activity.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
     ])
     res.json({ attendance, expenses, activities })
   } catch (error) { next(error) }
 })
 
 app.get('/api/activities', async (_req, res, next) => {
-  try { res.json(await prisma.activity.findMany({ orderBy: { date: 'desc' } })) }
+  try { res.json(await prisma.activity.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
   catch (error) { next(error) }
 })
 
@@ -238,13 +243,13 @@ app.post('/api/activities', async (req, res, next) => {
   try {
     const { name, type, date } = req.body
     if (!name || !date) return res.status(400).json({ message: 'name and date are required' })
-    const activity = await prisma.activity.create({ data: { name, type: type || null, date: new Date(date) } })
+    const activity = await prisma.activity.create({ data: { name, type: type || null, date: new Date(date), recordedById: Number(req.user.sub) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
     res.status(201).json(activity)
   } catch (error) { next(error) }
 })
 
 app.get('/api/attendance', async (_req, res, next) => {
-  try { res.json(await prisma.attendance.findMany({ include: { activity: true }, orderBy: { createdAt: 'desc' } })) }
+  try { res.json(await prisma.attendance.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } })) }
   catch (error) { next(error) }
 })
 
@@ -259,7 +264,7 @@ app.post('/api/attendance', async (req, res, next) => {
       if (!activity) return res.status(404).json({ message: 'Activity not found' })
     } else {
       if (!service || !date) return res.status(400).json({ message: 'service and date are required' })
-      activity = await prisma.activity.create({ data: { name: service, type: 'service', date: new Date(date) } })
+      activity = await prisma.activity.create({ data: { name: service, type: 'service', date: new Date(date), recordedById: Number(req.user.sub) } })
     }
 
     const value = (group, gender) => Math.max(0, Number(groups?.[group]?.[gender] || 0))
@@ -275,9 +280,11 @@ app.post('/api/attendance', async (req, res, next) => {
         youthFemale: value('Youth', 'female'),
         adultsMale: value('Adults', 'male'),
         adultsFemale: value('Adults', 'female'),
+        recordedById: Number(req.user.sub),
       },
       create: {
         activityId: activity.id,
+        recordedById: Number(req.user.sub),
         childrenMale: value('Children', 'male'),
         childrenFemale: value('Children', 'female'),
         teenagersMale: value('Teenagers', 'male'),
@@ -287,7 +294,7 @@ app.post('/api/attendance', async (req, res, next) => {
         adultsMale: value('Adults', 'male'),
         adultsFemale: value('Adults', 'female'),
       },
-      include: { activity: true },
+      include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
     })
 
     res.status(201).json(attendance)
@@ -295,7 +302,7 @@ app.post('/api/attendance', async (req, res, next) => {
 })
 
 app.get('/api/expenses', async (_req, res, next) => {
-  try { res.json(await prisma.expense.findMany({ include: { activity: true }, orderBy: { date: 'desc' } })) }
+  try { res.json(await prisma.expense.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
   catch (error) { next(error) }
 })
 
@@ -311,11 +318,69 @@ app.post('/api/expenses', async (req, res, next) => {
         description: description || title,
         category,
         amount: Number(amount),
+        recordedById: Number(req.user.sub),
         date: new Date(date),
       },
-      include: { activity: true },
+      include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
     })
     res.status(201).json(expense)
+  } catch (error) { next(error) }
+})
+
+
+app.get('/api/admin/staff', requireAdmin, async (_req, res, next) => {
+  try {
+    const staff = await prisma.user.findMany({
+      where: { role: 'STAFF' },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true, name: true, email: true, role: true, emailVerifiedAt: true, createdAt: true,
+        _count: { select: { recordedActivities: true, recordedAttendances: true, recordedExpenses: true, staffReviews: true } },
+      },
+    })
+    res.json(staff.map(item => ({
+      ...item,
+      emailVerified: Boolean(item.emailVerifiedAt),
+      recordCount: item._count.recordedActivities + item._count.recordedAttendances + item._count.recordedExpenses,
+      reviewCount: item._count.staffReviews,
+      _count: undefined,
+    })))
+  } catch (error) { next(error) }
+})
+
+app.get('/api/admin/staff/:staffId/reviews', requireAdmin, async (req, res, next) => {
+  try {
+    const staffId = Number(req.params.staffId)
+    if (!Number.isInteger(staffId)) return res.status(400).json({ message: 'Invalid staff id' })
+    const reviews = await prisma.sundayReview.findMany({
+      where: { staffId },
+      include: { admin: { select: { id: true, name: true, email: true } } },
+      orderBy: { reviewDate: 'desc' },
+    })
+    res.json(reviews)
+  } catch (error) { next(error) }
+})
+
+app.post('/api/admin/staff/:staffId/reviews', requireAdmin, async (req, res, next) => {
+  try {
+    const staffId = Number(req.params.staffId)
+    const reviewDate = new Date(req.body.reviewDate)
+    const rating = String(req.body.rating || '').toUpperCase()
+    const comment = String(req.body.comment || '').trim() || null
+    if (!Number.isInteger(staffId) || Number.isNaN(reviewDate.getTime())) return res.status(400).json({ message: 'Valid staff and Sunday review date are required' })
+    if (reviewDate.getDay() !== 0) return res.status(400).json({ message: 'Sunday reviews must use a Sunday date' })
+    if (!['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'BAD'].includes(rating)) return res.status(400).json({ message: 'Rating must be Excellent, Good, Fair, Poor or Bad' })
+
+    const staff = await prisma.user.findFirst({ where: { id: staffId, role: 'STAFF' } })
+    if (!staff) return res.status(404).json({ message: 'Staff member not found' })
+
+    const review = await prisma.sundayReview.upsert({
+      where: { staffId_reviewDate: { staffId, reviewDate } },
+      update: { rating, comment, adminId: Number(req.user.sub) },
+      create: { staffId, adminId: Number(req.user.sub), reviewDate, rating, comment },
+      include: { staff: { select: { id: true, name: true, email: true } }, admin: { select: { id: true, name: true, email: true } } },
+    })
+    res.status(201).json(review)
   } catch (error) { next(error) }
 })
 
