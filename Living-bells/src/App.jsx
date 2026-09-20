@@ -67,14 +67,14 @@ function App() {
 
       if (user.demo) {
         const demoAttendance = [
-          { id: 'demo-attendance-1', service: 'Sunday Worship Service', date: '20 Sep 2026', total: 184 },
-          { id: 'demo-attendance-2', service: 'Youth Fellowship', date: '18 Sep 2026', total: 72 },
-          { id: 'demo-attendance-3', service: 'Midweek Service', date: '16 Sep 2026', total: 126 },
+          { id: 'demo-attendance-1', service: 'Sunday Worship Service', date: '20 Sep 2026', total: 184, recordedBy: { id: 'demo-staff-1', name: 'John Doe', email: 'john@livingbells.demo' } },
+          { id: 'demo-attendance-2', service: 'Youth Fellowship', date: '18 Sep 2026', total: 72, recordedBy: { id: 'demo-staff-2', name: 'Mary James', email: 'mary@livingbells.demo' } },
+          { id: 'demo-attendance-3', service: 'Midweek Service', date: '16 Sep 2026', total: 126, recordedBy: { id: 'demo-staff-3', name: 'Peter Paul', email: 'peter@livingbells.demo' } },
         ]
         const demoExpenses = [
-          { id: 'demo-expense-1', title: 'Generator fuel', category: 'Utilities', amount: 45000, date: '19 Sep 2026' },
-          { id: 'demo-expense-2', title: 'Choir materials', category: 'Choir', amount: 28000, date: '17 Sep 2026' },
-          { id: 'demo-expense-3', title: 'Community outreach', category: 'Evangelism', amount: 65000, date: '14 Sep 2026' },
+          { id: 'demo-expense-1', title: 'Generator fuel', category: 'Utilities', amount: 45000, date: '19 Sep 2026', recordedBy: { id: 'demo-staff-1', name: 'John Doe', email: 'john@livingbells.demo' } },
+          { id: 'demo-expense-2', title: 'Choir materials', category: 'Choir', amount: 28000, date: '17 Sep 2026', recordedBy: { id: 'demo-staff-2', name: 'Mary James', email: 'mary@livingbells.demo' } },
+          { id: 'demo-expense-3', title: 'Community outreach', category: 'Evangelism', amount: 65000, date: '14 Sep 2026', recordedBy: { id: 'demo-staff-3', name: 'Peter Paul', email: 'peter@livingbells.demo' } },
         ]
         const demoStaff = [
           { id: 'demo-staff-1', name: 'John Doe', email: 'john@livingbells.demo', role: 'STAFF', emailVerified: true, recordCount: 24, reviewCount: 3 },
@@ -82,10 +82,10 @@ function App() {
           { id: 'demo-staff-3', name: 'Peter Paul', email: 'peter@livingbells.demo', role: 'STAFF', emailVerified: true, recordCount: 11, reviewCount: 2 },
         ]
         const demoActivities = [
-          { id: 'demo-activity-1', name: 'Sunday Worship Service', type: 'Service', date: '2026-09-20' },
-          { id: 'demo-activity-2', name: 'Youth Fellowship', type: 'Youth', date: '2026-09-18' },
-          { id: 'demo-activity-3', name: 'Community Outreach', type: 'Outreach', date: '2026-09-14' },
-          { id: 'demo-activity-4', name: 'Choir Practice', type: 'Choir', date: '2026-09-12' },
+          { id: 'demo-activity-1', name: 'Sunday Worship Service', type: 'Service', date: '2026-09-20', recordedBy: { id: 'demo-staff-1', name: 'John Doe' } },
+          { id: 'demo-activity-2', name: 'Youth Fellowship', type: 'Youth', date: '2026-09-18', recordedBy: { id: 'demo-staff-2', name: 'Mary James' } },
+          { id: 'demo-activity-3', name: 'Community Outreach', type: 'Outreach', date: '2026-09-14', recordedBy: { id: 'demo-staff-3', name: 'Peter Paul' } },
+          { id: 'demo-activity-4', name: 'Choir Practice', type: 'Choir', date: '2026-09-12', recordedBy: { id: 'demo-staff-1', name: 'John Doe' } },
         ]
 
         setAttendance(demoAttendance)
