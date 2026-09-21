@@ -106,15 +106,30 @@ app.post('/api/auth/register', async (req, res, next) => {
       },
     })
 
+    const verificationUrl = `${APP_URL}/?verify=${encodeURIComponent(rawToken)}`
+    let emailSent = true
+
     try {
       await sendVerificationEmail(user, rawToken)
     } catch (emailError) {
-      await prisma.user.delete({ where: { id: user.id } })
-      throw emailError
+      emailSent = false
+      console.error('Verification email failed:', emailError)
+
+      // Keep the account so a temporary email-provider/configuration failure
+      // does not turn a valid registration into a generic 500 error.
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({
+          message: 'Account created, but the verification email could not be sent. Please try resending the verification email.',
+          code: 'VERIFICATION_EMAIL_FAILED',
+        })
+      }
     }
 
     res.status(201).json({
-      message: 'Account created. Check your email to verify your account before signing in.',
+      message: emailSent
+        ? 'Account created. Check your email to verify your account before signing in.'
+        : 'Account created, but the verification email could not be sent. Use the development verification link below or fix the email configuration and resend.',
+      verificationUrl: !emailSent && process.env.NODE_ENV !== 'production' ? verificationUrl : undefined,
       user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: false },
     })
   } catch (error) { next(error) }
