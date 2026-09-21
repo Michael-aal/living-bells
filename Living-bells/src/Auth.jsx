@@ -11,6 +11,7 @@ export default function Auth({ onAuthenticated }) {
   const [resetPassword, setResetPassword] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [verificationUrl, setVerificationUrl] = useState('')
   const [loading, setLoading] = useState(Boolean(verifyToken))
   const update = (key, value) => setForm(x => ({ ...x, [key]: value }))
 
@@ -30,6 +31,7 @@ export default function Auth({ onAuthenticated }) {
     e.preventDefault()
     setError('')
     setNotice('')
+    setVerificationUrl('')
     setLoading(true)
     try {
       if (mode === 'login') {
@@ -63,6 +65,7 @@ export default function Auth({ onAuthenticated }) {
       } else if (mode === 'register') {
         const result = await api.register(form)
         setNotice(result.message)
+        setVerificationUrl(result.verificationUrl || '')
         setForm(x => ({ ...x, password: '', adminKey: '' }))
         setMode('login')
       } else if (mode === 'forgot') {
@@ -115,6 +118,7 @@ export default function Auth({ onAuthenticated }) {
       <p className="auth-subtitle">{subtitle}</p>
       {error && <div className="auth-error">{error}</div>}
       {notice && <div className="auth-notice">{notice}</div>}
+      {verificationUrl && <div className="auth-notice"><a href={verificationUrl}>Open development verification link</a></div>}
 
       {mode === 'verify' && loading ? <div className="auth-loading">Verifying your email...</div> : <form onSubmit={submit}>
         {mode === 'register' && <label>Full name<input value={form.name} onChange={e => update('name', e.target.value)} required /></label>}
