@@ -39,6 +39,10 @@ function requireStaff(req, res, next) {
   next()
 }
 
+function currentUserId(req) {
+  return Number(req.user?.sub)
+}
+
 function createRawToken() {
   return crypto.randomBytes(32).toString('hex')
 }
@@ -228,34 +232,59 @@ app.get('/health', async (_req, res) => {
   }
 })
 
-app.get('/api/dashboard', async (_req, res, next) => {
+app.get('/api/dashboard', async (req, res, next) => {
   try {
+    const staffOnly = req.user.role === 'STAFF'
+    const userId = currentUserId(req)
     const [attendance, expenses, activities] = await Promise.all([
-      prisma.attendance.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } }),
-      prisma.expense.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
-      prisma.activity.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
+      prisma.attendance.findMany({
+        where: staffOnly ? { recordedById: userId } : undefined,
+        include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.expense.findMany({
+        where: staffOnly ? { recordedById: userId } : undefined,
+        include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { date: 'desc' },
+      }),
+      prisma.activity.findMany({
+        where: staffOnly ? { recordedById: userId } : undefined,
+        include: { recordedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { date: 'desc' },
+      }),
     ])
     res.json({ attendance, expenses, activities })
   } catch (error) { next(error) }
 })
 
-app.get('/api/activities', async (_req, res, next) => {
-  try { res.json(await prisma.activity.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
-  catch (error) { next(error) }
+app.get('/api/activities', async (req, res, next) => {
+  try {
+    res.json(await prisma.activity.findMany({
+      where: req.user.role === 'STAFF' ? { recordedById: currentUserId(req) } : undefined,
+      include: { recordedBy: { select: { id: true, name: true, email: true } } },
+      orderBy: { date: 'desc' },
+    }))
+  } catch (error) { next(error) }
 })
 
 app.post('/api/activities', requireStaff, async (req, res, next) => {
   try {
     const { name, type, date } = req.body
-    if (!name || !date) return res.status(400).json({ message: 'name and date are required' })
-    const activity = await prisma.activity.create({ data: { name, type: type || null, date: new Date(date), recordedById: Number(req.user.sub) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
+    const activityDate = new Date(date)
+    if (!name?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid name and date are required' })
+    const activity = await prisma.activity.create({ data: { name: name.trim(), type: type?.trim() || null, date: activityDate, recordedById: currentUserId(req) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
     res.status(201).json(activity)
   } catch (error) { next(error) }
 })
 
-app.get('/api/attendance', async (_req, res, next) => {
-  try { res.json(await prisma.attendance.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } })) }
-  catch (error) { next(error) }
+app.get('/api/attendance', async (req, res, next) => {
+  try {
+    res.json(await prisma.attendance.findMany({
+      where: req.user.role === 'STAFF' ? { recordedById: currentUserId(req) } : undefined,
+      include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+    }))
+  } catch (error) { next(error) }
 })
 
 app.post('/api/attendance', requireStaff, async (req, res, next) => {
@@ -267,9 +296,11 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
     if (Number.isInteger(id) && id > 0) {
       activity = await prisma.activity.findUnique({ where: { id } })
       if (!activity) return res.status(404).json({ message: 'Activity not found' })
+      if (activity.recordedById !== currentUserId(req)) return res.status(403).json({ message: 'You can only record attendance for your own activities' })
     } else {
-      if (!service || !date) return res.status(400).json({ message: 'service and date are required' })
-      activity = await prisma.activity.create({ data: { name: service, type: 'service', date: new Date(date), recordedById: Number(req.user.sub) } })
+      const activityDate = new Date(date)
+      if (!service?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid service and date are required' })
+      activity = await prisma.activity.create({ data: { name: service.trim(), type: 'service', date: activityDate, recordedById: currentUserId(req) } })
     }
 
     const value = (group, gender) => Math.max(0, Number(groups?.[group]?.[gender] || 0))
@@ -285,7 +316,7 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
         youthFemale: value('Youth', 'female'),
         adultsMale: value('Adults', 'male'),
         adultsFemale: value('Adults', 'female'),
-        recordedById: Number(req.user.sub),
+        recordedById: currentUserId(req),
       },
       create: {
         activityId: activity.id,
@@ -306,25 +337,39 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.get('/api/expenses', async (_req, res, next) => {
-  try { res.json(await prisma.expense.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
-  catch (error) { next(error) }
+app.get('/api/expenses', async (req, res, next) => {
+  try {
+    res.json(await prisma.expense.findMany({
+      where: req.user.role === 'STAFF' ? { recordedById: currentUserId(req) } : undefined,
+      include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
+      orderBy: { date: 'desc' },
+    }))
+  } catch (error) { next(error) }
 })
 
 app.post('/api/expenses', requireStaff, async (req, res, next) => {
   try {
     const { activityId, description, title, category = 'General', amount, date } = req.body
-    if (!(description || title) || amount === undefined || !date) {
-      return res.status(400).json({ message: 'description, amount and date are required' })
+    const expenseDate = new Date(date)
+    const numericAmount = Number(amount)
+    if (!(description || title)?.trim() || !Number.isFinite(numericAmount) || numericAmount < 0 || Number.isNaN(expenseDate.getTime())) {
+      return res.status(400).json({ message: 'Valid description, non-negative amount and date are required' })
+    }
+    const linkedActivityId = activityId ? Number(activityId) : null
+    if (linkedActivityId !== null) {
+      if (!Number.isInteger(linkedActivityId) || linkedActivityId <= 0) return res.status(400).json({ message: 'Invalid activity id' })
+      const activity = await prisma.activity.findUnique({ where: { id: linkedActivityId }, select: { id: true, recordedById: true } })
+      if (!activity) return res.status(404).json({ message: 'Activity not found' })
+      if (activity.recordedById !== currentUserId(req)) return res.status(403).json({ message: 'You can only attach expenses to your own activities' })
     }
     const expense = await prisma.expense.create({
       data: {
-        activityId: activityId ? Number(activityId) : null,
-        description: description || title,
-        category,
-        amount: Number(amount),
-        recordedById: Number(req.user.sub),
-        date: new Date(date),
+        activityId: linkedActivityId,
+        description: (description || title).trim(),
+        category: String(category || 'General').trim() || 'General',
+        amount: numericAmount,
+        recordedById: currentUserId(req),
+        date: expenseDate,
       },
       include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
     })
@@ -357,6 +402,8 @@ app.get('/api/admin/staff/:staffId/reviews', requireAdmin, async (req, res, next
   try {
     const staffId = Number(req.params.staffId)
     if (!Number.isInteger(staffId)) return res.status(400).json({ message: 'Invalid staff id' })
+    const staff = await prisma.user.findFirst({ where: { id: staffId, role: 'STAFF' }, select: { id: true } })
+    if (!staff) return res.status(404).json({ message: 'Staff member not found' })
     const reviews = await prisma.sundayReview.findMany({
       where: { staffId },
       include: { admin: { select: { id: true, name: true, email: true } } },
