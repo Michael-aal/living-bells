@@ -97,7 +97,17 @@ export default function Auth({ onAuthenticated }) {
         {mode === 'register' && <label>Account type<select value={form.role} onChange={e => update('role', e.target.value)}><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select></label>}
         {mode === 'register' && form.role === 'ADMIN' && <label>Admin registration key<input type="password" value={form.adminKey} onChange={e => update('adminKey', e.target.value)} required /></label>}
         {mode === 'login' && <button type="button" className="auth-link" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
-        <button className="primary auth-submit" disabled={loading}>{loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Reset password'}</button>}
+        <button className="primary auth-submit" disabled={loading}>
+          {loading
+            ? 'Please wait...'
+            : mode === 'login'
+              ? 'Sign in'
+              : mode === 'register'
+                ? 'Create account'
+                : mode === 'forgot'
+                  ? 'Send reset link'
+                  : 'Reset password'}
+        </button>
       </form>
 
       {mode === 'login' && <div className="auth-switch">New staff member? <button onClick={() => { setError(''); setNotice(''); setMode('register') }}>Create an account</button></div>}
