@@ -270,7 +270,7 @@ function App() {
       <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><button className="avatar" title="Sign out" onClick={logout}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button></header>
       <section className="content">
         <div className="heading">
-          <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard 👋' : 'Staff dashboard 👋') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
+          <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard' : 'Staff dashboard') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
           <div className="actions"><button className="secondary" onClick={() => setPage('reports')}>View reports</button>{!isAdmin && <button className="primary" onClick={() => setModal('attendance')}>+ Record</button>}{isAdmin && <button className="secondary print-button" onClick={() => printReport('Church records')}>🖨 Print records</button>}</div>
         </div>
 
