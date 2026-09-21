@@ -12,6 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '')
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 const EMAIL_FROM = process.env.EMAIL_FROM || ''
+const ALLOW_UNVERIFIED_LOGIN_IN_DEVELOPMENT = process.env.NODE_ENV === 'development' && process.env.ALLOW_UNVERIFIED_LOGIN_IN_DEVELOPMENT === 'true'
 
 if (!JWT_SECRET) throw new Error('JWT_SECRET is required')
 if (!APP_URL) throw new Error('APP_URL is required')
@@ -162,8 +163,8 @@ app.post('/api/auth/login', async (req, res, next) => {
     const email = String(req.body.email || '').trim().toLowerCase(), password = String(req.body.password || '')
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ message: 'Invalid email or password' })
-    if (!user.emailVerifiedAt) return res.status(403).json({ message: 'Please verify your email before signing in', code: 'EMAIL_NOT_VERIFIED' })
-    res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: true } })
+    if (!user.emailVerifiedAt && !ALLOW_UNVERIFIED_LOGIN_IN_DEVELOPMENT) return res.status(403).json({ message: 'Please verify your email before signing in', code: 'EMAIL_NOT_VERIFIED' })
+    res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: Boolean(user.emailVerifiedAt) } })
   } catch (error) { next(error) }
 })
 
