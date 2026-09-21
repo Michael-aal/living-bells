@@ -42,6 +42,7 @@ function App() {
   const [page, setPage] = useState('dashboard')
   const [attendance, setAttendance] = useState([])
   const [expenses, setExpenses] = useState([])
+  const [finances, setFinances] = useState([])
   const [activities, setActivities] = useState([])
   const [staff, setStaff] = useState([])
   const [selectedStaff, setSelectedStaff] = useState(null)
@@ -52,10 +53,14 @@ function App() {
   const [query, setQuery] = useState('')
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
+  const moneyIn = useMemo(() => finances.filter(item => item.type === 'INCOME').reduce((sum, item) => sum + Number(item.amount || 0), 0), [finances])
+  const moneyOut = useMemo(() => finances.filter(item => item.type === 'EXPENSE').reduce((sum, item) => sum + Number(item.amount || 0), 0), [finances])
+  const netMoney = moneyIn - moneyOut
   const totalSpend = useMemo(() => expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0), [expenses])
   const normalizedQuery = query.trim().toLowerCase()
   const visibleAttendance = useMemo(() => !normalizedQuery ? attendance : attendance.filter(item => `${item.service} ${item.date}`.toLowerCase().includes(normalizedQuery)), [attendance, normalizedQuery])
   const visibleExpenses = useMemo(() => !normalizedQuery ? expenses : expenses.filter(item => `${item.title} ${item.category} ${item.date}`.toLowerCase().includes(normalizedQuery)), [expenses, normalizedQuery])
+  const visibleFinances = useMemo(() => !normalizedQuery ? finances : finances.filter(item => `${item.type} ${item.category} ${item.description} ${item.date}`.toLowerCase().includes(normalizedQuery)), [finances, normalizedQuery])
   const visibleActivities = useMemo(() => !normalizedQuery ? activities : activities.filter(item => `${item.name} ${item.type || ''} ${formatDate(item.date)}`.toLowerCase().includes(normalizedQuery)), [activities, normalizedQuery])
 
   useEffect(() => {
@@ -70,6 +75,12 @@ function App() {
           { id: 'demo-attendance-1', service: 'Sunday Worship Service', date: '20 Sep 2026', total: 184, recordedBy: { id: 'demo-staff-1', name: 'John Doe', email: 'john@livingbells.demo' } },
           { id: 'demo-attendance-2', service: 'Youth Fellowship', date: '18 Sep 2026', total: 72, recordedBy: { id: 'demo-staff-2', name: 'Mary James', email: 'mary@livingbells.demo' } },
           { id: 'demo-attendance-3', service: 'Midweek Service', date: '16 Sep 2026', total: 126, recordedBy: { id: 'demo-staff-3', name: 'Peter Paul', email: 'peter@livingbells.demo' } },
+        ]
+        const demoFinances = [
+          { id: 'demo-finance-1', type: 'INCOME', category: 'Offering', description: 'Sunday offering', amount: 245000, recordDate: '2026-09-20', date: '20 Sep 2026', recordedBy: { id: 'demo-staff-1', name: 'John Doe' } },
+          { id: 'demo-finance-2', type: 'INCOME', category: 'Donation', description: 'Building donation', amount: 180000, recordDate: '2026-09-19', date: '19 Sep 2026', recordedBy: { id: 'demo-staff-2', name: 'Mary James' } },
+          { id: 'demo-finance-3', type: 'EXPENSE', category: 'Utilities', description: 'Generator fuel', amount: 45000, recordDate: '2026-09-19', date: '19 Sep 2026', recordedBy: { id: 'demo-staff-1', name: 'John Doe' } },
+          { id: 'demo-finance-4', type: 'EXPENSE', category: 'Choir', description: 'Choir materials', amount: 28000, recordDate: '2026-09-17', date: '17 Sep 2026', recordedBy: { id: 'demo-staff-2', name: 'Mary James' } },
         ]
         const demoExpenses = [
           { id: 'demo-expense-1', title: 'Generator fuel', category: 'Utilities', amount: 45000, date: '19 Sep 2026', recordedBy: { id: 'demo-staff-1', name: 'John Doe', email: 'john@livingbells.demo' } },
@@ -90,6 +101,7 @@ function App() {
 
         setAttendance(demoAttendance)
         setExpenses(demoExpenses)
+        setFinances(demoFinances)
         setActivities(demoActivities)
         setStaff(user.role === 'ADMIN' ? demoStaff : [])
         setReviews([])
@@ -105,6 +117,7 @@ function App() {
         if (cancelled) return
         setAttendance((data.attendance || []).map(normalizeAttendance))
         setExpenses((data.expenses || []).map(normalizeExpense))
+        setFinances((data.finances || []).map(record => ({ ...record, amount: Number(record.amount || 0), date: formatDate(record.recordDate) })))
         setActivities(data.activities || [])
         setStaff(staffData)
         setSync('Backend connected')
@@ -146,6 +159,7 @@ function App() {
     setUser(null)
     setAttendance([])
     setExpenses([])
+    setFinances([])
     setActivities([])
     setStaff([])
     setSelectedStaff(null)
@@ -260,7 +274,7 @@ function App() {
       <div className="brand"><div className="logo">L</div><div><b>Living Bells</b><small>{dashboardLabel}</small></div></div>
       <span className="label">Workspace</span>
       {[
-        ['dashboard', '⌂', 'Dashboard'], ['attendance', '◉', 'Attendance'], ['expenses', '₦', 'Expenses'],
+        ['dashboard', '⌂', 'Dashboard'], ['attendance', '◉', 'Attendance'], ['finance', '₦', 'Finance'],
         ['activities', '▣', 'Activities'], ['reports', '⌁', 'Reports'], ...(isAdmin ? [['staff', '♙', 'Staff']] : []), ['forms', '□', 'Forms']
       ].map(([id, icon, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}><i>{icon}</i>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
@@ -277,11 +291,11 @@ function App() {
         {loading && <section className="card"><p>Loading your church records...</p></section>}
         {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
-        {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Record expense" onAdd={() => setModal('expense')} isAdmin={isAdmin} onPrint={() => printReport('Expense report')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleExpenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
+        {!loading && page === 'finance' && <FinancePage records={visibleFinances} isAdmin={isAdmin} money={money} onAdd={() => setModal('finance')} onPrint={() => printReport('Financial report')} />}
         {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')} isAdmin={isAdmin} onPrint={() => printReport('Activities report')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleActivities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td>{isAdmin && <td>{item.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
-        {!loading && page === 'reports' && <div className="report-grid"><Card title="Attendance"><strong className="big">{attendance.reduce((sum, item) => sum + item.total, 0).toLocaleString()}</strong><p>Combined recorded attendance.</p></Card><Card title="Expenses"><strong className="big">{money(totalSpend)}</strong><p>Combined expenses in this workspace.</p></Card></div>}
-        {!loading && page === 'forms' && !isAdmin && <div className="form-grid"><Action icon="◉" title="Attendance form" text="Children, teenagers, youth, adults, men and women." onClick={() => setModal('attendance')} /><Action icon="₦" title="Expense form" text="Amount, category, description and date." onClick={() => setModal('expense')} /></div>}
+        {!loading && page === 'reports' && <div className="report-grid"><Card title="Money in"><strong className="big">{money(moneyIn)}</strong><p>Total recorded income.</p></Card><Card title="Money out"><strong className="big">{money(moneyOut)}</strong><p>Total recorded expenses.</p></Card><Card title="Net result"><strong className="big">{money(netMoney)}</strong><p>Money in minus money out.</p></Card><Card title="Attendance"><strong className="big">{attendance.reduce((sum, item) => sum + item.total, 0).toLocaleString()}</strong><p>Combined recorded attendance.</p></Card></div>}
+        {!loading && page === 'forms' && !isAdmin && <div className="form-grid"><Action icon="◉" title="Attendance form" text="Children, teenagers, youth, adults, men and women." onClick={() => setModal('attendance')} /><Action icon="₦" title="Finance form" text="Record money received or money spent." onClick={() => setModal('finance')} /></div>}
         {!loading && page === 'forms' && isAdmin && <section className="card full"><span className="eyebrow">Admin view</span><h2>Staff recording forms</h2><p>Admins monitor records and print reports. Recording actions are reserved for staff accounts.</p></section>}
       </section>
     </main>
@@ -289,6 +303,10 @@ function App() {
     {modal === 'activity' && <ActivityForm close={() => setModal(null)} save={addActivity} />}
     {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} />}
     {modal === 'expense' && <ExpenseForm close={() => setModal(null)} save={addExpense} />}
+    {modal === 'finance' && <FinanceForm close={() => setModal(null)} save={async payload => {
+      if (user.demo) { setFinances(current => [{ id: `demo-finance-${Date.now()}`, ...payload, amount: Number(payload.amount), date: formatDate(payload.recordDate) }, ...current]); setModal(null); setSync('Demo mode'); return }
+      try { setSync('Saving financial record...'); const saved = await api.createFinance(payload); setFinances(current => [{ ...saved, amount: Number(saved.amount), date: formatDate(saved.recordDate) }, ...current.filter(item => item.id !== saved.id)]); setModal(null); setSync('Backend connected') } catch (error) { setSync(error.message || 'Could not save financial record') }
+    }} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
     <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['expenses','₦'],['activities','▣'],['reports','⌁'],...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
   </div>
@@ -306,8 +324,8 @@ function Stat({ icon, name, value, note }) { return <div className="stat"><span 
 function Action({ icon, title, text, onClick }) { return <button className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
 function Records({ title, eyebrow, action, onAdd, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <button className="primary" onClick={onAdd}>{action}</button>}</div></div><div className="table-wrap">{children}</div></section> }
-function title(p) { return ({ attendance: 'Attendance', expenses: 'Expenses', activities: 'Activities', reports: 'Reports', staff: 'Staff', forms: 'Forms' })[p] || 'Dashboard' }
-function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', expenses: 'Track church spending in one place.', activities: 'Keep church programs organized.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.', forms: 'Structured forms for recurring church records.' })[p] }
+function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', expenses: 'Expenses', activities: 'Activities', reports: 'Reports', staff: 'Staff', forms: 'Forms' })[p] || 'Dashboard' }
+function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', expenses: 'Track church spending in one place.', activities: 'Keep church programs organized.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.', forms: 'Structured forms for recurring church records.' })[p] }
 
 
 function StaffPage({ staff, selectedStaff, setSelectedStaff, reviews, attendance, expenses, activities, onReview, onPrint }) {
@@ -364,6 +382,18 @@ function ReviewForm({ staff, close, save }) {
     <button className="primary wide" disabled={!form.reviewDate || !isSunday} onClick={() => save(form)}>Save Sunday review</button>{!isSunday && <small className="form-error">Choose a Sunday date for the weekly review.</small>}
   </Modal>
 }
+function FinancePage({ records, isAdmin, money, onAdd, onPrint }) {
+  const moneyIn = records.filter(r => r.type === 'INCOME').reduce((sum, r) => sum + r.amount, 0)
+  const moneyOut = records.filter(r => r.type === 'EXPENSE').reduce((sum, r) => sum + r.amount, 0)
+  return <section className="card full"><div className="card-head"><div><span className="eyebrow">Financial records</span><h2>Money in & out</h2><p className="card-subtitle">Every record is classified as money received or money spent.</p></div><div className="record-actions">{isAdmin && <button className="secondary print-button" onClick={onPrint}>Print table</button>}{!isAdmin && <button className="primary" onClick={onAdd}>Record transaction</button>}</div></div><div className="stats"><Stat icon="₦" name="Money in" value={money(moneyIn)} note="Income received" /><Stat icon="₦" name="Money out" value={money(moneyOut)} note="Expenses paid" /><Stat icon="⌁" name="Net" value={money(moneyIn - moneyOut)} note="In minus out" /></div><div className="table-wrap"><table><thead><tr><th>Type</th><th>Description</th><th>Category</th><th>Date</th><th>Amount</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{records.map(r => <tr key={r.id}><td><span className="pill">{r.type === 'INCOME' ? 'Money in' : 'Money out'}</span></td><td><b>{r.description || '—'}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!records.length && <p>No financial records yet.</p>}</div></section>
+}
+
+function FinanceForm({ close, save }) {
+  const [form, setForm] = useState({ type: 'INCOME', category: '', amount: '', description: '', recordDate: new Date().toISOString().slice(0, 10) })
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
+  return <Modal title={form.type === 'INCOME' ? 'Record money in' : 'Record money out'} close={close}><label>Type<select value={form.type} onChange={e => set('type', e.target.value)}><option value="INCOME">Money in</option><option value="EXPENSE">Money out</option></select></label><label>Category<input value={form.category} onChange={e => set('category', e.target.value)} placeholder="e.g. Offering" /></label><label>Description<input value={form.description} onChange={e => set('description', e.target.value)} placeholder="Optional description" /></label><label>Amount<input type="number" min="0.01" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" /></label><label>Date<input type="date" value={form.recordDate} onChange={e => set('recordDate', e.target.value)} /></label><button className="primary wide" disabled={!form.category || !form.amount || Number(form.amount) <= 0} onClick={() => save(form)}>Save transaction</button></Modal>
+}
+
 function ExpenseForm({ close, save }) {
   const [d, setD] = useState({ title: '', category: 'General', amount: '', date: new Date().toISOString().slice(0, 10) }), set = (k, v) => setD(x => ({ ...x, [k]: v }))
   return <Modal title="Record expense" close={close}><label>Description<input value={d.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Generator fuel" /></label><label>Category<select value={d.category} onChange={e => set('category', e.target.value)}>{['General', 'Utilities', 'Welfare', 'Choir', 'Evangelism', 'Media'].map(x => <option key={x}>{x}</option>)}</select></label><label>Amount<input type="number" min="0" value={d.amount} onChange={e => set('amount', e.target.value)} placeholder="0" /></label><label>Date<input type="date" value={d.date} onChange={e => set('date', e.target.value)} /></label><button className="primary wide" disabled={!d.title || !d.amount} onClick={() => save(d)}>Save expense</button></Modal>
