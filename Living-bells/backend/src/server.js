@@ -213,12 +213,15 @@ app.get('/health', async (_req, res) => {
 
 app.get('/api/dashboard', async (_req, res, next) => {
   try {
-    const [attendance, expenses, activities] = await Promise.all([
+    const [attendance, expenses, activities, finances] = await Promise.all([
       prisma.attendance.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } }),
       prisma.expense.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
       prisma.activity.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
+      prisma.financialRecord.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { recordDate: 'desc' } }),
     ])
-    res.json({ attendance, expenses, activities })
+    const moneyIn = finances.filter(item => item.type === 'INCOME').reduce((sum, item) => sum + Number(item.amount), 0)
+    const moneyOut = finances.filter(item => item.type === 'EXPENSE').reduce((sum, item) => sum + Number(item.amount), 0)
+    res.json({ attendance, expenses, activities, finances, financeSummary: { moneyIn, moneyOut, net: moneyIn - moneyOut } })
   } catch (error) { next(error) }
 })
 
@@ -315,6 +318,35 @@ app.post('/api/expenses', requireStaff, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+
+app.get('/api/finances', async (_req, res, next) => {
+  try {
+    const records = await prisma.financialRecord.findMany({
+      include: { recordedBy: { select: { id: true, name: true, email: true } } },
+      orderBy: { recordDate: 'desc' },
+    })
+    res.json(records)
+  } catch (error) { next(error) }
+})
+
+app.post('/api/finances', requireStaff, async (req, res, next) => {
+  try {
+    const { type, category, amount, description, recordDate } = req.body
+    const normalizedType = String(type || '').toUpperCase()
+    const normalizedCategory = String(category || '').trim()
+    const value = Number(amount)
+    const date = new Date(recordDate)
+    if (!['INCOME', 'EXPENSE'].includes(normalizedType)) return res.status(400).json({ message: 'Type must be INCOME or EXPENSE' })
+    if (!normalizedCategory) return res.status(400).json({ message: 'Category is required' })
+    if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ message: 'Amount must be greater than zero' })
+    if (Number.isNaN(date.getTime())) return res.status(400).json({ message: 'A valid transaction date is required' })
+    const record = await prisma.financialRecord.create({
+      data: { type: normalizedType, category: normalizedCategory, amount: value, description: String(description || '').trim() || null, recordDate: date, recordedById: Number(req.user.sub) },
+      include: { recordedBy: { select: { id: true, name: true, email: true } } },
+    })
+    res.status(201).json(record)
+  } catch (error) { next(error) }
+})
 
 app.get('/api/admin/staff', requireAdmin, async (_req, res, next) => {
   try {
