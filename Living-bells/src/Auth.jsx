@@ -4,34 +4,19 @@ import './auth.css'
 
 export default function Auth({ onAuthenticated }) {
   const params = new URLSearchParams(window.location.search)
-  const verifyToken = params.get('verify')
   const resetToken = params.get('reset')
-  const [mode, setMode] = useState(resetToken ? 'reset' : verifyToken ? 'verify' : 'login')
+  const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STAFF', adminKey: '' })
   const [resetPassword, setResetPassword] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [verificationUrl, setVerificationUrl] = useState('')
-  const [loading, setLoading] = useState(Boolean(verifyToken))
+  const [loading, setLoading] = useState(false)
   const update = (key, value) => setForm(x => ({ ...x, [key]: value }))
 
-  useEffect(() => {
-    if (!verifyToken) return
-    api.verifyEmail(verifyToken)
-      .then(result => {
-        setNotice(result.message)
-        window.history.replaceState({}, '', window.location.pathname)
-        setMode('login')
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [verifyToken])
-
-  async function submit(e) {
+  async function submit  async function submit(e) {
     e.preventDefault()
     setError('')
     setNotice('')
-    setVerificationUrl('')
     setLoading(true)
     try {
       if (mode === 'login') {
@@ -65,7 +50,6 @@ export default function Auth({ onAuthenticated }) {
       } else if (mode === 'register') {
         const result = await api.register(form)
         setNotice(result.message)
-        setVerificationUrl(result.verificationUrl || '')
         setForm(x => ({ ...x, password: '', adminKey: '' }))
         setMode('login')
       } else if (mode === 'forgot') {
@@ -85,21 +69,7 @@ export default function Auth({ onAuthenticated }) {
     }
   }
 
-  async function resendVerification() {
-    setError('')
-    setNotice('')
-    setLoading(true)
-    try {
-      const result = await api.resendVerification(form.email)
-      setNotice(result.message)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const title = mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create your staff account' : mode === 'forgot' ? 'Reset your password' : mode === 'reset' ? 'Choose a new password' : 'Verify your email'
+  const title =  const title = mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create your staff account' : mode === 'forgot' ? 'Reset your password' : mode === 'reset' ? 'Choose a new password' : ''
   const subtitle = mode === 'login'
     ? 'Sign in to manage church activities, attendance and expenses.'
     : mode === 'register'
@@ -108,7 +78,7 @@ export default function Auth({ onAuthenticated }) {
         ? 'Enter your email and we will send you a secure reset link.'
         : mode === 'reset'
           ? 'Your new password must be at least 8 characters.'
-          : 'We are confirming your email address.'
+          : ''
 
   return <main className="auth-shell">
     <section className="auth-card">
@@ -118,9 +88,8 @@ export default function Auth({ onAuthenticated }) {
       <p className="auth-subtitle">{subtitle}</p>
       {error && <div className="auth-error">{error}</div>}
       {notice && <div className="auth-notice">{notice}</div>}
-      {verificationUrl && <div className="auth-notice"><a href={verificationUrl}>Open development verification link</a></div>}
 
-      {mode === 'verify' && loading ? <div className="auth-loading">Verifying your email...</div> : <form onSubmit={submit}>
+      <form onSubmit={submit}>
         {mode === 'register' && <label>Full name<input value={form.name} onChange={e => update('name', e.target.value)} required /></label>}
         {(mode === 'login' || mode === 'register' || mode === 'forgot') && <label>Email<input type="email" value={form.email} onChange={e => update('email', e.target.value)} required /></label>}
         {(mode === 'login' || mode === 'register') && <label>Password<input type="password" minLength="8" value={form.password} onChange={e => update('password', e.target.value)} required /></label>}
@@ -128,9 +97,8 @@ export default function Auth({ onAuthenticated }) {
         {mode === 'register' && <label>Account type<select value={form.role} onChange={e => update('role', e.target.value)}><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select></label>}
         {mode === 'register' && form.role === 'ADMIN' && <label>Admin registration key<input type="password" value={form.adminKey} onChange={e => update('adminKey', e.target.value)} required /></label>}
         {mode === 'login' && <button type="button" className="auth-link" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
-        {mode === 'login' && error.includes('verify') && <button type="button" className="auth-link" onClick={resendVerification}>Resend verification email</button>}
         {mode !== 'verify' && <button className="primary auth-submit" disabled={loading}>{loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Reset password'}</button>}
-      </form>}
+      </form>
 
       {mode === 'login' && <div className="auth-switch">New staff member? <button onClick={() => { setError(''); setNotice(''); setMode('register') }}>Create an account</button></div>}
       {mode === 'register' && <div className="auth-switch">Already registered? <button onClick={() => { setError(''); setNotice(''); setMode('login') }}>Sign in</button></div>}
