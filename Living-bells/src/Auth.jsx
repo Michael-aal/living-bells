@@ -13,7 +13,7 @@ export default function Auth({ onAuthenticated }) {
   const [loading, setLoading] = useState(false)
   const update = (key, value) => setForm(x => ({ ...x, [key]: value }))
 
-  async function submit  async function submit(e) {
+  async function submit(e) {
     e.preventDefault()
     setError('')
     setNotice('')
@@ -69,7 +69,7 @@ export default function Auth({ onAuthenticated }) {
     }
   }
 
-  const title =  const title = mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create your staff account' : mode === 'forgot' ? 'Reset your password' : mode === 'reset' ? 'Choose a new password' : ''
+  const title = mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create your staff account' : mode === 'forgot' ? 'Reset your password' : mode === 'reset' ? 'Choose a new password' : ''
   const subtitle = mode === 'login'
     ? 'Sign in to manage church activities, attendance and expenses.'
     : mode === 'register'
@@ -97,7 +97,7 @@ export default function Auth({ onAuthenticated }) {
         {mode === 'register' && <label>Account type<select value={form.role} onChange={e => update('role', e.target.value)}><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select></label>}
         {mode === 'register' && form.role === 'ADMIN' && <label>Admin registration key<input type="password" value={form.adminKey} onChange={e => update('adminKey', e.target.value)} required /></label>}
         {mode === 'login' && <button type="button" className="auth-link" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
-        {mode !== 'verify' && <button className="primary auth-submit" disabled={loading}>{loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Reset password'}</button>}
+        <button className="primary auth-submit" disabled={loading}>{loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Reset password'}</button>}
       </form>
 
       {mode === 'login' && <div className="auth-switch">New staff member? <button onClick={() => { setError(''); setNotice(''); setMode('register') }}>Create an account</button></div>}
