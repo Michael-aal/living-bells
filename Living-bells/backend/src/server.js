@@ -139,25 +139,6 @@ app.post('/api/auth/verify-email', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.post('/api/auth/resend-verification', async (req, res, next) => {
-  try {
-    const email = String(req.body.email || '').trim().toLowerCase()
-    if (!email) return res.status(400).json({ message: 'Email is required' })
-
-    const user = await prisma.user.findUnique({ where: { email } })
-    if (user && !user.emailVerifiedAt) {
-      const rawToken = createRawToken()
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { emailVerifyTokenHash: hashToken(rawToken), emailVerifyExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
-      })
-      await sendVerificationEmail(user, rawToken)
-    }
-
-    res.json({ message: 'If that account exists and is not verified, a verification email has been sent.' })
-  } catch (error) { next(error) }
-})
-
 app.post('/api/auth/login', async (req, res, next) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase(), password = String(req.body.password || '')
