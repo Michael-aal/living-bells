@@ -7,9 +7,11 @@ import crypto from 'node:crypto'
 import { prisma } from './db.js'
 
 const app = express()
+if (!JWT_SECRET) throw new Error('JWT_SECRET is required')
+if (!APP_URL) throw new Error('APP_URL is required')
 const PORT = Number(process.env.PORT || 5000)
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
-const APP_URL = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
+const JWT_SECRET = process.env.JWT_SECRET
+const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '')
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 const EMAIL_FROM = process.env.EMAIL_FROM || ''
 
