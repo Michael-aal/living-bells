@@ -7,10 +7,11 @@ import crypto from 'node:crypto'
 import { prisma } from './db.js'
 
 const app = express()
+if (!JWT_SECRET) throw new Error('JWT_SECRET is required')
+if (!APP_URL) throw new Error('APP_URL is required')
 const PORT = Number(process.env.PORT || 5000)
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
-const ADMIN_REGISTRATION_KEY = process.env.ADMIN_REGISTRATION_KEY || ''
-const APP_URL = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
+const JWT_SECRET = process.env.JWT_SECRET
+const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '')
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 const EMAIL_FROM = process.env.EMAIL_FROM || ''
 
@@ -75,13 +76,12 @@ async function sendResetEmail(user, rawToken) {
 
 app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const { name, email, password, role = 'STAFF', adminKey } = req.body
+    const { name, email, password, role = 'STAFF' } = req.body
     const normalizedEmail = String(email || '').trim().toLowerCase()
     const normalizedRole = String(role).toUpperCase()
     if (!name?.trim() || !normalizedEmail || !password) return res.status(400).json({ message: 'Name, email and password are required' })
     if (String(password).length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' })
     if (!['STAFF', 'ADMIN'].includes(normalizedRole)) return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
-    if (normalizedRole === 'ADMIN' && (!ADMIN_REGISTRATION_KEY || adminKey !== ADMIN_REGISTRATION_KEY)) return res.status(403).json({ message: 'A valid admin registration key is required' })
     if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) return res.status(409).json({ message: 'An account with this email already exists' })
     const passwordHash = await bcrypt.hash(String(password), 12)
     const user = await prisma.user.create({ data: { name: name.trim(), email: normalizedEmail, passwordHash, role: normalizedRole } })
