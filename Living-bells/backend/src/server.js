@@ -3,6 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import crypto from 'node:crypto'
 import { prisma } from './db.js'
 
 const app = express()
@@ -42,7 +43,15 @@ function currentUserId(req) {
   return Number(req.user?.sub)
 }
 
-async function sendEmailasync function sendEmail({ to, subject, html }) {
+function createRawToken() {
+  return crypto.randomBytes(32).toString('hex')
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+async function sendEmail({ to, subject, html }) {
   if (!RESEND_API_KEY || !EMAIL_FROM) throw new Error('Email service is not configured')
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -55,7 +64,7 @@ async function sendEmailasync function sendEmail({ to, subject, html }) {
   }
 }
 
-async function sendResetEmailasync function sendResetEmail(user, rawToken) {
+async function sendResetEmail(user, rawToken) {
   const url = `${APP_URL}/?reset=${encodeURIComponent(rawToken)}`
   await sendEmail({
     to: user.email,
@@ -95,7 +104,7 @@ app.post('/api/auth/forgot-password', async (req, res, next) => {
     if (!email) return res.status(400).json({ message: 'Email is required' })
 
     const user = await prisma.user.findUnique({ where: { email } })
-    if (user && user.emailVerifiedAt) {
+    if (user) {
       const rawToken = createRawToken()
       await prisma.user.update({
         where: { id: user.id },
