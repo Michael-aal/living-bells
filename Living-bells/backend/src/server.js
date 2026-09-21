@@ -3,7 +3,6 @@ import express from 'express'
 import cors from 'cors'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import crypto from 'node:crypto'
 import { prisma } from './db.js'
 
 const app = express()
@@ -43,15 +42,7 @@ function currentUserId(req) {
   return Number(req.user?.sub)
 }
 
-function createRawToken() {
-  return crypto.randomBytes(32).toString('hex')
-}
-
-function hashToken(token) {
-  return crypto.createHash('sha256').update(token).digest('hex')
-}
-
-async function sendEmail({ to, subject, html }) {
+async function sendEmailasync function sendEmail({ to, subject, html }) {
   if (!RESEND_API_KEY || !EMAIL_FROM) throw new Error('Email service is not configured')
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -64,16 +55,7 @@ async function sendEmail({ to, subject, html }) {
   }
 }
 
-async function sendVerificationEmail(user, rawToken) {
-  const url = `${APP_URL}/?verify=${encodeURIComponent(rawToken)}`
-  await sendEmail({
-    to: user.email,
-    subject: 'Verify your Living Bells email',
-    html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>Welcome to Living Bells, ${user.name}</h2><p>Please verify your email address to activate your account.</p><p><a href="${url}" style="display:inline-block;padding:12px 18px;background:#6d28d9;color:#fff;text-decoration:none;border-radius:8px">Verify email</a></p><p>This link expires in 24 hours.</p></div>`,
-  })
-}
-
-async function sendResetEmail(user, rawToken) {
+async function sendResetEmailasync function sendResetEmail(user, rawToken) {
   const url = `${APP_URL}/?reset=${encodeURIComponent(rawToken)}`
   await sendEmail({
     to: user.email,
@@ -92,86 +74,9 @@ app.post('/api/auth/register', async (req, res, next) => {
     if (!['STAFF', 'ADMIN'].includes(normalizedRole)) return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
     if (normalizedRole === 'ADMIN' && (!ADMIN_REGISTRATION_KEY || adminKey !== ADMIN_REGISTRATION_KEY)) return res.status(403).json({ message: 'A valid admin registration key is required' })
     if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) return res.status(409).json({ message: 'An account with this email already exists' })
-
     const passwordHash = await bcrypt.hash(String(password), 12)
-    const rawToken = createRawToken()
-    const user = await prisma.user.create({
-      data: {
-        name: name.trim(),
-        email: normalizedEmail,
-        passwordHash,
-        role: normalizedRole,
-        emailVerifyTokenHash: hashToken(rawToken),
-        emailVerifyExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    })
-
-    const verificationUrl = `${APP_URL}/?verify=${encodeURIComponent(rawToken)}`
-    let emailSent = true
-
-    try {
-      await sendVerificationEmail(user, rawToken)
-    } catch (emailError) {
-      emailSent = false
-      console.error('Verification email failed:', emailError)
-
-      // Keep the account so a temporary email-provider/configuration failure
-      // does not turn a valid registration into a generic 500 error.
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(503).json({
-          message: 'Account created, but the verification email could not be sent. Please try resending the verification email.',
-          code: 'VERIFICATION_EMAIL_FAILED',
-        })
-      }
-    }
-
-    res.status(201).json({
-      message: emailSent
-        ? 'Account created. Check your email to verify your account before signing in.'
-        : 'Account created, but the verification email could not be sent. Use the development verification link below or fix the email configuration and resend.',
-      verificationUrl: !emailSent && process.env.NODE_ENV !== 'production' ? verificationUrl : undefined,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: false },
-    })
-  } catch (error) { next(error) }
-})
-
-app.post('/api/auth/verify-email', async (req, res, next) => {
-  try {
-    const rawToken = String(req.body.token || '')
-    if (!rawToken) return res.status(400).json({ message: 'Verification token is required' })
-
-    const user = await prisma.user.findFirst({
-      where: {
-        emailVerifyTokenHash: hashToken(rawToken),
-        emailVerifyExpiresAt: { gt: new Date() },
-      },
-    })
-    if (!user) return res.status(400).json({ message: 'This verification link is invalid or expired' })
-
-    const verifiedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: { emailVerifiedAt: new Date(), emailVerifyTokenHash: null, emailVerifyExpiresAt: null },
-    })
-    res.json({ message: 'Email verified successfully. You can now sign in.', user: { id: verifiedUser.id, name: verifiedUser.name, email: verifiedUser.email, role: verifiedUser.role, emailVerified: true } })
-  } catch (error) { next(error) }
-})
-
-app.post('/api/auth/resend-verification', async (req, res, next) => {
-  try {
-    const email = String(req.body.email || '').trim().toLowerCase()
-    if (!email) return res.status(400).json({ message: 'Email is required' })
-
-    const user = await prisma.user.findUnique({ where: { email } })
-    if (user && !user.emailVerifiedAt) {
-      const rawToken = createRawToken()
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { emailVerifyTokenHash: hashToken(rawToken), emailVerifyExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
-      })
-      await sendVerificationEmail(user, rawToken)
-    }
-
-    res.json({ message: 'If that account exists and is not verified, a verification email has been sent.' })
+    const user = await prisma.user.create({ data: { name: name.trim(), email: normalizedEmail, passwordHash, role: normalizedRole } })
+    res.status(201).json({ message: 'Account created. You can now sign in.', user: { id: user.id, name: user.name, email: user.email, role: user.role } })
   } catch (error) { next(error) }
 })
 
@@ -180,7 +85,6 @@ app.post('/api/auth/login', async (req, res, next) => {
     const email = String(req.body.email || '').trim().toLowerCase(), password = String(req.body.password || '')
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ message: 'Invalid email or password' })
-    if (!user.emailVerifiedAt) return res.status(403).json({ message: 'Please verify your email before signing in', code: 'EMAIL_NOT_VERIFIED' })
     res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: true } })
   } catch (error) { next(error) }
 })
@@ -230,9 +134,9 @@ app.post('/api/auth/reset-password', async (req, res, next) => {
 
 app.get('/api/auth/me', authenticate, async (req, res, next) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) }, select: { id: true, name: true, email: true, role: true, emailVerifiedAt: true } })
+    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) }, select: { id: true, name: true, email: true, role: true } })
     if (!user) return res.status(401).json({ message: 'User account not found' })
-    res.json({ ...user, emailVerified: Boolean(user.emailVerifiedAt) })
+    res.json(user)
   } catch (error) { next(error) }
 })
 
