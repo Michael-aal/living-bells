@@ -312,13 +312,12 @@ app.get('/api/admin/staff', requireAdmin, async (_req, res, next) => {
       where: { role: 'STAFF' },
       orderBy: { name: 'asc' },
       select: {
-        id: true, name: true, email: true, role: true, emailVerifiedAt: true, createdAt: true,
+        id: true, name: true, email: true, role: true, createdAt: true,
         _count: { select: { recordedActivities: true, recordedAttendances: true, recordedExpenses: true, staffReviews: true } },
       },
     })
     res.json(staff.map(item => ({
       ...item,
-      emailVerified: Boolean(item.emailVerifiedAt),
       recordCount: item._count.recordedActivities + item._count.recordedAttendances + item._count.recordedExpenses,
       reviewCount: item._count.staffReviews,
       _count: undefined,
