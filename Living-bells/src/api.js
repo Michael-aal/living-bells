@@ -41,7 +41,6 @@ export const api = {
   register: payload => apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: payload => apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   verifyEmail: token => apiRequest('/api/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) }),
-  resendVerification: email => apiRequest('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) }),
   forgotPassword: email => apiRequest('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token, password) => apiRequest('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
   me: () => apiRequest('/api/auth/me'),
