@@ -169,6 +169,7 @@ model FinancialRecord {
   @@index([category])
   @@index([recordDate])
   @@index([recordedById])
+  @@index([recordDate, type])
 }
 
 enum FinancialType {
