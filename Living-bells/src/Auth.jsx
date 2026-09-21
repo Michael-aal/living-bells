@@ -7,7 +7,7 @@ export default function Auth({ onAuthenticated }) {
   const verifyToken = params.get('verify')
   const resetToken = params.get('reset')
   const [mode, setMode] = useState(resetToken ? 'reset' : verifyToken ? 'verify' : 'login')
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STAFF', adminKey: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STAFF' })
   const [resetPassword, setResetPassword] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -63,7 +63,7 @@ export default function Auth({ onAuthenticated }) {
       } else if (mode === 'register') {
         const result = await api.register(form)
         setNotice(result.message)
-        setForm(x => ({ ...x, password: '', adminKey: '' }))
+        setForm(x => ({ ...x, password: '' }))
         setMode('login')
       } else if (mode === 'forgot') {
         const result = await api.forgotPassword(form.email)
@@ -75,20 +75,6 @@ export default function Auth({ onAuthenticated }) {
         window.history.replaceState({}, '', window.location.pathname)
         setMode('login')
       }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function resendVerification() {
-    setError('')
-    setNotice('')
-    setLoading(true)
-    try {
-      const result = await api.resendVerification(form.email)
-      setNotice(result.message)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -122,9 +108,7 @@ export default function Auth({ onAuthenticated }) {
         {(mode === 'login' || mode === 'register') && <label>Password<input type="password" minLength="8" value={form.password} onChange={e => update('password', e.target.value)} required /></label>}
         {mode === 'reset' && <label>New password<input type="password" minLength="8" value={resetPassword} onChange={e => setResetPassword(e.target.value)} required /></label>}
         {mode === 'register' && <label>Account type<select value={form.role} onChange={e => update('role', e.target.value)}><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select></label>}
-        {mode === 'register' && form.role === 'ADMIN' && <label>Admin registration key<input type="password" value={form.adminKey} onChange={e => update('adminKey', e.target.value)} required /></label>}
         {mode === 'login' && <button type="button" className="auth-link" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
-        {mode === 'login' && error.includes('verify') && <button type="button" className="auth-link" onClick={resendVerification}>Resend verification email</button>}
         {mode !== 'verify' && <button className="primary auth-submit" disabled={loading}>{loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Reset password'}</button>}
       </form>}
 
