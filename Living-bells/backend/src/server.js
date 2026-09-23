@@ -42,6 +42,17 @@ function requireStaff(req, res, next) {
   next()
 }
 
+function currentUserId(req) {
+  const id = Number(req.user?.sub)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+function ownRecordFilter(req) {
+  return req.user?.role === 'STAFF'
+    ? { recordedById: currentUserId(req) }
+    : undefined
+}
+
 function createRawToken() {
   return crypto.randomBytes(32).toString('hex')
 }
@@ -211,13 +222,14 @@ app.get('/health', async (_req, res) => {
   }
 })
 
-app.get('/api/dashboard', async (_req, res, next) => {
+app.get('/api/dashboard', async (req, res, next) => {
   try {
+    const filter = ownRecordFilter(req)
     const [attendance, expenses, activities, finances] = await Promise.all([
-      prisma.attendance.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } }),
-      prisma.expense.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
-      prisma.activity.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
-      prisma.financialRecord.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { recordDate: 'desc' } }),
+      prisma.attendance.findMany({ where: filter, include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } }),
+      prisma.expense.findMany({ where: filter, include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
+      prisma.activity.findMany({ where: filter, include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
+      prisma.financialRecord.findMany({ where: filter, include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { recordDate: 'desc' } }),
     ])
     const moneyIn = finances.filter(item => item.type === 'INCOME').reduce((sum, item) => sum + Number(item.amount), 0)
     const moneyOut = finances.filter(item => item.type === 'EXPENSE').reduce((sum, item) => sum + Number(item.amount), 0)
@@ -225,8 +237,8 @@ app.get('/api/dashboard', async (_req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.get('/api/activities', async (_req, res, next) => {
-  try { res.json(await prisma.activity.findMany({ include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
+app.get('/api/activities', async (req, res, next) => {
+  try { res.json(await prisma.activity.findMany({ where: ownRecordFilter(req), include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
   catch (error) { next(error) }
 })
 
@@ -239,8 +251,8 @@ app.post('/api/activities', requireStaff, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.get('/api/attendance', async (_req, res, next) => {
-  try { res.json(await prisma.attendance.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } })) }
+app.get('/api/attendance', async (req, res, next) => {
+  try { res.json(await prisma.attendance.findMany({ where: ownRecordFilter(req), include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } })) }
   catch (error) { next(error) }
 })
 
@@ -292,8 +304,8 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.get('/api/expenses', async (_req, res, next) => {
-  try { res.json(await prisma.expense.findMany({ include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
+app.get('/api/expenses', async (req, res, next) => {
+  try { res.json(await prisma.expense.findMany({ where: ownRecordFilter(req), include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
   catch (error) { next(error) }
 })
 
@@ -319,9 +331,10 @@ app.post('/api/expenses', requireStaff, async (req, res, next) => {
 })
 
 
-app.get('/api/finances', async (_req, res, next) => {
+app.get('/api/finances', async (req, res, next) => {
   try {
     const records = await prisma.financialRecord.findMany({
+      where: ownRecordFilter(req),
       include: { recordedBy: { select: { id: true, name: true, email: true } } },
       orderBy: { recordDate: 'desc' },
     })
