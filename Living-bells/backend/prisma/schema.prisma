@@ -10,6 +10,8 @@ datasource db {
 enum UserRole {
   STAFF
   ADMIN
+  SECRETARY
+  PASTOR
 }
 
 enum ReviewRating {
@@ -39,6 +41,7 @@ model User {
   recordedExpenses     Expense[]    @relation("ExpenseRecorder")
   adminReviews         SundayReview[] @relation("ReviewAdmin")
   staffReviews         SundayReview[] @relation("ReviewStaff")
+  weeklyReportsCreated WeeklyReport[] @relation("WeeklyReportCreator")
 }
 
 model Activity {
@@ -112,4 +115,26 @@ model SundayReview {
   @@unique([staffId, reviewDate])
   @@index([reviewDate])
   @@index([staffId])
+}
+
+
+model WeeklyReport {
+  id               Int      @id @default(autoincrement())
+  reportDate       DateTime
+  numerical        Json
+  spiritual        Json
+  income           Json
+  expenditure      Json
+  totalIncome      Decimal  @db.Decimal(14, 2)
+  totalExpenditure Decimal  @db.Decimal(14, 2)
+  balance          Decimal  @db.Decimal(14, 2)
+  createdById      Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  createdBy User? @relation("WeeklyReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([reportDate])
+  @@index([createdById])
+  @@index([reportDate, createdAt])
 }
