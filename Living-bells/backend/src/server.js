@@ -223,6 +223,47 @@ app.get('/api/auth/me', authenticate, async (req, res, next) => {
 
 app.use('/api', authenticate)
 
+function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY'].includes(req.user?.role))return res.status(403).json({message:'Only Admin or Secretary accounts can create or edit weekly reports'});next()}
+function requireWeeklyReportView(req,res,next){if(!['ADMIN','SECRETARY','PASTOR'].includes(req.user?.role))return res.status(403).json({message:'You do not have permission to view weekly reports'});next()}
+function validateWeeklyPayload(body){
+  const reportDate=new Date(body?.reportDate); if(Number.isNaN(reportDate.getTime()))return{error:'A valid report date is required'}
+  const numerical=Array.isArray(body?.numerical)?body.numerical:[], income=Array.isArray(body?.income)?body.income:[], expenditure=Array.isArray(body?.expenditure)?body.expenditure:[]
+  const spiritual=body?.spiritual&&typeof body.spiritual==='object'?body.spiritual:{}
+  const nn=v=>{const n=Number(v);return Number.isFinite(n)&&n>=0?n:null}
+  for(const r of numerical)for(const k of ['adult','children','visitor'])if(nn(r?.[k])===null)return{error:'Numerical values must be non-negative numbers'}
+  for(const v of Object.values(spiritual))if(nn(v)===null)return{error:'Spiritual values must be non-negative numbers'}
+  for(const rows of [income,expenditure])for(const r of rows)if(nn(r?.amount)===null)return{error:'Financial amounts must be non-negative numbers'}
+  const n=numerical.map((r,i)=>{const adult=nn(r.adult)??0,children=nn(r.children)??0,visitor=nn(r.visitor)??0;return{sn:Number(r.sn)||i+1,service:String(r.service||'').trim(),adult,children,visitor,total:adult+children+visitor}})
+  const inc=income.map((r,i)=>({sn:Number(r.sn)||i+1,name:String(r.name||'').trim(),amount:nn(r.amount)??0}))
+  const exp=expenditure.map((r,i)=>({sn:Number(r.sn)||i+1,name:String(r.name||'').trim(),amount:nn(r.amount)??0}))
+  const sp=Object.fromEntries(Object.entries(spiritual).map(([k,v])=>[k,nn(v)??0]))
+  const totalIncome=inc.reduce((a,r)=>a+r.amount,0),totalExpenditure=exp.reduce((a,r)=>a+r.amount,0)
+  return{data:{reportDate,numerical:n,spiritual:sp,income:inc,expenditure:exp,totalIncome,totalExpenditure,balance:totalIncome-totalExpenditure}}
+}
+const reportDto=r=>({...r,totalIncome:Number(r.totalIncome),totalExpenditure:Number(r.totalExpenditure),balance:Number(r.balance)})
+app.get('/api/weekly-reports',requireWeeklyReportView,async(req,res,next)=>{
+ try{
+  const where={},search=String(req.query.search||'').trim(),month=String(req.query.month||''),year=String(req.query.year||'')
+  if(/^\\d{4}-\\d{2}$/.test(month)){const[y,m]=month.split('-').map(Number);where.reportDate={gte:new Date(y,m-1,1),lt:new Date(y,m,1)}}
+  else if(/^\\d{4}$/.test(year)){const y=Number(year);where.reportDate={gte:new Date(y,0,1),lt:new Date(y+1,0,1)}}
+  else if(search){const d=new Date(search);if(!Number.isNaN(d.getTime())){const e=new Date(d);e.setHours(0,0,0,0);const end=new Date(e);end.setDate(end.getDate()+1);where.reportDate={gte:e,lt:end}}}
+  const rows=await prisma.weeklyReport.findMany({where,orderBy:{reportDate:'desc'},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
+  res.json(rows.map(reportDto))
+ }catch(e){next(e)}
+})
+app.get('/api/weekly-reports/:id',requireWeeklyReportView,async(req,res,next)=>{
+ try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});const r=await prisma.weeklyReport.findUnique({where:{id},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});if(!r)return res.status(404).json({message:'Weekly report not found'});res.json(reportDto(r))}catch(e){next(e)}
+})
+app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
+ try{const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error});const d=v.data;const r=await prisma.weeklyReport.create({data:{...d,createdById:currentUserId(req)},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});res.status(201).json(reportDto(r))}catch(e){next(e)}
+})
+app.put('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
+ try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error});if(!await prisma.weeklyReport.findUnique({where:{id},select:{id:true}}))return res.status(404).json({message:'Weekly report not found'});const r=await prisma.weeklyReport.update({where:{id},data:v.data,include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});res.json(reportDto(r))}catch(e){next(e)}
+})
+app.delete('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
+ try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});await prisma.weeklyReport.delete({where:{id}});res.json({message:'Weekly report deleted'})}catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});next(e)}
+})
+
 app.get('/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`
