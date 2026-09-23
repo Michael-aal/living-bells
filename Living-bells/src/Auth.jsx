@@ -6,7 +6,7 @@ export default function Auth({ onAuthenticated }) {
   const params = new URLSearchParams(window.location.search)
   const resetToken = params.get('reset')
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STAFF', adminKey: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STAFF', department: 'Media', position: '', adminKey: '' })
   const [resetPassword, setResetPassword] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -95,6 +95,9 @@ export default function Auth({ onAuthenticated }) {
         {(mode === 'login' || mode === 'register') && <label>Password<input type="password" minLength="8" value={form.password} onChange={e => update('password', e.target.value)} required /></label>}
         {mode === 'reset' && <label>New password<input type="password" minLength="8" value={resetPassword} onChange={e => setResetPassword(e.target.value)} required /></label>}
         {mode === 'register' && <label>Account type<select value={form.role} onChange={e => update('role', e.target.value)}><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select></label>}
+        {mode === 'register' && form.role === 'STAFF' && <label>Department<select value={form.department} onChange={e => update('department', e.target.value)} required><option value="Media">Media</option><option value="Technical">Technical</option><option value="Security">Security</option><option value="Secretary">Secretary</option><option value="Others">Others</option></select></label>}
+        {mode === 'register' && form.role === 'STAFF' && form.department === 'Others' && <label>Specify department<input value={form.otherDepartment || ''} onChange={e => update('otherDepartment', e.target.value)} placeholder="Enter department" required /></label>}
+        {mode === 'register' && form.role === 'ADMIN' && <label>Position<input value={form.position} onChange={e => update('position', e.target.value)} placeholder="e.g. Senior Pastor, Pastor, Branch Pastor" required /><small>Example: Senior Pastor, Pastor, Branch Pastor</small></label>}
         {mode === 'register' && form.role === 'ADMIN' && <label>Admin registration key<input type="password" value={form.adminKey} onChange={e => update('adminKey', e.target.value)} required /></label>}
         {mode === 'login' && <button type="button" className="auth-link" onClick={() => { setError(''); setNotice(''); setMode('forgot') }}>Forgot password?</button>}
         <button className="primary auth-submit" disabled={loading}>
