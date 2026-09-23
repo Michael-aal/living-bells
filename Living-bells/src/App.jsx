@@ -309,7 +309,7 @@ function App() {
       if (user.demo) { setFinances(current => [{ id: `demo-finance-${Date.now()}`, ...payload, amount: Number(payload.amount), date: formatDate(payload.recordDate) }, ...current]); setModal(null); setSync('Demo mode'); return }
       try { setSync('Saving financial record...'); const saved = await api.createFinance(payload); setFinances(current => [{ ...saved, amount: Number(saved.amount), date: formatDate(saved.recordDate) }, ...current.filter(item => item.id !== saved.id)]); setModal(null); setSync('Backend connected') } catch (error) { setSync(error.message || 'Could not save financial record') }
     }} />}
-    {modal === 'review'    {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
+    {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
     <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['finance','₦'],['activities','▣'],['reports','⌁'],...(['ADMIN','SECRETARY','PASTOR'].includes(user.role) ? [['weekly-reports','▤']] : []),...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
   </div>
 }
