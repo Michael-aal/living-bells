@@ -137,29 +137,51 @@ app.get('/api/auth/me', authenticate, async (req, res, next) => {
 app.use('/api', authenticate)
 
 function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY'].includes(req.user?.role))return res.status(403).json({message:'Only Admin or Secretary accounts can create or edit weekly reports'});next()}
-function requireWeeklyReportView(req,res,next){if(!['ADMIN','SECRETARY','PASTOR'].includes(req.user?.role))return res.status(403).json({message:'You do not have permission to view weekly reports'});next()}
+function requireWeeklyReportView(req,res,next){next()}
+const WEEKLY_SERVICES=['Pre-Sunday Prayer','Sunday School','Worship Service','Bible Study','House Fellowship','Prayer Meeting','Vigil','Revival Service','Intercessory Prayer','Anointing Service']
+const WEEKLY_SPIRITUAL=['No. of Decision','No. of Water Baptism','No. of Healing','No. of Conversion','No. of Holy Spirit Baptism','No. of Deliverance']
+const WEEKLY_INCOME_COUNT=24
+const WEEKLY_EXPENDITURE_COUNT=24
+function normalizeReportDate(value){
+  const date=new Date(value)
+  if(Number.isNaN(date.getTime())) return null
+  date.setUTCHours(0,0,0,0)
+  return date
+}
 function validateWeeklyPayload(body){
-  const reportDate=new Date(body?.reportDate); if(Number.isNaN(reportDate.getTime()))return{error:'A valid report date is required'}
-  const numerical=Array.isArray(body?.numerical)?body.numerical:[], income=Array.isArray(body?.income)?body.income:[], expenditure=Array.isArray(body?.expenditure)?body.expenditure:[]
+  const reportDate=normalizeReportDate(body?.reportDate)
+  if(!reportDate)return{error:'A valid report date is required'}
+  const numerical=Array.isArray(body?.numerical)?body.numerical:[]
+  const income=Array.isArray(body?.income)?body.income:[]
+  const expenditure=Array.isArray(body?.expenditure)?body.expenditure:[]
   const spiritual=body?.spiritual&&typeof body.spiritual==='object'?body.spiritual:{}
-  const nn=v=>{const n=Number(v);return Number.isFinite(n)&&n>=0?n:null}
-  for(const r of numerical)for(const k of ['adult','children','visitor'])if(nn(r?.[k])===null)return{error:'Numerical values must be non-negative numbers'}
-  for(const v of Object.values(spiritual))if(nn(v)===null)return{error:'Spiritual values must be non-negative numbers'}
-  for(const rows of [income,expenditure])for(const r of rows)if(nn(r?.amount)===null)return{error:'Financial amounts must be non-negative numbers'}
-  const n=numerical.map((r,i)=>{const adult=nn(r.adult)??0,children=nn(r.children)??0,visitor=nn(r.visitor)??0;return{sn:Number(r.sn)||i+1,service:String(r.service||'').trim(),adult,children,visitor,total:adult+children+visitor}})
-  const inc=income.map((r,i)=>({sn:Number(r.sn)||i+1,name:String(r.name||'').trim(),amount:nn(r.amount)??0}))
-  const exp=expenditure.map((r,i)=>({sn:Number(r.sn)||i+1,name:String(r.name||'').trim(),amount:nn(r.amount)??0}))
-  const sp=Object.fromEntries(Object.entries(spiritual).map(([k,v])=>[k,nn(v)??0]))
-  const totalIncome=inc.reduce((a,r)=>a+r.amount,0),totalExpenditure=exp.reduce((a,r)=>a+r.amount,0)
+  if(numerical.length!==WEEKLY_SERVICES.length)return{error:'The numerical section must contain exactly 10 rows'}
+  if(income.length!==WEEKLY_INCOME_COUNT)return{error:'The income section must contain exactly 24 rows'}
+  if(expenditure.length!==WEEKLY_EXPENDITURE_COUNT)return{error:'The expenditure section must contain exactly 24 rows'}
+  const integer=v=>{const n=Number(v);return Number.isInteger(n)&&n>=0?n:null}
+  const amount=v=>{const n=Number(v);return Number.isFinite(n)&&n>=0&&Math.round(n*100)===n*100?n:null}
+  const n=numerical.map((r,i)=>{
+    const adult=integer(r?.adult),children=integer(r?.children),visitor=integer(r?.visitor)
+    if(adult===null||children===null||visitor===null)return null
+    return{sn:i+1,service:WEEKLY_SERVICES[i],adult,children,visitor,total:adult+children+visitor}
+  })
+  if(n.some(row=>!row))return{error:'Attendance values must be whole numbers greater than or equal to 0'}
+  const sp={}
+  for(const label of WEEKLY_SPIRITUAL){const value=integer(spiritual[label]);if(value===null)return{error:'Spiritual experience values must be whole numbers greater than or equal to 0'};sp[label]=value}
+  const inc=income.map((r,i)=>{const value=amount(r?.amount);if(value===null)return null;return{sn:i+1,name:String(r?.name||'').trim(),amount:value}})
+  const exp=expenditure.map((r,i)=>{const value=amount(r?.amount);if(value===null)return null;return{sn:i+1,name:String(r?.name||'').trim(),amount:value}})
+  if(inc.some(row=>!row)||exp.some(row=>!row))return{error:'Financial amounts must be valid non-negative numbers with at most 2 decimal places'}
+  const totalIncome=inc.reduce((sum,row)=>sum+row.amount,0)
+  const totalExpenditure=exp.reduce((sum,row)=>sum+row.amount,0)
   return{data:{reportDate,numerical:n,spiritual:sp,income:inc,expenditure:exp,totalIncome,totalExpenditure,balance:totalIncome-totalExpenditure}}
 }
-const reportDto=r=>({...r,totalIncome:Number(r.totalIncome),totalExpenditure:Number(r.totalExpenditure),balance:Number(r.balance)})
+const reportDto=r=>({...r,reportDate:r.reportDate.toISOString().slice(0,10),totalIncome:Number(r.totalIncome),totalExpenditure:Number(r.totalExpenditure),balance:Number(r.balance)})
 app.get('/api/weekly-reports',requireWeeklyReportView,async(req,res,next)=>{
  try{
   const where={},search=String(req.query.search||'').trim(),month=String(req.query.month||''),year=String(req.query.year||'')
-  if(/^\d{4}-\d{2}$/.test(month)){const[y,m]=month.split('-').map(Number);where.reportDate={gte:new Date(y,m-1,1),lt:new Date(y,m,1)}}
-  else if(/^\d{4}$/.test(year)){const y=Number(year);where.reportDate={gte:new Date(y,0,1),lt:new Date(y+1,0,1)}}
-  else if(search){const d=new Date(search);if(!Number.isNaN(d.getTime())){const e=new Date(d);e.setHours(0,0,0,0);const end=new Date(e);end.setDate(end.getDate()+1);where.reportDate={gte:e,lt:end}}}
+  if(/^\d{4}-\d{2}$/.test(month)){const[y,m]=month.split('-').map(Number);where.reportDate={gte:new Date(Date.UTC(y,m-1,1)),lt:new Date(Date.UTC(y,m,1))}}
+  else if(/^\d{4}$/.test(year)){const y=Number(year);where.reportDate={gte:new Date(Date.UTC(y,0,1)),lt:new Date(Date.UTC(y+1,0,1))}}
+  else if(search){const d=normalizeReportDate(search);if(d){const end=new Date(d);end.setUTCDate(end.getUTCDate()+1);where.reportDate={gte:d,lt:end}}}
   const rows=await prisma.weeklyReport.findMany({where,orderBy:{reportDate:'desc'},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
   res.json(rows.map(reportDto))
  }catch(e){next(e)}
@@ -168,10 +190,25 @@ app.get('/api/weekly-reports/:id',requireWeeklyReportView,async(req,res,next)=>{
  try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});const r=await prisma.weeklyReport.findUnique({where:{id},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});if(!r)return res.status(404).json({message:'Weekly report not found'});res.json(reportDto(r))}catch(e){next(e)}
 })
 app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
- try{const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error});const d=v.data;const r=await prisma.weeklyReport.create({data:{...d,createdById:currentUserId(req)},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});res.status(201).json(reportDto(r))}catch(e){next(e)}
+ try{
+  const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
+  const d=v.data
+  const r=await prisma.weeklyReport.upsert({
+   where:{reportDate:d.reportDate},
+   update:{numerical:d.numerical,spiritual:d.spiritual,income:d.income,expenditure:d.expenditure,totalIncome:d.totalIncome,totalExpenditure:d.totalExpenditure,balance:d.balance},
+   create:{...d,createdById:currentUserId(req)},
+   include:{createdBy:{select:{id:true,name:true,email:true,role:true}}},
+  })
+  res.status(201).json(reportDto(r))
+ }catch(e){if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that date. Refresh and try again.'});next(e)}
 })
 app.put('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
- try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error});if(!await prisma.weeklyReport.findUnique({where:{id},select:{id:true}}))return res.status(404).json({message:'Weekly report not found'});const r=await prisma.weeklyReport.update({where:{id},data:v.data,include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});res.json(reportDto(r))}catch(e){next(e)}
+ try{
+  const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'})
+  const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
+  const r=await prisma.weeklyReport.update({where:{id},data:v.data,include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
+  res.json(reportDto(r))
+ }catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that date'});next(e)}
 })
 app.delete('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
  try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});await prisma.weeklyReport.delete({where:{id}});res.json({message:'Weekly report deleted'})}catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});next(e)}
