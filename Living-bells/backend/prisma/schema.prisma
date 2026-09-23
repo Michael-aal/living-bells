@@ -10,6 +10,8 @@ datasource db {
 enum UserRole {
   STAFF
   ADMIN
+  SECRETARY
+  PASTOR
 }
 
 enum ReviewRating {
