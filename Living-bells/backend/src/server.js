@@ -244,8 +244,8 @@ const reportDto=r=>({...r,totalIncome:Number(r.totalIncome),totalExpenditure:Num
 app.get('/api/weekly-reports',requireWeeklyReportView,async(req,res,next)=>{
  try{
   const where={},search=String(req.query.search||'').trim(),month=String(req.query.month||''),year=String(req.query.year||'')
-  if(/^\\d{4}-\\d{2}$/.test(month)){const[y,m]=month.split('-').map(Number);where.reportDate={gte:new Date(y,m-1,1),lt:new Date(y,m,1)}}
-  else if(/^\\d{4}$/.test(year)){const y=Number(year);where.reportDate={gte:new Date(y,0,1),lt:new Date(y+1,0,1)}}
+  if(/^\d{4}-\d{2}$/.test(month)){const[y,m]=month.split('-').map(Number);where.reportDate={gte:new Date(y,m-1,1),lt:new Date(y,m,1)}}
+  else if(/^\d{4}$/.test(year)){const y=Number(year);where.reportDate={gte:new Date(y,0,1),lt:new Date(y+1,0,1)}}
   else if(search){const d=new Date(search);if(!Number.isNaN(d.getTime())){const e=new Date(d);e.setHours(0,0,0,0);const end=new Date(e);end.setDate(end.getDate()+1);where.reportDate={gte:e,lt:end}}}
   const rows=await prisma.weeklyReport.findMany({where,orderBy:{reportDate:'desc'},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
   res.json(rows.map(reportDto))
