@@ -41,6 +41,7 @@ model User {
   staffReviews         SundayReview[] @relation("ReviewStaff")
   attendanceRecords    AttendanceRecord[] @relation("AttendanceRecordCreator")
   financialRecords     FinancialRecord[] @relation("FinancialRecordCreator")
+  weeklyReportsCreated WeeklyReport[]    @relation("WeeklyReportCreator")
 }
 
 model Activity {
@@ -175,4 +176,27 @@ model FinancialRecord {
 enum FinancialType {
   INCOME
   EXPENSE
+}
+
+
+/// Weekly management snapshot for church leadership.
+model WeeklyReport {
+  id               Int      @id @default(autoincrement())
+  reportDate       DateTime
+  numerical        Json
+  spiritual        Json
+  income           Json
+  expenditure      Json
+  totalIncome      Decimal  @db.Decimal(14, 2)
+  totalExpenditure Decimal  @db.Decimal(14, 2)
+  balance          Decimal  @db.Decimal(14, 2)
+  createdById      Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  createdBy User? @relation("WeeklyReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([reportDate])
+  @@index([createdById])
+  @@index([reportDate, createdAt])
 }
