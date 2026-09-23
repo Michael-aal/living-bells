@@ -41,7 +41,9 @@ model User {
   recordedExpenses     Expense[]    @relation("ExpenseRecorder")
   adminReviews         SundayReview[] @relation("ReviewAdmin")
   staffReviews         SundayReview[] @relation("ReviewStaff")
-  weeklyReportsCreated WeeklyReport[] @relation("WeeklyReportCreator")
+  attendanceRecords    AttendanceRecord[] @relation("AttendanceRecordCreator")
+  financialRecords     FinancialRecord[] @relation("FinancialRecordCreator")
+  weeklyReportsCreated WeeklyReport[]    @relation("WeeklyReportCreator")
 }
 
 model Activity {
@@ -118,6 +120,68 @@ model SundayReview {
 }
 
 
+/// Generic weekly attendance foundation.
+/// Categories are intentionally stored as data, not as hard-coded columns,
+/// so the church owner can define the final categories later.
+model AttendanceRecord {
+  id           Int                @id @default(autoincrement())
+  serviceDate  DateTime
+  recordedById Int?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  recordedBy   User?              @relation("AttendanceRecordCreator", fields: [recordedById], references: [id], onDelete: SetNull)
+  entries      AttendanceEntry[]
+
+  @@unique([serviceDate])
+  @@index([serviceDate])
+  @@index([recordedById])
+}
+
+/// One row per attendance category for a Sunday.
+model AttendanceEntry {
+  id                 Int              @id @default(autoincrement())
+  attendanceRecordId Int
+  category           String
+  count              Int              @default(0)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  attendanceRecord   AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([attendanceRecordId, category])
+  @@index([category])
+}
+
+/// Generic financial foundation for both money received and money spent.
+/// The final category names and business rules will be supplied by the owner.
+model FinancialRecord {
+  id           Int              @id @default(autoincrement())
+  type         FinancialType
+  category     String
+  amount       Decimal          @db.Decimal(12, 2)
+  description  String?
+  recordDate   DateTime
+  recordedById Int?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  recordedBy   User?            @relation("FinancialRecordCreator", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([type])
+  @@index([category])
+  @@index([recordDate])
+  @@index([recordedById])
+  @@index([recordDate, type])
+}
+
+enum FinancialType {
+  INCOME
+  EXPENSE
+}
+
+
+/// Weekly management snapshot for church leadership.
 model WeeklyReport {
   id               Int      @id @default(autoincrement())
   reportDate       DateTime
