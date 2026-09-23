@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import WeeklyReports from './WeeklyReports'
+import FinancePage from './FinancePage'
+import ActivitiesPage from './ActivitiesPage'
 import './App.css'
 import Auth from './Auth'
 import { api } from './api'
@@ -276,7 +277,7 @@ function App() {
       <span className="label">Workspace</span>
       {[
         ['dashboard', '⌂', 'Dashboard'], ['attendance', '◉', 'Attendance'], ['expenses', '₦', 'Expenses'],
-        ['activities', '▣', 'Activities'], ['reports', '⌁', 'Reports'], ...(isAdmin ? [['staff', '♙', 'Staff']] : []), ...(['ADMIN','SECRETARY','PASTOR'].includes(user.role) ? [['weekly-reports','▤','Weekly reports']] : []), ['forms', '□', 'Forms']
+        ['activities', '▣', 'Activities'], ['programs', '◫', 'Programs'], ['finance', '₦', 'Finance'], ['reports', '⌁', 'Reports'], ...(isAdmin ? [['staff', '♙', 'Staff']] : []), ['forms', '□', 'Forms']
       ].map(([id, icon, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}><i>{icon}</i>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
     </aside>
@@ -293,10 +294,11 @@ function App() {
         {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Record expense" onAdd={() => setModal('expense')} isAdmin={isAdmin} onPrint={() => printReport('Expense report')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleExpenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
-        {!loading && page === 'activities' && <Records title="Activities" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')} isAdmin={isAdmin} onPrint={() => printReport('Activities report')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleActivities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td>{isAdmin && <td>{item.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
+        {!loading && page === 'programs' && <Records title="Programs" eyebrow="Church programs" action="Record activity" onAdd={() => setModal('activity')} isAdmin={isAdmin} onPrint={() => printReport('Activities report')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleActivities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td>{isAdmin && <td>{item.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
+        {!loading && page === 'activities' && <ActivitiesPage user={user} />}
+        {!loading && page === 'finance' && <FinancePage user={user} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
-        {!loading && page === 'weekly-reports' && ['ADMIN','SECRETARY','PASTOR'].includes(user.role) && <WeeklyReports user={user} demo={user.demo} />}
-        {!loading && page === 'reports' && <div className="report-grid"><Card title="Attendance"><strong className="big">{attendance.reduce((sum, item) => sum + item.total, 0).toLocaleString()}</strong><p>Combined recorded attendance.</p></Card><Card title="Expenses"><strong className="big">{money(totalSpend)}</strong><p>Combined expenses in this workspace.</p></Card></div>}
+        {{!loading && page === 'reports' && <div className="report-grid"><Card title="Attendance"><strong className="big">{attendance.reduce((sum, item) => sum + item.total, 0).toLocaleString()}</strong><p>Combined recorded attendance.</p></Card><Card title="Expenses"><strong className="big">{money(totalSpend)}</strong><p>Combined expenses in this workspace.</p></Card></div>}
         {!loading && page === 'forms' && !isAdmin && <div className="form-grid"><Action icon="◉" title="Attendance form" text="Children, teenagers, youth, adults, men and women." onClick={() => setModal('attendance')} /><Action icon="₦" title="Expense form" text="Amount, category, description and date." onClick={() => setModal('expense')} /></div>}
         {!loading && page === 'forms' && isAdmin && <section className="card full"><span className="eyebrow">Admin view</span><h2>Staff recording forms</h2><p>Admins monitor records and print reports. Recording actions are reserved for staff accounts.</p></section>}
       </section>
@@ -310,7 +312,7 @@ function App() {
       try { setSync('Saving financial record...'); const saved = await api.createFinance(payload); setFinances(current => [{ ...saved, amount: Number(saved.amount), date: formatDate(saved.recordDate) }, ...current.filter(item => item.id !== saved.id)]); setModal(null); setSync('Backend connected') } catch (error) { setSync(error.message || 'Could not save financial record') }
     }} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
-    <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['finance','₦'],['activities','▣'],['reports','⌁'],...(['ADMIN','SECRETARY','PASTOR'].includes(user.role) ? [['weekly-reports','▤']] : []),...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
+    <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['finance','₦'],['activities','▣'],['reports','⌁'],...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
   </div>
 }
 
@@ -326,8 +328,8 @@ function Stat({ icon, name, value, note }) { return <div className="stat"><span 
 function Action({ icon, title, text, onClick }) { return <button className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
 function Records({ title, eyebrow, action, onAdd, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <button className="primary" onClick={onAdd}>{action}</button>}</div></div><div className="table-wrap">{children}</div></section> }
-function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', expenses: 'Expenses', activities: 'Activities', reports: 'Reports', 'weekly-reports': 'Weekly Reports', staff: 'Staff', forms: 'Forms' })[p] || 'Dashboard' }
-function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', expenses: 'Track church spending in one place.', activities: 'Keep church programs organized.', reports: 'Turn records into useful summaries.', 'weekly-reports': 'Complete and review the official weekly church report form.', staff: 'Review and support every staff member.', forms: 'Structured forms for recurring church records.' })[p] }
+function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', expenses: 'Expenses', activities: 'Activities', programs: 'Programs', reports: 'Reports', staff: 'Staff', forms: 'Forms' })[p] || 'Dashboard' }
+function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', expenses: 'Track church spending in one place.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', programs: 'Keep church programs organized.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.', forms: 'Structured forms for recurring church records.' })[p] }
 
 
 function StaffPage({ staff, selectedStaff, setSelectedStaff, reviews, attendance, expenses, activities, onReview, onPrint }) {
