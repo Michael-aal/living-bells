@@ -198,7 +198,7 @@ model WeeklyReport {
 
   createdBy User? @relation("WeeklyReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
-  @@index([reportDate])
+  @@unique([reportDate])
   @@index([createdById])
   @@index([reportDate, createdAt])
 }
