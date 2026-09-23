@@ -8,14 +8,11 @@ import { prisma } from './db.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
-const JWT_SECRET = process.env.JWT_SECRET
-const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '')
+const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
+const ADMIN_REGISTRATION_KEY = process.env.ADMIN_REGISTRATION_KEY || ''
+const APP_URL = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 const EMAIL_FROM = process.env.EMAIL_FROM || ''
-const ALLOW_UNVERIFIED_LOGIN_IN_DEVELOPMENT = process.env.NODE_ENV === 'development' && process.env.ALLOW_UNVERIFIED_LOGIN_IN_DEVELOPMENT === 'true'
-
-if (!JWT_SECRET) throw new Error('JWT_SECRET is required')
-if (!APP_URL) throw new Error('APP_URL is required')
 
 app.use(cors())
 app.use(express.json())
@@ -43,14 +40,7 @@ function requireStaff(req, res, next) {
 }
 
 function currentUserId(req) {
-  const id = Number(req.user?.sub)
-  return Number.isInteger(id) && id > 0 ? id : null
-}
-
-function ownRecordFilter(req) {
-  return req.user?.role === 'STAFF'
-    ? { recordedById: currentUserId(req) }
-    : undefined
+  return Number(req.user?.sub)
 }
 
 function createRawToken() {
@@ -94,12 +84,13 @@ async function sendResetEmail(user, rawToken) {
 
 app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const { name, email, password, role = 'STAFF' } = req.body
+    const { name, email, password, role = 'STAFF', adminKey } = req.body
     const normalizedEmail = String(email || '').trim().toLowerCase()
     const normalizedRole = String(role).toUpperCase()
     if (!name?.trim() || !normalizedEmail || !password) return res.status(400).json({ message: 'Name, email and password are required' })
     if (String(password).length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' })
     if (!['STAFF', 'ADMIN'].includes(normalizedRole)) return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
+    if (normalizedRole === 'ADMIN' && (!ADMIN_REGISTRATION_KEY || adminKey !== ADMIN_REGISTRATION_KEY)) return res.status(403).json({ message: 'A valid admin registration key is required' })
     if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) return res.status(409).json({ message: 'An account with this email already exists' })
 
     const passwordHash = await bcrypt.hash(String(password), 12)
@@ -150,13 +141,32 @@ app.post('/api/auth/verify-email', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+app.post('/api/auth/resend-verification', async (req, res, next) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase()
+    if (!email) return res.status(400).json({ message: 'Email is required' })
+
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (user && !user.emailVerifiedAt) {
+      const rawToken = createRawToken()
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifyTokenHash: hashToken(rawToken), emailVerifyExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+      })
+      await sendVerificationEmail(user, rawToken)
+    }
+
+    res.json({ message: 'If that account exists and is not verified, a verification email has been sent.' })
+  } catch (error) { next(error) }
+})
+
 app.post('/api/auth/login', async (req, res, next) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase(), password = String(req.body.password || '')
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ message: 'Invalid email or password' })
-    if (!user.emailVerifiedAt && !ALLOW_UNVERIFIED_LOGIN_IN_DEVELOPMENT) return res.status(403).json({ message: 'Please verify your email before signing in', code: 'EMAIL_NOT_VERIFIED' })
-    res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: Boolean(user.emailVerifiedAt) } })
+    if (!user.emailVerifiedAt) return res.status(403).json({ message: 'Please verify your email before signing in', code: 'EMAIL_NOT_VERIFIED' })
+    res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: true } })
   } catch (error) { next(error) }
 })
 
@@ -213,6 +223,47 @@ app.get('/api/auth/me', authenticate, async (req, res, next) => {
 
 app.use('/api', authenticate)
 
+function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY'].includes(req.user?.role))return res.status(403).json({message:'Only Admin or Secretary accounts can create or edit weekly reports'});next()}
+function requireWeeklyReportView(req,res,next){if(!['ADMIN','SECRETARY','PASTOR'].includes(req.user?.role))return res.status(403).json({message:'You do not have permission to view weekly reports'});next()}
+function validateWeeklyPayload(body){
+  const reportDate=new Date(body?.reportDate); if(Number.isNaN(reportDate.getTime()))return{error:'A valid report date is required'}
+  const numerical=Array.isArray(body?.numerical)?body.numerical:[], income=Array.isArray(body?.income)?body.income:[], expenditure=Array.isArray(body?.expenditure)?body.expenditure:[]
+  const spiritual=body?.spiritual&&typeof body.spiritual==='object'?body.spiritual:{}
+  const nn=v=>{const n=Number(v);return Number.isFinite(n)&&n>=0?n:null}
+  for(const r of numerical)for(const k of ['adult','children','visitor'])if(nn(r?.[k])===null)return{error:'Numerical values must be non-negative numbers'}
+  for(const v of Object.values(spiritual))if(nn(v)===null)return{error:'Spiritual values must be non-negative numbers'}
+  for(const rows of [income,expenditure])for(const r of rows)if(nn(r?.amount)===null)return{error:'Financial amounts must be non-negative numbers'}
+  const n=numerical.map((r,i)=>{const adult=nn(r.adult)??0,children=nn(r.children)??0,visitor=nn(r.visitor)??0;return{sn:Number(r.sn)||i+1,service:String(r.service||'').trim(),adult,children,visitor,total:adult+children+visitor}})
+  const inc=income.map((r,i)=>({sn:Number(r.sn)||i+1,name:String(r.name||'').trim(),amount:nn(r.amount)??0}))
+  const exp=expenditure.map((r,i)=>({sn:Number(r.sn)||i+1,name:String(r.name||'').trim(),amount:nn(r.amount)??0}))
+  const sp=Object.fromEntries(Object.entries(spiritual).map(([k,v])=>[k,nn(v)??0]))
+  const totalIncome=inc.reduce((a,r)=>a+r.amount,0),totalExpenditure=exp.reduce((a,r)=>a+r.amount,0)
+  return{data:{reportDate,numerical:n,spiritual:sp,income:inc,expenditure:exp,totalIncome,totalExpenditure,balance:totalIncome-totalExpenditure}}
+}
+const reportDto=r=>({...r,totalIncome:Number(r.totalIncome),totalExpenditure:Number(r.totalExpenditure),balance:Number(r.balance)})
+app.get('/api/weekly-reports',requireWeeklyReportView,async(req,res,next)=>{
+ try{
+  const where={},search=String(req.query.search||'').trim(),month=String(req.query.month||''),year=String(req.query.year||'')
+  if(/^\d{4}-\d{2}$/.test(month)){const[y,m]=month.split('-').map(Number);where.reportDate={gte:new Date(y,m-1,1),lt:new Date(y,m,1)}}
+  else if(/^\d{4}$/.test(year)){const y=Number(year);where.reportDate={gte:new Date(y,0,1),lt:new Date(y+1,0,1)}}
+  else if(search){const d=new Date(search);if(!Number.isNaN(d.getTime())){const e=new Date(d);e.setHours(0,0,0,0);const end=new Date(e);end.setDate(end.getDate()+1);where.reportDate={gte:e,lt:end}}}
+  const rows=await prisma.weeklyReport.findMany({where,orderBy:{reportDate:'desc'},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
+  res.json(rows.map(reportDto))
+ }catch(e){next(e)}
+})
+app.get('/api/weekly-reports/:id',requireWeeklyReportView,async(req,res,next)=>{
+ try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});const r=await prisma.weeklyReport.findUnique({where:{id},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});if(!r)return res.status(404).json({message:'Weekly report not found'});res.json(reportDto(r))}catch(e){next(e)}
+})
+app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
+ try{const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error});const d=v.data;const r=await prisma.weeklyReport.create({data:{...d,createdById:currentUserId(req)},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});res.status(201).json(reportDto(r))}catch(e){next(e)}
+})
+app.put('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
+ try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error});if(!await prisma.weeklyReport.findUnique({where:{id},select:{id:true}}))return res.status(404).json({message:'Weekly report not found'});const r=await prisma.weeklyReport.update({where:{id},data:v.data,include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});res.json(reportDto(r))}catch(e){next(e)}
+})
+app.delete('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
+ try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});await prisma.weeklyReport.delete({where:{id}});res.json({message:'Weekly report deleted'})}catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});next(e)}
+})
+
 app.get('/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`
@@ -224,36 +275,62 @@ app.get('/health', async (_req, res) => {
 
 app.get('/api/dashboard', async (req, res, next) => {
   try {
-    const filter = ownRecordFilter(req)
-    const [attendance, expenses, activities, finances] = await Promise.all([
-      prisma.attendance.findMany({ where: filter, include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } }),
-      prisma.expense.findMany({ where: filter, include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
-      prisma.activity.findMany({ where: filter, include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } }),
-      prisma.financialRecord.findMany({ where: filter, include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { recordDate: 'desc' } }),
+    const staffOnly = req.user.role === 'STAFF'
+    const userId = currentUserId(req)
+    const [attendance, expenses, activities] = await Promise.all([
+      prisma.attendance.findMany({
+        where: staffOnly ? { recordedById: userId } : undefined,
+        include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.expense.findMany({
+        where: staffOnly ? { recordedById: userId } : undefined,
+        include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { date: 'desc' },
+      }),
+      prisma.activity.findMany({
+        where: staffOnly ? { recordedById: userId } : undefined,
+        include: { recordedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { date: 'desc' },
+      }),
+      prisma.financialRecord.findMany({
+        where: staffOnly ? { recordedById: userId } : undefined,
+        include: { recordedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { recordDate: 'desc' },
+      }),
     ])
-    const moneyIn = finances.filter(item => item.type === 'INCOME').reduce((sum, item) => sum + Number(item.amount), 0)
-    const moneyOut = finances.filter(item => item.type === 'EXPENSE').reduce((sum, item) => sum + Number(item.amount), 0)
-    res.json({ attendance, expenses, activities, finances, financeSummary: { moneyIn, moneyOut, net: moneyIn - moneyOut } })
+    res.json({ attendance, expenses, activities, finances })
   } catch (error) { next(error) }
 })
 
 app.get('/api/activities', async (req, res, next) => {
-  try { res.json(await prisma.activity.findMany({ where: ownRecordFilter(req), include: { recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
-  catch (error) { next(error) }
+  try {
+    res.json(await prisma.activity.findMany({
+      where: req.user.role === 'STAFF' ? { recordedById: currentUserId(req) } : undefined,
+      include: { recordedBy: { select: { id: true, name: true, email: true } } },
+      orderBy: { date: 'desc' },
+    }))
+  } catch (error) { next(error) }
 })
 
 app.post('/api/activities', requireStaff, async (req, res, next) => {
   try {
     const { name, type, date } = req.body
-    if (!name || !date) return res.status(400).json({ message: 'name and date are required' })
-    const activity = await prisma.activity.create({ data: { name, type: type || null, date: new Date(date), recordedById: Number(req.user.sub) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
+    const activityDate = new Date(date)
+    if (!name?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid name and date are required' })
+    const activity = await prisma.activity.create({ data: { name: name.trim(), type: type?.trim() || null, date: activityDate, recordedById: currentUserId(req) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
     res.status(201).json(activity)
   } catch (error) { next(error) }
 })
 
 app.get('/api/attendance', async (req, res, next) => {
-  try { res.json(await prisma.attendance.findMany({ where: ownRecordFilter(req), include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } })) }
-  catch (error) { next(error) }
+  try {
+    res.json(await prisma.attendance.findMany({
+      where: req.user.role === 'STAFF' ? { recordedById: currentUserId(req) } : undefined,
+      include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+    }))
+  } catch (error) { next(error) }
 })
 
 app.post('/api/attendance', requireStaff, async (req, res, next) => {
@@ -265,9 +342,11 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
     if (Number.isInteger(id) && id > 0) {
       activity = await prisma.activity.findUnique({ where: { id } })
       if (!activity) return res.status(404).json({ message: 'Activity not found' })
+      if (activity.recordedById !== currentUserId(req)) return res.status(403).json({ message: 'You can only record attendance for your own activities' })
     } else {
-      if (!service || !date) return res.status(400).json({ message: 'service and date are required' })
-      activity = await prisma.activity.create({ data: { name: service, type: 'service', date: new Date(date), recordedById: Number(req.user.sub) } })
+      const activityDate = new Date(date)
+      if (!service?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid service and date are required' })
+      activity = await prisma.activity.create({ data: { name: service.trim(), type: 'service', date: activityDate, recordedById: currentUserId(req) } })
     }
 
     const value = (group, gender) => Math.max(0, Number(groups?.[group]?.[gender] || 0))
@@ -283,7 +362,7 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
         youthFemale: value('Youth', 'female'),
         adultsMale: value('Adults', 'male'),
         adultsFemale: value('Adults', 'female'),
-        recordedById: Number(req.user.sub),
+        recordedById: currentUserId(req),
       },
       create: {
         activityId: activity.id,
@@ -305,24 +384,38 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
 })
 
 app.get('/api/expenses', async (req, res, next) => {
-  try { res.json(await prisma.expense.findMany({ where: ownRecordFilter(req), include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } }, orderBy: { date: 'desc' } })) }
-  catch (error) { next(error) }
+  try {
+    res.json(await prisma.expense.findMany({
+      where: req.user.role === 'STAFF' ? { recordedById: currentUserId(req) } : undefined,
+      include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
+      orderBy: { date: 'desc' },
+    }))
+  } catch (error) { next(error) }
 })
 
 app.post('/api/expenses', requireStaff, async (req, res, next) => {
   try {
     const { activityId, description, title, category = 'General', amount, date } = req.body
-    if (!(description || title) || amount === undefined || !date) {
-      return res.status(400).json({ message: 'description, amount and date are required' })
+    const expenseDate = new Date(date)
+    const numericAmount = Number(amount)
+    if (!(description || title)?.trim() || !Number.isFinite(numericAmount) || numericAmount < 0 || Number.isNaN(expenseDate.getTime())) {
+      return res.status(400).json({ message: 'Valid description, non-negative amount and date are required' })
+    }
+    const linkedActivityId = activityId ? Number(activityId) : null
+    if (linkedActivityId !== null) {
+      if (!Number.isInteger(linkedActivityId) || linkedActivityId <= 0) return res.status(400).json({ message: 'Invalid activity id' })
+      const activity = await prisma.activity.findUnique({ where: { id: linkedActivityId }, select: { id: true, recordedById: true } })
+      if (!activity) return res.status(404).json({ message: 'Activity not found' })
+      if (activity.recordedById !== currentUserId(req)) return res.status(403).json({ message: 'You can only attach expenses to your own activities' })
     }
     const expense = await prisma.expense.create({
       data: {
-        activityId: activityId ? Number(activityId) : null,
-        description: description || title,
-        category,
-        amount: Number(amount),
-        recordedById: Number(req.user.sub),
-        date: new Date(date),
+        activityId: linkedActivityId,
+        description: (description || title).trim(),
+        category: String(category || 'General').trim() || 'General',
+        amount: numericAmount,
+        recordedById: currentUserId(req),
+        date: expenseDate,
       },
       include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
     })
@@ -385,6 +478,8 @@ app.get('/api/admin/staff/:staffId/reviews', requireAdmin, async (req, res, next
   try {
     const staffId = Number(req.params.staffId)
     if (!Number.isInteger(staffId)) return res.status(400).json({ message: 'Invalid staff id' })
+    const staff = await prisma.user.findFirst({ where: { id: staffId, role: 'STAFF' }, select: { id: true } })
+    if (!staff) return res.status(404).json({ message: 'Staff member not found' })
     const reviews = await prisma.sundayReview.findMany({
       where: { staffId },
       include: { admin: { select: { id: true, name: true, email: true } } },
