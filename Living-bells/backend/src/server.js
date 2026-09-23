@@ -7,13 +7,14 @@ import crypto from 'node:crypto'
 import { prisma } from './db.js'
 
 const app = express()
-if (!JWT_SECRET) throw new Error('JWT_SECRET is required')
-if (!APP_URL) throw new Error('APP_URL is required')
 const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET
 const APP_URL = (process.env.APP_URL || '').replace(/\/$/, '')
+const ADMIN_REGISTRATION_KEY = process.env.ADMIN_REGISTRATION_KEY || ''
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
 const EMAIL_FROM = process.env.EMAIL_FROM || ''
+if (!JWT_SECRET) throw new Error('JWT_SECRET is required')
+if (!APP_URL) throw new Error('APP_URL is required')
 
 app.use(cors())
 app.use(express.json())
@@ -76,16 +77,23 @@ async function sendResetEmail(user, rawToken) {
 
 app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const { name, email, password, role = 'STAFF' } = req.body
+    const { name, email, password, role = 'STAFF', department, otherDepartment, position, adminKey } = req.body
     const normalizedEmail = String(email || '').trim().toLowerCase()
     const normalizedRole = String(role).toUpperCase()
     if (!name?.trim() || !normalizedEmail || !password) return res.status(400).json({ message: 'Name, email and password are required' })
     if (String(password).length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' })
     if (!['STAFF', 'ADMIN'].includes(normalizedRole)) return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
+    if (normalizedRole === 'ADMIN' && (!ADMIN_REGISTRATION_KEY || String(adminKey || '') !== ADMIN_REGISTRATION_KEY)) return res.status(403).json({ message: 'Invalid admin registration key' })
+    const normalizedDepartment = normalizedRole === 'STAFF' ? String(department || '').trim() : null
+    const finalDepartment = normalizedDepartment === 'Others' ? String(otherDepartment || '').trim() : normalizedDepartment
+    const normalizedPosition = normalizedRole === 'ADMIN' ? String(position || '').trim() : null
+    if (normalizedRole === 'STAFF' && !['Media','Technical','Security','Secretary','Others'].includes(normalizedDepartment)) return res.status(400).json({ message: 'Select a valid staff department' })
+    if (normalizedRole === 'STAFF' && normalizedDepartment === 'Others' && !finalDepartment) return res.status(400).json({ message: 'Please specify the department' })
+    if (normalizedRole === 'ADMIN' && !normalizedPosition) return res.status(400).json({ message: 'Position is required for admin accounts' })
     if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) return res.status(409).json({ message: 'An account with this email already exists' })
     const passwordHash = await bcrypt.hash(String(password), 12)
-    const user = await prisma.user.create({ data: { name: name.trim(), email: normalizedEmail, passwordHash, role: normalizedRole } })
-    res.status(201).json({ message: 'Account created. You can now sign in.', user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+    const user = await prisma.user.create({ data: { name: name.trim(), email: normalizedEmail, passwordHash, role: normalizedRole, department: finalDepartment, position: normalizedPosition } })
+    res.status(201).json({ message: 'Account created. You can now sign in.', user: { id: user.id, name: user.name, email: user.email, role: user.role, department: user.department, position: user.position } })
   } catch (error) { next(error) }
 })
 
@@ -94,7 +102,7 @@ app.post('/api/auth/login', async (req, res, next) => {
     const email = String(req.body.email || '').trim().toLowerCase(), password = String(req.body.password || '')
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ message: 'Invalid email or password' })
-    res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: true } })
+    res.json({ token: signToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role, department: user.department, position: user.position, emailVerified: true } })
   } catch (error) { next(error) }
 })
 
@@ -143,7 +151,7 @@ app.post('/api/auth/reset-password', async (req, res, next) => {
 
 app.get('/api/auth/me', authenticate, async (req, res, next) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) }, select: { id: true, name: true, email: true, role: true } })
+    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) }, select: { id: true, name: true, email: true, role: true, department: true, position: true } })
     if (!user) return res.status(401).json({ message: 'User account not found' })
     res.json(user)
   } catch (error) { next(error) }
@@ -312,7 +320,7 @@ app.get('/api/admin/staff', requireAdmin, async (_req, res, next) => {
       where: { role: 'STAFF' },
       orderBy: { name: 'asc' },
       select: {
-        id: true, name: true, email: true, role: true, createdAt: true,
+        id: true, name: true, email: true, role: true, department: true, position: true, createdAt: true,
         _count: { select: { recordedActivities: true, recordedAttendances: true, recordedExpenses: true, staffReviews: true } },
       },
     })
