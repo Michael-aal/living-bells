@@ -386,12 +386,6 @@ function ReviewForm({ staff, close, save }) {
     <button className="primary wide" disabled={!form.reviewDate || !isSunday} onClick={() => save(form)}>Save Sunday review</button>{!isSunday && <small className="form-error">Choose a Sunday date for the weekly review.</small>}
   </Modal>
 }
-function FinancePage({ records, isAdmin, money, onAdd, onPrint }) {
-  const moneyIn = records.filter(r => r.type === 'INCOME').reduce((sum, r) => sum + r.amount, 0)
-  const moneyOut = records.filter(r => r.type === 'EXPENSE').reduce((sum, r) => sum + r.amount, 0)
-  return <section className="card full"><div className="card-head"><div><span className="eyebrow">Financial records</span><h2>Money in & out</h2><p className="card-subtitle">Every record is classified as money received or money spent.</p></div><div className="record-actions">{isAdmin && <button className="secondary print-button" onClick={onPrint}>Print table</button>}{!isAdmin && <button className="primary" onClick={onAdd}>Record transaction</button>}</div></div><div className="stats"><Stat icon="₦" name="Money in" value={money(moneyIn)} note="Income received" /><Stat icon="₦" name="Money out" value={money(moneyOut)} note="Expenses paid" /><Stat icon="⌁" name="Net" value={money(moneyIn - moneyOut)} note="In minus out" /></div><div className="table-wrap"><table><thead><tr><th>Type</th><th>Description</th><th>Category</th><th>Date</th><th>Amount</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{records.map(r => <tr key={r.id}><td><span className="pill">{r.type === 'INCOME' ? 'Money in' : 'Money out'}</span></td><td><b>{r.description || '—'}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!records.length && <p>No financial records yet.</p>}</div></section>
-}
-
 function FinanceForm({ close, save }) {
   const [form, setForm] = useState({ type: 'INCOME', category: '', amount: '', description: '', recordDate: new Date().toISOString().slice(0, 10) })
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
