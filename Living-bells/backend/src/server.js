@@ -227,7 +227,7 @@ app.get('/api/dashboard', async (req, res, next) => {
   try {
     const staffOnly = req.user.role === 'STAFF'
     const userId = currentUserId(req)
-    const [attendance, expenses, activities] = await Promise.all([
+    const [attendance, expenses, activities, finances] = await Promise.all([
       prisma.attendance.findMany({
         where: staffOnly ? { recordedById: userId } : undefined,
         include: { activity: true, recordedBy: { select: { id: true, name: true, email: true } } },
