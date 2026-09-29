@@ -3,7 +3,7 @@ import { api } from './api'
 import WeeklyPrintSheet from './WeeklyPrintSheet'
 import { CURRENCY, money, normalizeReport, reportPayload, totals, dateLabel, emptyReport } from './weeklyReportConfig'
 
-const canEdit = role => ['ADMIN','SECRETARY'].includes(role)
+const canEdit = role => ['ADMIN','SECRETARY','PASTOR'].includes(role)
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b)
 
 export default function FinancePage({ user }) {
@@ -16,7 +16,7 @@ export default function FinancePage({ user }) {
   async function loadHistory(){try{setLoading(true);setError('');const data=await api.weeklyReports();setReports(data||[]);const current=(data||[]).find(r=>String(r.reportDate).slice(0,10)===selectedDate);if(current){const n=normalizeReport(current);setReport(n);setSaved(n)}}catch(e){setError(e.message||'Could not load weekly finance reports')}finally{setLoading(false)}}
   function selectDate(date){if(dirty&&!window.confirm('You have unsaved changes. Discard them and open another report?'))return;setSelectedDate(date);const existing=reports.find(r=>String(r.reportDate).slice(0,10)===date);const n=existing?normalizeReport(existing):emptyReport(date);setReport(n);setSaved(n);setNotice(existing?'Saved report loaded.':'New report for this date.')}
   function update(section,index,key,value){setReport(current=>({...current,[section]:current[section].map((row,i)=>i===index?{...row,[key]:key==='amount'?Math.max(0,Math.round((Number(value)||0)*100)/100):value}:row)}))}
-  async function save(){if(!editable)return;try{setSaving(true);setError('');const savedReport=await api.saveWeeklyReport(reportPayload(report));const n=normalizeReport(savedReport);setReport(n);setSaved(n);setReports(current=>[savedReport,...current.filter(r=>String(r.reportDate).slice(0,10)!==report.reportDate)]);setNotice('Weekly finance report saved successfully.');setTimeout(()=>setNotice(''),3000)}catch(e){setError(e.message||'Could not save the weekly finance report')}finally{setSaving(false)}}
+  async function save(){if(!editable)return;try{setSaving(true);setError('');const payload=reportPayload(report);const savedReport=report.id?await api.updateWeeklyReport(report.id,payload):await api.saveWeeklyReport(payload);const n=normalizeReport(savedReport);setReport(n);setSaved(n);setReports(current=>[savedReport,...current.filter(r=>String(r.reportDate).slice(0,10)!==report.reportDate)]);setNotice('Weekly finance report saved successfully.');setTimeout(()=>setNotice(''),3000)}catch(e){setError(e.message||'Could not save the weekly finance report')}finally{setSaving(false)}}
   return <div className="weekly-page">
     {loading&&<div className="card full" role="status">Loading weekly report…</div>}
     <section className="card full weekly-editor">
