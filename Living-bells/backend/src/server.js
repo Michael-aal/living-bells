@@ -156,7 +156,7 @@ app.patch('/api/auth/me', authenticate, async (req, res, next) => {
 
 app.use('/api', authenticate)
 
-function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY','PASTOR'].includes(req.user?.role))return res.status(403).json({message:'Only Admin, Pastor or Secretary accounts can create or edit weekly reports'});next()}
+function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY','PASTOR','STAFF'].includes(req.user?.role))return res.status(403).json({message:'Only Admin, Pastor or Secretary accounts can create or edit weekly reports'});next()}
 function requireWeeklyReportView(req,res,next){next()}
 const WEEKLY_SERVICES=['Pre-Sunday Prayer','Sunday School','Worship Service','Bible Study','House Fellowship','Prayer Meeting','Vigil','Revival Service','Intercessory Prayer','Anointing Service']
 const WEEKLY_SPIRITUAL=['No. of Decision','No. of Water Baptism','No. of Healing','No. of Conversion','No. of Holy Spirit Baptism','No. of Deliverance']
