@@ -41,6 +41,7 @@ export const api = {
   register: payload => apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: payload => apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   me: () => apiRequest('/api/auth/me'),
+  updateProfile: payload => apiRequest('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
   dashboard: () => apiRequest('/api/dashboard'),
   activities: () => apiRequest('/api/activities'),
   createActivity: payload => apiRequest('/api/activities', { method: 'POST', body: JSON.stringify(payload) }),
