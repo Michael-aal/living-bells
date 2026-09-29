@@ -3,7 +3,7 @@ import { api } from './api'
 import WeeklyPrintSheet from './WeeklyPrintSheet'
 import { CURRENCY, money, normalizeReport, reportPayload, totals, dateLabel, emptyReport } from './weeklyReportConfig'
 
-const canEdit = role => ['ADMIN','SECRETARY','PASTOR'].includes(role)
+const canEdit = role => ['ADMIN','SECRETARY','PASTOR','STAFF'].includes(role)
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b)
 
 export default function FinancePage({ user }) {
