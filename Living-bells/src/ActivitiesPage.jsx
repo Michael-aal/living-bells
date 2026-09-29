@@ -3,13 +3,13 @@ import { api } from './api'
 import WeeklyPrintSheet from './WeeklyPrintSheet'
 import { NUMERICAL_ROWS, SPIRITUAL_ROWS, emptyReport, normalizeReport, reportPayload, money, dateLabel } from './weeklyReportConfig'
 
-const canEdit = role => ['ADMIN','SECRETARY'].includes(role)
+const canEdit = role => ['STAFF','SECRETARY'].includes(role)
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b)
 
 export default function ActivitiesPage({ user }) {
   const base=emptyReport(),[reports,setReports]=useState([]),[report,setReport]=useState(base),[saved,setSaved]=useState(base)
   const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[selectedDate,setSelectedDate]=useState(base.reportDate)
-  const editable=canEdit(user.role),dirty=useMemo(()=>!same(reportPayload(report),reportPayload(saved)),[report,saved])
+  const locked=report.status==='SUBMITTED'||report.status==='REVIEWED',editable=canEdit(user.role)&&!locked,dirty=useMemo(()=>!same(reportPayload(report),reportPayload(saved)),[report,saved])
   useEffect(()=>{loadHistory()},[])
   useEffect(()=>{const handler=e=>{if(dirty)e.preventDefault()};window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler)},[dirty])
   async function loadHistory(){try{setLoading(true);setError('');const data=await api.weeklyReports();setReports(data||[]);const current=(data||[]).find(r=>String(r.reportDate).slice(0,10)===selectedDate);if(current){const n=normalizeReport(current);setReport(n);setSaved(n)}}catch(e){setError(e.message||'Could not load weekly activity reports')}finally{setLoading(false)}}
@@ -17,11 +17,11 @@ export default function ActivitiesPage({ user }) {
   function setNumerical(index,key,value){const number=Math.max(0,Math.trunc(Number(value)||0));setReport(current=>({...current,numerical:current.numerical.map((row,i)=>i===index?{...row,[key]:number,total:key==='adult'?number+row.children+row.visitor:key==='children'?row.adult+number+row.visitor:row.adult+row.children+number}:row)}))}
   function setSpiritual(label,value){setReport(current=>({...current,spiritual:{...current.spiritual,[label]:Math.max(0,Math.trunc(Number(value)||0))}}))}
   const columnTotals=useMemo(()=>report.numerical.reduce((a,row)=>({adult:a.adult+row.adult,children:a.children+row.children,visitor:a.visitor+row.visitor,total:a.total+row.total}),{adult:0,children:0,visitor:0,total:0}),[report.numerical])
-  async function save(){if(!editable)return;try{setSaving(true);setError('');const savedReport=await api.saveWeeklyReport(reportPayload(report));const n=normalizeReport(savedReport);setReport(n);setSaved(n);setReports(current=>[savedReport,...current.filter(r=>String(r.reportDate).slice(0,10)!==report.reportDate)]);setNotice('Weekly activities report saved successfully.');setTimeout(()=>setNotice(''),3000)}catch(e){setError(e.message||'Could not save the weekly activities report')}finally{setSaving(false)}}
+  async function save(){if(!editable||!dirty)return;if(!window.confirm('Are you really sure? Submitting this Sunday report will save it permanently and lock all of its values from further edits.'))return;try{setSaving(true);setError('');const savedReport=await api.saveWeeklyReport(reportPayload(report));const n=normalizeReport(savedReport);setReport(n);setSaved(n);setReports(current=>[savedReport,...current.filter(r=>String(r.reportDate).slice(0,10)!==report.reportDate)]);setNotice('Weekly activities report submitted and locked.');setTimeout(()=>setNotice(''),3000)}catch(e){setError(e.message||'Could not submit the weekly activities report')}finally{setSaving(false)}}
   return <div className="weekly-page">
     {loading&&<div className="card full" role="status">Loading weekly report…</div>}
     <section className="card full weekly-editor">
-      <div className="card-head"><div><span className="eyebrow">Weekly report • Activities</span><h2>Activities</h2><p className="card-subtitle">Sections A and B of the church Weekly Report Form. {editable?'You can edit this report.':'Read-only access.'}</p></div><div className="record-actions">{dirty&&<span className="save-state unsaved">Unsaved changes</span>}{!dirty&&<span className="save-state saved">Saved</span>}{editable&&<button className="primary" disabled={saving||!dirty} onClick={save}>{saving?'Saving…':'Save report'}</button>}<button className="secondary" onClick={()=>window.print()}>Print / PDF</button></div></div>
+      <div className="card-head"><div><span className="eyebrow">Weekly report • Activities</span><h2>Activities</h2><p className="card-subtitle">Sections A and B of the church Weekly Report Form. {editable?'You can edit this report.':'Read-only access.'}</p></div><div className="record-actions">{dirty&&<span className="save-state unsaved">Unsaved changes</span>}{!dirty&&<span className="save-state saved">Saved</span>}{editable&&<button className="primary" disabled={saving||!dirty} onClick={save}>{saving?'Submitting…':'Submit report'}</button>}{locked&&<span className="save-state saved">Submitted • locked</span>}<button className="secondary" onClick={()=>window.print()}>Print / PDF</button></div></div>
       {notice&&<div className="toast" role="status">{notice}</div>}{error&&<div className="toast toast-error" role="alert">{error}</div>}{error&&<div className="form-error weekly-error" role="alert">{error}</div>}
       <label className="report-date">Weekly report date<input aria-label="Weekly report date" type="date" value={report.reportDate} onChange={e=>selectDate(e.target.value)}/></label>
       <section className="weekly-section"><div className="weekly-section-title">A. NUMERICAL SECTION (ACTUAL)</div><div className="table-wrap"><table className="weekly-table activities-table"><thead><tr><th>S/N</th><th>Service Type</th><th>Adult</th><th>Children</th><th>Visitor</th><th>Total</th></tr></thead><tbody>
