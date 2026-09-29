@@ -1,7 +1,9 @@
+CREATE TYPE "WeeklyReportStatus" AS ENUM ('SUBMITTED', 'REVIEWED');
+
 ALTER TABLE "WeeklyReport"
   ADD COLUMN "submittedById" INTEGER,
   ADD COLUMN "submittedAt" TIMESTAMP(3),
-  ADD COLUMN "status" TEXT NOT NULL DEFAULT 'SUBMITTED',
+  ADD COLUMN "status" "WeeklyReportStatus" NOT NULL DEFAULT 'SUBMITTED',
   ADD COLUMN "reviewedById" INTEGER,
   ADD COLUMN "reviewedAt" TIMESTAMP(3),
   ADD COLUMN "reviewRating" "ReviewRating",
