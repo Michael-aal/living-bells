@@ -22,6 +22,11 @@ enum ReviewRating {
   BAD
 }
 
+enum WeeklyReportStatus {
+  SUBMITTED
+  REVIEWED
+}
+
 model User {
   id                   Int       @id @default(autoincrement())
   name                 String
@@ -44,6 +49,8 @@ model User {
   attendanceRecords    AttendanceRecord[] @relation("AttendanceRecordCreator")
   financialRecords     FinancialRecord[] @relation("FinancialRecordCreator")
   weeklyReportsCreated WeeklyReport[]    @relation("WeeklyReportCreator")
+  weeklyReportsSubmitted WeeklyReport[]  @relation("WeeklyReportSubmitter")
+  weeklyReportsReviewed WeeklyReport[]   @relation("WeeklyReportReviewer")
 }
 
 model Activity {
@@ -193,10 +200,19 @@ model WeeklyReport {
   totalExpenditure Decimal  @db.Decimal(14, 2)
   balance          Decimal  @db.Decimal(14, 2)
   createdById      Int?
+  submittedById   Int?
+  submittedAt     DateTime?
+  status          WeeklyReportStatus @default(SUBMITTED)
+  reviewedById    Int?
+  reviewedAt      DateTime?
+  reviewRating    ReviewRating?
+  reviewComment   String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   createdBy User? @relation("WeeklyReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  submittedBy User? @relation("WeeklyReportSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedBy User? @relation("WeeklyReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@unique([reportDate])
   @@index([createdById])
