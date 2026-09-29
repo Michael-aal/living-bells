@@ -4,7 +4,7 @@ import './auth.css'
 
 export default function Auth({ onAuthenticated }) {
   const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'STAFF', adminKey: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'STAFF' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -35,7 +35,6 @@ export default function Auth({ onAuthenticated }) {
         email,
         password: form.password,
         role: form.role,
-        adminKey: form.role === 'ADMIN' ? form.adminKey : undefined,
       })
 
       // Registration is complete immediately. The API returns a signed token,
@@ -73,7 +72,7 @@ export default function Auth({ onAuthenticated }) {
         {!isLogin && <label>Confirm password<input type="password" minLength="8" value={form.confirmPassword} onChange={e => update('confirmPassword', e.target.value)} autoComplete="new-password" required /></label>}
 
         {!isLogin && <label>Account type<select value={form.role} onChange={e => update('role', e.target.value)}><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select></label>}
-        {!isLogin && form.role === 'ADMIN' && <label>Admin registration key<input type="password" value={form.adminKey} onChange={e => update('adminKey', e.target.value)} autoComplete="off" required /></label>}
+
 
         <button className="primary auth-submit" disabled={loading}>
           {loading ? 'Please wait...' : isLogin ? 'Sign in' : 'Create account'}
