@@ -3,7 +3,7 @@ import { api } from './api'
 import WeeklyPrintSheet from './WeeklyPrintSheet'
 import { NUMERICAL_ROWS, SPIRITUAL_ROWS, emptyReport, normalizeReport, reportPayload, money, dateLabel } from './weeklyReportConfig'
 
-const canEdit = role => ['ADMIN','SECRETARY'].includes(role)
+const canEdit = role => ['ADMIN','SECRETARY','PASTOR','STAFF'].includes(role)
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b)
 
 export default function ActivitiesPage({ user }) {
@@ -17,7 +17,7 @@ export default function ActivitiesPage({ user }) {
   function setNumerical(index,key,value){const number=Math.max(0,Math.trunc(Number(value)||0));setReport(current=>({...current,numerical:current.numerical.map((row,i)=>i===index?{...row,[key]:number,total:key==='adult'?number+row.children+row.visitor:key==='children'?row.adult+number+row.visitor:row.adult+row.children+number}:row)}))}
   function setSpiritual(label,value){setReport(current=>({...current,spiritual:{...current.spiritual,[label]:Math.max(0,Math.trunc(Number(value)||0))}}))}
   const columnTotals=useMemo(()=>report.numerical.reduce((a,row)=>({adult:a.adult+row.adult,children:a.children+row.children,visitor:a.visitor+row.visitor,total:a.total+row.total}),{adult:0,children:0,visitor:0,total:0}),[report.numerical])
-  async function save(){if(!editable)return;try{setSaving(true);setError('');const savedReport=await api.saveWeeklyReport(reportPayload(report));const n=normalizeReport(savedReport);setReport(n);setSaved(n);setReports(current=>[savedReport,...current.filter(r=>String(r.reportDate).slice(0,10)!==report.reportDate)]);setNotice('Weekly activities report saved successfully.');setTimeout(()=>setNotice(''),3000)}catch(e){setError(e.message||'Could not save the weekly activities report')}finally{setSaving(false)}}
+  async function save(){if(!editable)return;try{setSaving(true);setError('');const savedReport=report.id?await api.updateWeeklyReport(report.id,reportPayload(report)):await api.saveWeeklyReport(reportPayload(report));const n=normalizeReport(savedReport);setReport(n);setSaved(n);setReports(current=>[savedReport,...current.filter(r=>String(r.reportDate).slice(0,10)!==report.reportDate)]);setNotice('Weekly activities report saved successfully.');setTimeout(()=>setNotice(''),3000)}catch(e){setError(e.message||'Could not save the weekly activities report')}finally{setSaving(false)}}
   return <div className="weekly-page">
     {loading&&<div className="card full" role="status">Loading weekly report…</div>}
     <section className="card full weekly-editor">
