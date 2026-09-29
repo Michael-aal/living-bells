@@ -168,6 +168,34 @@ function App() {
     setReviews([])
   }
 
+  async function saveProfile(name) {
+    const nextName = String(name || '').trim()
+    if (nextName.length < 2) {
+      setSync('Username must be at least 2 characters')
+      return
+    }
+
+    if (user.demo) {
+      const updated = { ...user, name: nextName }
+      localStorage.setItem('living_bells_user', JSON.stringify(updated))
+      setUser(updated)
+      setModal(null)
+      setSync('Demo mode')
+      return
+    }
+
+    try {
+      setSync('Saving username...')
+      const updated = await api.updateProfile({ name: nextName })
+      localStorage.setItem('living_bells_user', JSON.stringify(updated))
+      setUser(updated)
+      setModal(null)
+      setSync('Backend connected')
+    } catch (error) {
+      setSync(error.message || 'Could not save username')
+    }
+  }
+
   async function addAttendance(payload) {
     if (user.demo) {
       const total = Object.values(payload.groups || {}).reduce((sum, group) => sum + Number(group.male || 0) + Number(group.female || 0), 0)
@@ -283,7 +311,7 @@ function App() {
     </aside>
 
     <main>
-      <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><button className="avatar" title="Sign out" onClick={logout}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button></header>
+      <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><button className="avatar" title="Edit username" onClick={() => setModal('profile')}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button></header>
       <section className="content">
         <div className="heading">
           <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard 👋' : 'Staff dashboard 👋') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
@@ -304,6 +332,7 @@ function App() {
       </section>
     </main>
 
+    {modal === 'profile' && <ProfileForm user={user} close={() => setModal(null)} save={saveProfile} />}
     {modal === 'activity' && <ActivityForm close={() => setModal(null)} save={addActivity} />}
     {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} />}
     {modal === 'expense' && <ExpenseForm close={() => setModal(null)} save={addExpense} />}
@@ -356,6 +385,24 @@ function StaffPage({ staff, selectedStaff, setSelectedStaff, reviews, attendance
 }
 
 function Modal({ title, children, close }) { return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">Living Bells</span><h2>{title}</h2></div><button className="close" onClick={close}>×</button></div>{children}</div></div> }
+function ProfileForm({ user, close, save }) {
+  const [name, setName] = useState(user.name || '')
+  const [saving, setSaving] = useState(false)
+
+  async function submit() {
+    const value = name.trim()
+    if (value.length < 2) return
+    setSaving(true)
+    try { await save(value) } finally { setSaving(false) }
+  }
+
+  return <Modal title="Profile" close={close}>
+    <p className="review-intro">Update the username shown across Living Bells.</p>
+    <label>Username<input autoFocus maxLength="80" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" /></label>
+    <label>Email<input value={user.email || ''} readOnly /></label>
+    <button className="primary wide" disabled={saving || name.trim().length < 2 || name.trim() === (user.name || '').trim()} onClick={submit}>{saving ? 'Saving…' : 'Save username'}</button>
+  </Modal>
+}
 function ActivityForm({ close, save }) {
   const [form, setForm] = useState({ name: '', type: 'Service', date: new Date().toISOString().slice(0, 10) })
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
