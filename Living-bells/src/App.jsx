@@ -438,7 +438,7 @@ function ActivityForm({ close, save }) {
 
   return <Modal title="Submit activity" close={close}>
     <label>Activity name<input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sunday Worship Service" /></label>
-    <label>Type<select value={form.type} onChange={e => set('type', e.target.value)} /></label>
+    <label>Type<select value={form.type} onChange={e => set('type', e.target.value)}>{['Service', 'Meeting', 'Outreach', 'Youth', 'Children', 'Choir', 'Other'].map(x => <option key={x}>{x}</option>)}</select></label>
     <label>Date<input type="date" value={form.date} onChange={e => set('date', e.target.value)} /></label>
     <button type="button" className="primary wide" disabled={saving || !form.name || !form.date} onClick={submit}>{saving ? 'Saving…' : 'Submit activity'}</button>
   </Modal>
