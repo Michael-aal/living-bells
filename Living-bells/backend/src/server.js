@@ -134,9 +134,29 @@ app.get('/api/auth/me', authenticate, async (req, res, next) => {
   }
 })
 
+app.patch('/api/auth/me', authenticate, async (req, res, next) => {
+  try {
+    const name = String(req.body?.name || '').trim()
+    if (name.length < 2 || name.length > 80) {
+      return res.status(400).json({ message: 'Username must be between 2 and 80 characters' })
+    }
+
+    const user = await prisma.user.update({
+      where: { id: Number(req.user.sub) },
+      data: { name },
+      select: { id: true, name: true, email: true, role: true },
+    })
+
+    res.json({ ...user, emailVerified: true })
+  } catch (error) {
+    if (error?.code === 'P2025') return res.status(404).json({ message: 'User account not found' })
+    next(error)
+  }
+})
+
 app.use('/api', authenticate)
 
-function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY'].includes(req.user?.role))return res.status(403).json({message:'Only Admin or Secretary accounts can create or edit weekly reports'});next()}
+function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY','PASTOR'].includes(req.user?.role))return res.status(403).json({message:'Only Admin, Pastor or Secretary accounts can create or edit weekly reports'});next()}
 function requireWeeklyReportView(req,res,next){next()}
 const WEEKLY_SERVICES=['Pre-Sunday Prayer','Sunday School','Worship Service','Bible Study','House Fellowship','Prayer Meeting','Vigil','Revival Service','Intercessory Prayer','Anointing Service']
 const WEEKLY_SPIRITUAL=['No. of Decision','No. of Water Baptism','No. of Healing','No. of Conversion','No. of Holy Spirit Baptism','No. of Deliverance']
