@@ -8,7 +8,6 @@ import { prisma } from './db.js'
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
-const ADMIN_REGISTRATION_KEY = process.env.ADMIN_REGISTRATION_KEY || ''
 
 app.use(cors())
 app.use(express.json())
@@ -41,7 +40,7 @@ function currentUserId(req) {
 
 app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const { name, email, password, role = 'STAFF', adminKey } = req.body
+    const { name, email, password, role = 'STAFF' } = req.body
     const normalizedEmail = String(email || '').trim().toLowerCase()
     const normalizedRole = String(role).toUpperCase()
 
@@ -53,9 +52,6 @@ app.post('/api/auth/register', async (req, res, next) => {
     }
     if (!['STAFF', 'ADMIN'].includes(normalizedRole)) {
       return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
-    }
-    if (normalizedRole === 'ADMIN' && (!ADMIN_REGISTRATION_KEY || adminKey !== ADMIN_REGISTRATION_KEY)) {
-      return res.status(403).json({ message: 'A valid admin registration key is required' })
     }
     if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) {
       return res.status(409).json({ message: 'An account with this email already exists' })
@@ -136,7 +132,8 @@ app.get('/api/auth/me', authenticate, async (req, res, next) => {
 
 app.use('/api', authenticate)
 
-function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY'].includes(req.user?.role))return res.status(403).json({message:'Only Admin or Secretary accounts can create or edit weekly reports'});next()}
+function requireWeeklyReportSubmit(req,res,next){if(!['STAFF','SECRETARY'].includes(req.user?.role))return res.status(403).json({message:'Only staff accounts can submit weekly reports'});next()}
+function requireAdminReview(req,res,next){if(req.user?.role!=='ADMIN')return res.status(403).json({message:'Only Admin accounts can review weekly reports'});next()}
 function requireWeeklyReportView(req,res,next){next()}
 const WEEKLY_SERVICES=['Pre-Sunday Prayer','Sunday School','Worship Service','Bible Study','House Fellowship','Prayer Meeting','Vigil','Revival Service','Intercessory Prayer','Anointing Service']
 const WEEKLY_SPIRITUAL=['No. of Decision','No. of Water Baptism','No. of Healing','No. of Conversion','No. of Holy Spirit Baptism','No. of Deliverance']
@@ -175,43 +172,63 @@ function validateWeeklyPayload(body){
   const totalExpenditure=exp.reduce((sum,row)=>sum+row.amount,0)
   return{data:{reportDate,numerical:n,spiritual:sp,income:inc,expenditure:exp,totalIncome,totalExpenditure,balance:totalIncome-totalExpenditure}}
 }
-const reportDto=r=>({...r,reportDate:r.reportDate.toISOString().slice(0,10),totalIncome:Number(r.totalIncome),totalExpenditure:Number(r.totalExpenditure),balance:Number(r.balance)})
+const reportDto=r=>({...r,reportDate:r.reportDate.toISOString().slice(0,10),totalIncome:Number(r.totalIncome),totalExpenditure:Number(r.totalExpenditure),balance:Number(r.balance),submittedAt:r.submittedAt?.toISOString?.()||null,reviewedAt:r.reviewedAt?.toISOString?.()||null})
 app.get('/api/weekly-reports',requireWeeklyReportView,async(req,res,next)=>{
  try{
   const where={},search=String(req.query.search||'').trim(),month=String(req.query.month||''),year=String(req.query.year||'')
   if(/^\d{4}-\d{2}$/.test(month)){const[y,m]=month.split('-').map(Number);where.reportDate={gte:new Date(Date.UTC(y,m-1,1)),lt:new Date(Date.UTC(y,m,1))}}
   else if(/^\d{4}$/.test(year)){const y=Number(year);where.reportDate={gte:new Date(Date.UTC(y,0,1)),lt:new Date(Date.UTC(y+1,0,1))}}
   else if(search){const d=normalizeReportDate(search);if(d){const end=new Date(d);end.setUTCDate(end.getUTCDate()+1);where.reportDate={gte:d,lt:end}}}
-  const rows=await prisma.weeklyReport.findMany({where,orderBy:{reportDate:'desc'},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
+  const rows=await prisma.weeklyReport.findMany({where,orderBy:{reportDate:'desc'},include:{
+    createdBy:{select:{id:true,name:true,email:true,role:true}},
+    submittedBy:{select:{id:true,name:true,email:true,role:true}},
+    reviewedBy:{select:{id:true,name:true,email:true,role:true}},
+  }})
   res.json(rows.map(reportDto))
  }catch(e){next(e)}
 })
 app.get('/api/weekly-reports/:id',requireWeeklyReportView,async(req,res,next)=>{
- try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});const r=await prisma.weeklyReport.findUnique({where:{id},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});if(!r)return res.status(404).json({message:'Weekly report not found'});res.json(reportDto(r))}catch(e){next(e)}
+ try{
+  const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'})
+  const r=await prisma.weeklyReport.findUnique({where:{id},include:{
+    createdBy:{select:{id:true,name:true,email:true,role:true}},
+    submittedBy:{select:{id:true,name:true,email:true,role:true}},
+    reviewedBy:{select:{id:true,name:true,email:true,role:true}},
+  }})
+  if(!r)return res.status(404).json({message:'Weekly report not found'})
+  res.json(reportDto(r))
+ }catch(e){next(e)}
 })
-app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
+app.post('/api/weekly-reports',requireWeeklyReportSubmit,async(req,res,next)=>{
  try{
   const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
   const d=v.data
-  const r=await prisma.weeklyReport.upsert({
-   where:{reportDate:d.reportDate},
-   update:{numerical:d.numerical,spiritual:d.spiritual,income:d.income,expenditure:d.expenditure,totalIncome:d.totalIncome,totalExpenditure:d.totalExpenditure,balance:d.balance},
-   create:{...d,createdById:currentUserId(req)},
-   include:{createdBy:{select:{id:true,name:true,email:true,role:true}}},
+  const existing=await prisma.weeklyReport.findUnique({where:{reportDate:d.reportDate},select:{id:true}})
+  if(existing)return res.status(409).json({message:'A weekly report already exists for that Sunday. Submitted reports are locked.'})
+  const now=new Date()
+  const r=await prisma.weeklyReport.create({
+   data:{...d,createdById:currentUserId(req),submittedById:currentUserId(req),submittedAt:now,status:'SUBMITTED'},
+   include:{createdBy:{select:{id:true,name:true,email:true,role:true}},submittedBy:{select:{id:true,name:true,email:true,role:true}},reviewedBy:{select:{id:true,name:true,email:true,role:true}}},
   })
   res.status(201).json(reportDto(r))
- }catch(e){if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that date. Refresh and try again.'});next(e)}
+ }catch(e){if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that Sunday. Submitted reports are locked.'});next(e)}
 })
-app.put('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
+app.put('/api/weekly-reports/:id',async(req,res)=>res.status(423).json({message:'Submitted weekly reports are locked and cannot be edited.'}))
+app.delete('/api/weekly-reports/:id',requireAdminReview,async(req,res,next)=>{
+ try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});return res.status(403).json({message:'Submitted reports cannot be deleted.'})}catch(e){next(e)}
+})
+app.post('/api/weekly-reports/:id/review',requireAdminReview,async(req,res,next)=>{
  try{
-  const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'})
-  const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
-  const r=await prisma.weeklyReport.update({where:{id},data:v.data,include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
-  res.json(reportDto(r))
- }catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that date'});next(e)}
-})
-app.delete('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
- try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});await prisma.weeklyReport.delete({where:{id}});res.json({message:'Weekly report deleted'})}catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});next(e)}
+  const id=Number(req.params.id),rating=String(req.body.rating||'').toUpperCase(),comment=String(req.body.comment||'').trim()||null
+  if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'})
+  if(!['EXCELLENT','GOOD','FAIR','POOR','BAD'].includes(rating))return res.status(400).json({message:'Rating must be Excellent, Good, Fair, Poor or Bad'})
+  const report=await prisma.weeklyReport.update({
+   where:{id},
+   data:{status:'REVIEWED',reviewedById:currentUserId(req),reviewedAt:new Date(),reviewRating:rating,reviewComment:comment},
+   include:{createdBy:{select:{id:true,name:true,email:true,role:true}},submittedBy:{select:{id:true,name:true,email:true,role:true}},reviewedBy:{select:{id:true,name:true,email:true,role:true}}},
+  })
+  res.json(reportDto(report))
+ }catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});next(e)}
 })
 
 app.get('/health', async (_req, res) => {

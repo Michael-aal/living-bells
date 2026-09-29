@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import FinancePage from './FinancePage'
 import ActivitiesPage from './ActivitiesPage'
+import ReportsPage from './ReportsPage'
 import './App.css'
 import Auth from './Auth'
 import { api } from './api'
@@ -286,8 +287,8 @@ function App() {
       <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><button className="avatar" title="Sign out" onClick={logout}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button></header>
       <section className="content">
         <div className="heading">
-          <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard 👋' : 'Staff dashboard 👋') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
-          <div className="actions"><button className="secondary" onClick={() => setPage('reports')}>View reports</button>{!isAdmin && <button className="primary" onClick={() => setModal('attendance')}>+ Record</button>}{isAdmin && <button className="secondary print-button" onClick={() => printReport('Church records')}>🖨 Print records</button>}</div>
+          <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard' : 'Staff dashboard') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
+          <div className="actions"><button className="secondary" onClick={() => setPage('reports')}>View reports</button>{!isAdmin && <button className="primary" onClick={() => setModal('attendance')}>+ Record</button>}{isAdmin && <button className="secondary print-button" onClick={() => printReport('Church records')}>Print records</button>}</div>
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
@@ -298,7 +299,7 @@ function App() {
         {!loading && page === 'activities' && <ActivitiesPage user={user} />}
         {!loading && page === 'finance' && <FinancePage user={user} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
-        {!loading && page === 'reports' && <div className="report-grid"><Card title="Attendance"><strong className="big">{attendance.reduce((sum, item) => sum + item.total, 0).toLocaleString()}</strong><p>Combined recorded attendance.</p></Card><Card title="Expenses"><strong className="big">{money(totalSpend)}</strong><p>Combined expenses in this workspace.</p></Card></div>}
+        {!loading && page === 'reports' && <ReportsPage user={user} />}
         {!loading && page === 'forms' && !isAdmin && <div className="form-grid"><Action icon="◉" title="Attendance form" text="Children, teenagers, youth, adults, men and women." onClick={() => setModal('attendance')} /><Action icon="₦" title="Expense form" text="Amount, category, description and date." onClick={() => setModal('expense')} /></div>}
         {!loading && page === 'forms' && isAdmin && <section className="card full"><span className="eyebrow">Admin view</span><h2>Staff recording forms</h2><p>Admins monitor records and print reports. Recording actions are reserved for staff accounts.</p></section>}
       </section>

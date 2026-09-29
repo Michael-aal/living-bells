@@ -38,3 +38,5 @@
   .weekly-print-sheet .print-finance-columns{grid-template-columns:1fr 1fr}
   .toast{display:none!important}
 }
+
+.report-value{border:1px solid var(--border);border-radius:10px;padding:12px;background:#faf9fd}.report-value span,.report-value b{display:block}.report-value span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.report-value b{font-size:18px;margin-top:4px}
