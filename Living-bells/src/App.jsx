@@ -44,6 +44,7 @@ function App() {
   })
   const [page, setPage] = useState('dashboard')
   const [reportEditDate, setReportEditDate] = useState(null)
+  const [reportRefresh, setReportRefresh] = useState(0)
   const [attendance, setAttendance] = useState([])
   const [expenses, setExpenses] = useState([])
   const [finances, setFinances] = useState([])
@@ -243,6 +244,7 @@ function App() {
       setSync('Saving activity...')
       const saved = await api.createActivity(payload)
       setActivities(current => [saved, ...current.filter(item => item.id !== saved.id)])
+      setReportRefresh(value => value + 1)
       setModal(null)
       setSync('Backend connected')
       return true
@@ -375,7 +377,7 @@ function App() {
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
-        {!loading && page === 'reports' && <ReportsPage user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
+        {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
         
       </section>
     </main>
