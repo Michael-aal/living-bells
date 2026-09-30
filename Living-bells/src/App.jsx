@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import FinancePage from './FinancePage'
 import ActivitiesPage from './ActivitiesPage'
+import ReportsPage from './ReportsPage'
 import './App.css'
 import Auth from './Auth'
 import { api } from './api'
@@ -42,6 +43,7 @@ function App() {
     try { return JSON.parse(localStorage.getItem('living_bells_user') || 'null') } catch { return null }
   })
   const [page, setPage] = useState('dashboard')
+  const [reportEditDate, setReportEditDate] = useState(null)
   const [attendance, setAttendance] = useState([])
   const [expenses, setExpenses] = useState([])
   const [finances, setFinances] = useState([])
@@ -299,6 +301,11 @@ function App() {
   const isAdmin = user.role === 'ADMIN'
   const dashboardLabel = isAdmin ? 'Admin dashboard' : 'Staff dashboard'
 
+  function openReportEditor(date) {
+    setReportEditDate(date)
+    setPage('activities')
+  }
+
   function printReport(titleText) {
     document.title = `Living Bells - ${titleText}`
     window.print()
@@ -329,7 +336,7 @@ function App() {
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'expenses' && <Records title="Expenses" eyebrow="Financial records" action="Submit expense" onAdd={() => setModal('expense')} isAdmin={isAdmin} onPrint={() => printReport('Expense report')}><table><thead><tr><th>Description</th><th>Category</th><th>Date</th><th>Amount</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleExpenses.map(r => <tr key={r.id}><td><b>{r.title}</b></td><td>{r.category}</td><td>{r.date}</td><td><b>{money(r.amount)}</b></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!expenses.length && <p>No expenses recorded yet.</p>}</Records>}
         {!loading && page === 'programs' && <Records title="Programs" eyebrow="Church programs" action="Submit activity" onAdd={() => setModal('activity')} isAdmin={isAdmin} onPrint={() => printReport('Activities report')}><table><thead><tr><th>Name</th><th>Type</th><th>Date</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleActivities.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.type || '—'}</td><td>{formatDate(item.date)}</td>{isAdmin && <td>{item.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!activities.length && <p>No activities recorded yet.</p>}</Records>}
-        {!loading && page === 'activities' && <ActivitiesPage user={user} />}
+        {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
         {!loading && page === 'reports' && <ReportsPage attendance={attendance} finances={finances} expenses={expenses} reports={[]} money={money} />}
