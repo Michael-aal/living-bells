@@ -293,6 +293,27 @@ app.post('/api/activities', requireStaff, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+app.put('/api/activities/:id', requireStaff, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const { name, type, date } = req.body
+    const activityDate = new Date(date)
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid activity id' })
+    if (!name?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid name and date are required' })
+
+    const existing = await prisma.activity.findUnique({ where: { id } })
+    if (!existing) return res.status(404).json({ message: 'Activity not found' })
+    if (existing.recordedById !== currentUserId(req)) return res.status(403).json({ message: 'You can only edit your own activities' })
+
+    const activity = await prisma.activity.update({
+      where: { id },
+      data: { name: name.trim(), type: type?.trim() || null, date: activityDate },
+      include: { recordedBy: { select: { id: true, name: true, email: true } } },
+    })
+    res.json(activity)
+  } catch (error) { next(error) }
+})
+
 app.get('/api/attendance', async (req, res, next) => {
   try {
     res.json(await prisma.attendance.findMany({
