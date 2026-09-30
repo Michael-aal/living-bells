@@ -48,6 +48,7 @@ function App() {
   const [attendance, setAttendance] = useState([])
   const [expenses, setExpenses] = useState([])
   const [finances, setFinances] = useState([])
+  const [weeklyReports, setWeeklyReports] = useState([])
   const [activities, setActivities] = useState([])
   const [staff, setStaff] = useState([])
   const [selectedStaff, setSelectedStaff] = useState(null)
@@ -58,8 +59,11 @@ function App() {
   const [query, setQuery] = useState('')
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
-  const moneyIn = useMemo(() => finances.filter(item => item.type === 'INCOME').reduce((sum, item) => sum + Number(item.amount || 0), 0), [finances])
-  const moneyOut = useMemo(() => finances.filter(item => item.type === 'EXPENSE').reduce((sum, item) => sum + Number(item.amount || 0), 0), [finances])
+  const moneyIn = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports])
+  const moneyOut = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0), [weeklyReports])
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const todayMoneyIn = useMemo(() => weeklyReports.filter(report => String(report.reportDate).slice(0, 10) === todayKey).reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports, todayKey])
+  const todayMoneyOut = useMemo(() => weeklyReports.filter(report => String(report.reportDate).slice(0, 10) === todayKey).reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0), [weeklyReports, todayKey])
   const netMoney = moneyIn - moneyOut
   const totalSpend = useMemo(() => expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0), [expenses])
   const normalizedQuery = query.trim().toLowerCase()
@@ -117,12 +121,13 @@ function App() {
 
       setSync('Connecting...')
       try {
-        const data = await api.dashboard()
+        const [data, weeklyData] = await Promise.all([api.dashboard(), api.weeklyReports()])
         const staffData = user.role === 'ADMIN' ? await api.staff() : []
         if (cancelled) return
         setAttendance((data.attendance || []).map(normalizeAttendance))
         setExpenses((data.expenses || []).map(normalizeExpense))
         setFinances((data.finances || []).map(record => ({ ...record, amount: Number(record.amount || 0), date: formatDate(record.recordDate) })))
+        setWeeklyReports(weeklyData || [])
         setActivities(data.activities || [])
         setStaff(staffData)
         setSync('Backend connected')
@@ -165,6 +170,7 @@ function App() {
     setAttendance([])
     setExpenses([])
     setFinances([])
+    setWeeklyReports([])
     setActivities([])
     setStaff([])
     setSelectedStaff(null)
@@ -373,7 +379,7 @@ function App() {
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
-        {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
+        {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} todayMoneyIn={todayMoneyIn} todayMoneyOut={todayMoneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} />}
@@ -411,9 +417,10 @@ function App() {
   </div>
 }
 
-function Dashboard({ attendance, expenses, activitiesCount, spend, money, moneyIn, moneyOut, netMoney, open, go, isAdmin }) {
+function Dashboard({ attendance, expenses, activitiesCount, spend, money, moneyIn, moneyOut, todayMoneyIn, todayMoneyOut, netMoney, open, go, isAdmin }) {
   return <>
-    <div className="stats"><Stat icon="◉" name="Attendance" value={attendance[0]?.total || 0} note="Latest service" /><Stat icon="₦" name="Money in" value={money(moneyIn)} note="Income received" /><Stat icon="₦" name="Money out" value={money(moneyOut)} note="Expenses paid" /><Stat icon="⌁" name="Net" value={money(netMoney)} note="In minus out" /></div>
+    <div className="stats"><Stat icon="◉" name="Attendance" value={attendance[0]?.total || 0} note="Latest service" /><Stat icon="₦" name="Total money in" value={money(moneyIn)} note="All saved weekly reports" /><Stat icon="₦" name="Total money out" value={money(moneyOut)} note="All saved weekly reports" /><Stat icon="⌁" name="Total balance" value={money(netMoney)} note="Total in minus total out" /></div>
+    <section className="card dashboard-today"><div><span className="eyebrow">Today</span><h2>Today's finance snapshot</h2><p className="card-subtitle">Only records saved for today's date.</p></div><div className="today-money"><div><small>Money in</small><b>{money(todayMoneyIn)}</b></div><div><small>Money out</small><b>{money(todayMoneyOut)}</b></div><div><small>Balance</small><b>{money(todayMoneyIn - todayMoneyOut)}</b></div></div></section>
     <div className="quick">{!isAdmin && <><Action icon="₦" title="Record money in or out" text="Record income received or expenses paid." onClick={() => go('finance')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} /></>}{isAdmin && <Action icon="▤" title="Print reports" text="Print attendance, expense and activity tables." onClick={() => go('reports')} />}</div>
     <div className="dash-grid"><Card title="Attendance trend"><div className="bars">{attendance.slice(0, 7).reverse().map(r => <div className="bar-col" key={r.id}><b>{r.total}</b><div className="bar" style={{ height: Math.max(25, Math.min(100, r.total / 4)) + '%' }} /><small>{r.date.slice(0, 6)}</small></div>)}</div>{!attendance.length && <p>No attendance data yet.</p>}</Card><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
   </>
