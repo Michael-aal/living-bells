@@ -26,7 +26,7 @@ const relativeDate = value => {
   return new Date(`${key}T12:00:00`).toLocaleDateString('en-NG', { weekday: 'long' })
 }
 
-export default function ReportsPage({ user, onEdit, onEditFinance, onEditActivity, onEditAttendance }) {
+export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinance, onEditActivity, onEditAttendance }) {
   const [reports, setReports] = useState([])
   const [activities, setActivities] = useState([])
   const [attendance, setAttendance] = useState([])
@@ -66,7 +66,7 @@ export default function ReportsPage({ user, onEdit, onEditFinance, onEditActivit
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [refreshKey])
 
   const filteredReports = useMemo(() => reports.filter(report => {
     const reportDate = keyOf(report.reportDate)
