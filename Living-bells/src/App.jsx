@@ -218,6 +218,7 @@ function App() {
       setSync('Saving attendance...')
       const saved = await api.createAttendance(payload)
       setAttendance(current => [normalizeAttendance(saved), ...current.filter(item => item.id !== saved.id)])
+      setReportRefresh(value => value + 1)
       setModal(null)
       setSync('Backend connected')
       return true
