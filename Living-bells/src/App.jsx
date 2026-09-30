@@ -317,8 +317,8 @@ function App() {
       <div className="brand"><div className="logo">L</div><div><b>Living Bells</b><small>{dashboardLabel}</small></div></div>
       <span className="label">Workspace</span>
       {[
-        ['dashboard', '⌂', 'Dashboard'], ['attendance', '◉', 'Attendance'], ['expenses', '₦', 'Expenses'],
-        ['activities', '▣', 'Activities'], ['programs', '◫', 'Programs'], ['finance', '₦', 'Finance'], ['reports', '⌁', 'Reports'], ...(isAdmin ? [['staff', '♙', 'Staff']] : []), ['forms', '□', 'Forms']
+        ['dashboard', '⌂', 'Dashboard'], ['attendance', '◉', 'Attendance'],
+        ['activities', '▣', 'Activities'], ['finance', '₦', 'Finance'], ['reports', '⌁', 'Reports'], ...(isAdmin ? [['staff', '♙', 'Staff']] : [])
       ].map(([id, icon, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}><i>{icon}</i>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
     </aside>
@@ -327,7 +327,7 @@ function App() {
       <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><button className="avatar" title="Edit username" onClick={() => setModal('profile')}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button></header>
       <section className="content">
         <div className="heading">
-          <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard 👋' : 'Staff dashboard 👋') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
+          <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard' : 'Staff dashboard') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
           <div className="actions"><button type="button" className="secondary" onClick={() => setPage('reports')}>View reports</button>{isAdmin && <button type="button" className="secondary print-button" onClick={() => printReport('Church records')}>🖨 Print records</button>}</div>
         </div>
 
@@ -339,16 +339,13 @@ function App() {
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
-        {!loading && page === 'reports' && <ReportsPage attendance={attendance} finances={finances} expenses={expenses} reports={[]} money={money} />}
-        {!loading && page === 'forms' && !isAdmin && <div className="form-grid"><Action icon="◉" title="Attendance form" text="Children, teenagers, youth, adults, men and women." onClick={() => setModal('attendance')} /><Action icon="₦" title="Expense form" text="Amount, category, description and date." onClick={() => setModal('expense')} /></div>}
-        {!loading && page === 'forms' && isAdmin && <section className="card full"><span className="eyebrow">Admin view</span><h2>Staff recording forms</h2><p>Admins monitor records and print reports. Recording actions are reserved for staff accounts.</p></section>}
+        {!loading && page === 'reports' && <ReportsPage />}
+        
       </section>
     </main>
 
     {modal === 'profile' && <ProfileForm user={user} close={() => setModal(null)} save={saveProfile} />}
-    {modal === 'activity' && <ActivityForm close={() => setModal(null)} save={addActivity} />}
     {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} />}
-    {modal === 'expense' && <ExpenseForm close={() => setModal(null)} save={addExpense} />}
     {modal === 'finance' && <FinanceForm close={() => setModal(null)} save={async payload => {
       if (user.demo) {
         setFinances(current => [{ id: `demo-finance-${Date.now()}`, ...payload, amount: Number(payload.amount), date: formatDate(payload.recordDate) }, ...current])
@@ -385,8 +382,8 @@ function Stat({ icon, name, value, note }) { return <div className="stat"><span 
 function Action({ icon, title, text, onClick }) { return <button type="button" className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
 function Records({ title, eyebrow, action, onAdd, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button type="button" className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <button type="button" className="primary" onClick={onAdd}>{action}</button>}</div></div><div className="table-wrap">{children}</div></section> }
-function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', expenses: 'Expenses', activities: 'Activities', programs: 'Programs', reports: 'Reports', staff: 'Staff', forms: 'Forms' })[p] || 'Dashboard' }
-function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', expenses: 'Track church spending in one place.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', programs: 'Keep church programs organized.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.', forms: 'Structured forms for recurring church records.' })[p] }
+function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', staff: 'Staff' })[p] || 'Dashboard' }
+function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.',  })[p] }
 
 
 function StaffPage({ staff, selectedStaff, setSelectedStaff, reviews, attendance, expenses, activities, onReview, onPrint }) {
