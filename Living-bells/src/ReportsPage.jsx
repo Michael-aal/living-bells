@@ -3,31 +3,43 @@ import { api } from './api'
 import { dateLabel, money } from './weeklyReportConfig'
 import './ReportsPage.css'
 
-function startOfDay(value) {
-  if (!value) return null
-  return new Date(value + 'T00:00:00')
+const pad = value => String(value).padStart(2, '0')
+const todayKey = () => {
+  const now = new Date()
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
-function sameDay(value, selected) {
-  if (!selected) return true
-  return String(value).slice(0, 10) === selected
+const keyOf = value => String(value || '').slice(0, 10)
+const displayDate = value => {
+  const key = keyOf(value)
+  if (!key) return '—'
+  const [year, month, day] = key.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' })
 }
-function amountMatches(report, amount) {
-  if (amount === '') return true
-  const target = Number(amount)
-  if (!Number.isFinite(target)) return true
-  return [report.totalIncome, report.totalExpenditure, report.balance]
-    .some(value => Math.abs(Number(value || 0) - target) < 0.005)
+const relativeDate = value => {
+  const key = keyOf(value)
+  const today = todayKey()
+  const yesterdayDate = new Date(`${today}T12:00:00`)
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+  const yesterday = `${yesterdayDate.getFullYear()}-${pad(yesterdayDate.getMonth() + 1)}-${pad(yesterdayDate.getDate())}`
+  if (key === today) return 'Today'
+  if (key === yesterday) return 'Yesterday'
+  return new Date(`${key}T12:00:00`).toLocaleDateString('en-NG', { weekday: 'long' })
 }
 
-export default function ReportsPage({ user, onEdit }) {
+export default function ReportsPage({ user, onEdit, onEditFinance, onEditActivity, onEditAttendance }) {
   const [reports, setReports] = useState([])
+  const [activities, setActivities] = useState([])
+  const [attendance, setAttendance] = useState([])
   const [expenses, setExpenses] = useState([])
+  const [selectedDate, setSelectedDate] = useState(todayKey())
   const [date, setDate] = useState('')
   const [year, setYear] = useState('')
   const [amount, setAmount] = useState('')
-  const [selected, setSelected] = useState(null)
+  const [review, setReview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const canEditOperational = user?.role === 'STAFF'
 
   useEffect(() => {
     let cancelled = false
@@ -35,9 +47,16 @@ export default function ReportsPage({ user, onEdit }) {
       try {
         setLoading(true)
         setError('')
-        const [weekly, legacyExpenses] = await Promise.all([api.weeklyReports(), api.expenses()])
+        const [weekly, activityRows, attendanceRows, legacyExpenses] = await Promise.all([
+          api.weeklyReports(),
+          api.activities(),
+          api.attendance(),
+          api.expenses(),
+        ])
         if (cancelled) return
         setReports(weekly || [])
+        setActivities(activityRows || [])
+        setAttendance(attendanceRows || [])
         setExpenses((legacyExpenses || []).map(item => ({ ...item, amount: Number(item.amount || 0) })))
       } catch (e) {
         if (!cancelled) setError(e.message || 'Could not load reports')
@@ -49,61 +68,35 @@ export default function ReportsPage({ user, onEdit }) {
     return () => { cancelled = true }
   }, [])
 
-  const filtered = useMemo(() => reports.filter(report => {
-    const reportDate = String(report.reportDate || '').slice(0, 10)
-    return sameDay(reportDate, date)
-      && (!year || reportDate.startsWith(year))
-      && amountMatches(report, amount)
-  }), [reports, date, year, amount])
+  const filteredReports = useMemo(() => reports.filter(report => {
+    const reportDate = keyOf(report.reportDate)
+    const target = date || selectedDate
+    const amountTarget = Number(amount)
+    const amountMatch = !amount || [report.totalIncome, report.totalExpenditure, report.balance]
+      .some(value => Math.abs(Number(value || 0) - amountTarget) < 0.005)
+    return reportDate === target && (!year || reportDate.startsWith(year)) && amountMatch
+  }), [reports, date, selectedDate, year, amount])
 
-  const now = new Date()
-  const pad = value => String(value).padStart(2, '0')
-  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-  const monthKey = todayKey.slice(0, 7)
-  const yearKey = todayKey.slice(0, 4)
-
-  // WeeklyReport is the source of truth for this page because Finance/Activities
-  // save the official weekly form into WeeklyReport. Do not mix it with the
-  // separate FinancialRecord ledger here: doing so would double-count money
-  // that is already represented inside a saved weekly report.
-  const financeTotals = useMemo(() => {
-    const inFor = key => reports
-      .filter(report => {
-        const value = String(report.reportDate || '').slice(0, 10)
-        return key.length === 10 ? value === key : value.startsWith(key)
-      })
-      .reduce((sum, report) => sum + Number(report.totalIncome || 0), 0)
-
-    const outFor = key => reports
-      .filter(report => {
-        const value = String(report.reportDate || '').slice(0, 10)
-        return key.length === 10 ? value === key : value.startsWith(key)
-      })
-      .reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0)
-
-    const dayIn = inFor(todayKey)
-    const dayOut = outFor(todayKey)
-    const monthIn = inFor(monthKey)
-    const monthOut = outFor(monthKey)
-    const yearIn = inFor(yearKey)
-    const yearOut = outFor(yearKey)
-
+  const day = useMemo(() => {
+    const target = selectedDate
+    const finance = reports.find(report => keyOf(report.reportDate) === target) || null
+    const dayActivities = activities.filter(item => keyOf(item.date) === target)
+    const dayAttendance = attendance.filter(item => keyOf(item.activity?.date) === target)
+    const dayExpenses = expenses.filter(item => keyOf(item.date || item.recordDate) === target)
+    const income = finance ? Number(finance.totalIncome || 0) : 0
+    const out = finance ? Number(finance.totalExpenditure || 0) : 0
+    const attendanceTotal = dayAttendance.reduce((sum, item) => sum + attendanceTotalFor(item), 0)
     return {
-      dayIn,
-      dayOut,
-      monthIn,
-      monthOut,
-      yearIn,
-      yearOut,
-      dayNet: dayIn - dayOut,
-      monthNet: monthIn - monthOut,
-      yearNet: yearIn - yearOut,
+      finance,
+      activities: dayActivities,
+      attendance: dayAttendance,
+      expenses: dayExpenses,
+      income,
+      out,
+      balance: income - out,
+      attendanceTotal,
     }
-  }, [reports, todayKey, monthKey, yearKey])
-
-  function review(report) {
-    setSelected(report)
-  }
+  }, [selectedDate, reports, activities, attendance, expenses])
 
   function clearFilters() {
     setDate('')
@@ -111,69 +104,116 @@ export default function ReportsPage({ user, onEdit }) {
     setAmount('')
   }
 
-  return <div className="reports-page">
-    <section className="card full">
-      <div className="card-head">
-        <div>
-          <span className="eyebrow">Central archive</span>
-          <h2>Reports</h2>
-          <p className="card-subtitle">The official saved Weekly Report is the source of truth for money in, money out, attendance, and report details.</p>
-        </div>
-        <button type="button" className="secondary" onClick={clearFilters}>Clear filters</button>
-      </div>
+  function chooseDate(value) {
+    setSelectedDate(value)
+    setDate('')
+  }
 
-      <div className="report-filters">
-        <label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
-        <label>Year<input type="number" min="2000" max="2100" placeholder="2026" value={year} onChange={e => setYear(e.target.value)} /></label>
-        <label>Amount<input type="number" min="0" step="0.01" placeholder="Search amount" value={amount} onChange={e => setAmount(e.target.value)} /></label>
+  return <div className="reports-page">
+    <section className="card full report-date-hero">
+      <div>
+        <span className="eyebrow">Daily archive</span>
+        <h2>{relativeDate(selectedDate)} · {displayDate(selectedDate)}</h2>
+        <p className="card-subtitle">One date connects the saved attendance, finance and activity records. Pick any date to see what was recorded that day.</p>
       </div>
+      <label className="report-date-picker">Date<input type="date" value={selectedDate} onChange={e => chooseDate(e.target.value)} /></label>
     </section>
 
     <section className="report-money-grid">
-      <MoneyCard title="Today" inValue={financeTotals.dayIn} outValue={financeTotals.dayOut} net={financeTotals.dayNet} />
-      <MoneyCard title="This month" inValue={financeTotals.monthIn} outValue={financeTotals.monthOut} net={financeTotals.monthNet} />
-      <MoneyCard title="This year" inValue={financeTotals.yearIn} outValue={financeTotals.yearOut} net={financeTotals.yearNet} />
+      <MoneyCard title="Money in" value={day.income} note={day.finance ? 'From saved weekly finance report' : 'No saved finance report for this date'} />
+      <MoneyCard title="Money out" value={day.out} note={day.finance ? 'From saved weekly finance report' : 'No saved finance report for this date'} />
+      <MoneyCard title="Balance" value={day.balance} note={`${day.attendanceTotal.toLocaleString('en-NG')} attendance recorded`} />
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
-    <section className="card full">
-      <div className="card-head"><div><span className="eyebrow">Stored expense records</span><h2>Money out records</h2><p className="card-subtitle">These are legacy Expense records stored in the database. They are shown separately from Weekly Report totals so the same expense is not counted twice.</p></div></div>
-      {expenses.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Money out</th></tr></thead><tbody>{expenses.slice(0, 50).map(item => <tr key={item.id}><td>{dateLabel(item.date || item.recordDate)}</td><td><b>{item.description || item.title || 'Expense'}</b></td><td>{item.category || 'General'}</td><td>{money(item.amount)}</td></tr>)}</tbody></table></div> : <p>No legacy Expense records are currently returned by the database.</p>}
-    </section>
-    <section className="card full">
-      <div className="card-head"><div><span className="eyebrow">Saved weekly reports</span><h2>{filtered.length} report{filtered.length === 1 ? '' : 's'}</h2></div></div>
-      {loading ? <p>Loading saved reports…</p> : filtered.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Money in</th><th>Money out</th><th>Balance</th><th>Attendance</th><th>Actions</th></tr></thead><tbody>{filtered.map(report => {
-        const attendance = (report.numerical || []).reduce((sum, row) => sum + Number(row.total || 0), 0)
-        return <tr key={report.id}>
-          <td><b>{dateLabel(report.reportDate)}</b></td>
-          <td>{money(report.totalIncome)}</td>
-          <td>{money(report.totalExpenditure)}</td>
-          <td className={Number(report.balance) >= 0 ? 'positive' : 'negative'}>{money(report.balance)}</td>
-          <td>{attendance.toLocaleString('en-NG')}</td>
-          <td><div className="report-row-actions"><button className="secondary small-button" onClick={() => review(report)}>Review</button><button className="secondary small-button" onClick={() => onEdit(String(report.reportDate).slice(0, 10))}>Edit</button></div></td>
-        </tr>
-      })}</tbody></table></div> : <p>No saved weekly reports match these filters.</p>}
+
+    <section className="daily-record-grid">
+      <DailyCard
+        eyebrow="Section 1"
+        title="Attendance"
+        count={day.attendance.length}
+        empty="No attendance was saved for this date."
+        onReview={item => setReview({ type: 'attendance', item })}
+        onEdit={canEditOperational ? onEditAttendance : null}
+      >
+        {day.attendance.map(item => <RecordRow key={item.id} title={item.activity?.name || 'Service attendance'} meta={`${attendanceTotalFor(item).toLocaleString('en-NG')} people · ${item.recordedBy?.name || 'Unknown'}`} actionLabel="Review" onAction={() => setReview({ type: 'attendance', item })} edit={canEditOperational ? () => onEditAttendance(item) : null} />)}
+      </DailyCard>
+
+      <DailyCard
+        eyebrow="Section 2"
+        title="Finance"
+        count={day.finance ? 1 : 0}
+        empty="No weekly finance report was saved for this date."
+        onReview={item => setReview({ type: 'finance', item })}
+        onEdit={onEditFinance || onEdit}
+      >
+        {day.finance && <RecordRow title="Weekly finance report" meta={`In ${money(day.income)} · Out ${money(day.out)} · Balance ${money(day.balance)}`} actionLabel="Review" onAction={() => setReview({ type: 'finance', item: day.finance })} edit={() => (onEditFinance || onEdit)?.(selectedDate)} />}
+      </DailyCard>
+
+      <DailyCard
+        eyebrow="Section 3"
+        title="Activities"
+        count={day.activities.length}
+        empty="No activities were saved for this date."
+        onReview={item => setReview({ type: 'activity', item })}
+        onEdit={canEditOperational ? onEditActivity : null}
+      >
+        {day.activities.map(item => <RecordRow key={item.id} title={item.name} meta={`${item.type || 'Activity'} · ${item.recordedBy?.name || 'Unknown'}`} actionLabel="Review" onAction={() => setReview({ type: 'activity', item })} edit={canEditOperational ? () => onEditActivity(item) : null} />)}
+      </DailyCard>
     </section>
 
-    {selected && <ReviewPanel report={selected} close={() => setSelected(null)} onEdit={() => { setSelected(null); onEdit(String(selected.reportDate).slice(0, 10)) }} />}
+    <section className="card full">
+      <div className="card-head">
+        <div><span className="eyebrow">Date search</span><h2>Find another saved date</h2><p className="card-subtitle">Use the date, year or amount to jump through the archive.</p></div>
+        <button type="button" className="secondary" onClick={clearFilters}>Clear filters</button>
+      </div>
+      <div className="report-filters">
+        <label>Date<input type="date" value={date} onChange={e => { setDate(e.target.value); if (e.target.value) setSelectedDate(e.target.value) }} /></label>
+        <label>Year<input type="number" min="2000" max="2100" placeholder="2026" value={year} onChange={e => setYear(e.target.value)} /></label>
+        <label>Amount<input type="number" min="0" step="0.01" placeholder="Search amount" value={amount} onChange={e => setAmount(e.target.value)} /></label>
+      </div>
+      {loading ? <p>Loading saved records…</p> : filteredReports.length ? <div className="table-wrap archive-table"><table><thead><tr><th>Date</th><th>Money in</th><th>Money out</th><th>Balance</th><th>Actions</th></tr></thead><tbody>{filteredReports.map(report => <tr key={report.id}><td><b>{dateLabel(report.reportDate)}</b></td><td>{money(report.totalIncome)}</td><td>{money(report.totalExpenditure)}</td><td>{money(report.balance)}</td><td><div className="report-row-actions"><button className="secondary small-button" onClick={() => { setSelectedDate(keyOf(report.reportDate)); setReview({ type: 'finance', item: report }) }}>Review</button><button className="secondary small-button" onClick={() => (onEditFinance || onEdit)?.(keyOf(report.reportDate))}>Edit</button></div></td></tr>)}</tbody></table></div> : <p>No saved weekly finance reports match these filters.</p>}
+    </section>
+
+    <section className="card full">
+      <div className="card-head"><div><span className="eyebrow">Stored legacy records</span><h2>Money out records</h2><p className="card-subtitle">Legacy Expense records remain visible here separately so they are not double-counted inside the official weekly finance totals.</p></div></div>
+      {day.expenses.length ? <div className="table-wrap"><table><thead><tr><th>Description</th><th>Category</th><th>Money out</th></tr></thead><tbody>{day.expenses.map(item => <tr key={item.id}><td><b>{item.description || item.title || 'Expense'}</b></td><td>{item.category || 'General'}</td><td>{money(item.amount)}</td></tr>)}</tbody></table></div> : <p>No legacy Expense records for this date.</p>}
+    </section>
+
+    {review && <DailyReview review={review} close={() => setReview(null)} />}
   </div>
 }
 
-function MoneyCard({ title, inValue, outValue, net }) {
-  return <section className="card money-summary">
-    <div><span className="eyebrow">{title}</span><h3>{money(net)}</h3></div>
-    <div className="money-lines"><span><b>Money in</b><strong>{money(inValue)}</strong></span><span><b>Money out</b><strong>{money(outValue)}</strong></span></div>
-  </section>
+function attendanceTotalFor(item) {
+  return ['childrenMale', 'childrenFemale', 'teenagersMale', 'teenagersFemale', 'youthMale', 'youthFemale', 'adultsMale', 'adultsFemale']
+    .reduce((sum, key) => sum + Number(item[key] || 0), 0)
 }
 
-function ReviewPanel({ report, close, onEdit }) {
+function MoneyCard({ title, value, note }) {
+  return <section className="card money-summary"><span className="eyebrow">{title}</span><h3>{money(value)}</h3><p>{note}</p></section>
+}
+
+function DailyCard({ eyebrow, title, count, empty, children }) {
+  return <section className="card daily-card"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><span className="record-count">{count}</span></div>{count ? <div className="daily-record-list">{children}</div> : <p>{empty}</p>}</section>
+}
+
+function RecordRow({ title, meta, onAction, edit }) {
+  return <div className="daily-record-row"><div><b>{title}</b><small>{meta}</small></div><div className="report-row-actions"><button className="secondary small-button" onClick={onAction}>Review</button>{edit && <button className="secondary small-button" onClick={edit}>Edit</button>}</div></div>
+}
+
+function DailyReview({ review, close }) {
+  const { type, item } = review
   return <div className="backdrop" onMouseDown={close}>
     <div className="modal report-review-modal" onMouseDown={e => e.stopPropagation()}>
-      <div className="modal-head"><div><span className="eyebrow">Read-only review</span><h2>{dateLabel(report.reportDate)}</h2></div><button className="close" onClick={close}>×</button></div>
-      <div className="review-total-grid"><div><small>Money in</small><b>{money(report.totalIncome)}</b></div><div><small>Money out</small><b>{money(report.totalExpenditure)}</b></div><div><small>Balance</small><b>{money(report.balance)}</b></div></div>
-      <div className="table-wrap"><table><thead><tr><th>Service</th><th>Adult</th><th>Children</th><th>Visitor</th><th>Total</th></tr></thead><tbody>{(report.numerical || []).map(row => <tr key={row.sn}><td>{row.service}</td><td>{row.adult}</td><td>{row.children}</td><td>{row.visitor}</td><td><b>{row.total}</b></td></tr>)}</tbody></table></div>
-      <div className="review-finance"><h3>Income</h3>{(report.income || []).filter(row => Number(row.amount) > 0).map(row => <p key={row.sn}><span>{row.name || 'Other'}</span><b>{money(row.amount)}</b></p>)}<h3>Expenditure</h3>{(report.expenditure || []).filter(row => Number(row.amount) > 0).map(row => <p key={row.sn}><span>{row.name || 'Other'}</span><b>{money(row.amount)}</b></p>)}</div>
-      <div className="record-actions"><button className="secondary" onClick={() => window.print()}>Print / PDF</button><button className="primary" onClick={onEdit}>Edit report</button></div>
+      <div className="modal-head"><div><span className="eyebrow">Daily record</span><h2>{type[0].toUpperCase() + type.slice(1)} · {displayDate(type === 'finance' ? item.reportDate : type === 'activity' ? item.date : item.activity?.date)}</h2></div><button className="close" onClick={close}>×</button></div>
+      {type === 'activity' && <div className="review-detail-list"><Detail label="Activity" value={item.name} /><Detail label="Type" value={item.type || '—'} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div>}
+      {type === 'attendance' && <><div className="review-total-grid"><Detail label="Service" value={item.activity?.name || 'Service'} /><Detail label="Total people" value={attendanceTotalFor(item).toLocaleString('en-NG')} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div><div className="review-detail-list">{[['Children male',item.childrenMale],['Children female',item.childrenFemale],['Teenagers male',item.teenagersMale],['Teenagers female',item.teenagersFemale],['Youth male',item.youthMale],['Youth female',item.youthFemale],['Adults male',item.adultsMale],['Adults female',item.adultsFemale]].map(([label,value])=><Detail key={label} label={label} value={Number(value||0).toLocaleString('en-NG')} />)}</div></>}
+      {type === 'finance' && <><div className="review-total-grid"><Detail label="Money in" value={money(item.totalIncome)} /><Detail label="Money out" value={money(item.totalExpenditure)} /><Detail label="Balance" value={money(item.balance)} /></div><div className="review-finance"><h3>Money in details</h3>{(item.income || []).filter(row => Number(row.amount) > 0).map(row => <p key={row.sn}><span>{row.name || 'Other'}</span><b>{money(row.amount)}</b></p>)}<h3>Money out details</h3>{(item.expenditure || []).filter(row => Number(row.amount) > 0).map(row => <p key={row.sn}><span>{row.name || 'Other'}</span><b>{money(row.amount)}</b></p>)}</div></>}
+      <div className="record-actions"><button className="secondary" onClick={() => window.print()}>Print / PDF</button><button className="primary" onClick={close}>Done</button></div>
     </div>
   </div>
+}
+
+function Detail({ label, value }) {
+  return <div className="detail-item"><small>{label}</small><b>{value}</b></div>
 }
