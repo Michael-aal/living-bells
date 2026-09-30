@@ -37,3 +37,14 @@
 .negative{font-weight:700}
 @media(max-width:1000px){.daily-record-grid{grid-template-columns:1fr}.report-date-hero{align-items:stretch;flex-direction:column}.report-date-picker{min-width:0}.report-filters,.report-money-grid,.review-total-grid{grid-template-columns:1fr}}
 @media(max-width:650px){.daily-record-row{align-items:flex-start;flex-direction:column}.report-row-actions{width:100%}.review-detail-list{grid-template-columns:1fr}}
+
+.reports-print-sheet{display:none}
+@media print{
+  body *{visibility:hidden!important}
+  .reports-print-sheet,.reports-print-sheet *{visibility:visible!important}
+  .reports-print-sheet{display:block!important;position:absolute;inset:0;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:8pt;padding:10mm}
+  .reports-print-header{display:grid;gap:3px;text-align:center;margin-bottom:14px}.reports-print-header strong{font-size:13pt}.reports-print-header span{font-size:11pt;font-weight:700}.reports-print-header small{font-size:8pt}
+  .reports-print-sheet h3{font-size:10pt;margin:14px 0 6px;border-bottom:1px solid #111;padding-bottom:3px}
+  .reports-print-sheet table{width:100%;border-collapse:collapse;margin-bottom:8px}.reports-print-sheet th,.reports-print-sheet td{border:1px solid #333;padding:4px 5px;color:#111}.reports-print-sheet th{font-weight:700}
+  .reports-print-balance{border:1px solid #111;padding:7px;text-align:right;font-weight:800;margin-top:10px}
+}
