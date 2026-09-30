@@ -22,6 +22,7 @@ function amountMatches(report, amount) {
 export default function ReportsPage({ user, onEdit }) {
   const [reports, setReports] = useState([])
   const [finances, setFinances] = useState([])
+  const [expenses, setExpenses] = useState([])
   const [date, setDate] = useState('')
   const [year, setYear] = useState('')
   const [amount, setAmount] = useState('')
@@ -35,10 +36,11 @@ export default function ReportsPage({ user, onEdit }) {
       try {
         setLoading(true)
         setError('')
-        const [weekly, finance] = await Promise.all([api.weeklyReports(), api.finances()])
+        const [weekly, finance, legacyExpenses] = await Promise.all([api.weeklyReports(), api.finances(), api.expenses()])
         if (cancelled) return
         setReports(weekly || [])
         setFinances((finance || []).map(item => ({ ...item, amount: Number(item.amount || 0) })))
+        setExpenses((legacyExpenses || []).map(item => ({ ...item, amount: Number(item.amount || 0) })))
       } catch (e) {
         if (!cancelled) setError(e.message || 'Could not load reports')
       } finally {
@@ -113,6 +115,10 @@ export default function ReportsPage({ user, onEdit }) {
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
+    <section className="card full">
+      <div className="card-head"><div><span className="eyebrow">Stored expense records</span><h2>Money out records</h2><p className="card-subtitle">These are legacy Expense records stored in the database. They are shown separately from Weekly Report totals so the same expense is not counted twice.</p></div></div>
+      {expenses.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Money out</th></tr></thead><tbody>{expenses.slice(0, 50).map(item => <tr key={item.id}><td>{dateLabel(item.date)}</td><td><b>{item.description || item.title || 'Expense'}</b></td><td>{item.category || 'General'}</td><td>{money(item.amount)}</td></tr>)}</tbody></table></div> : <p>No legacy Expense records are currently returned by the database.</p>}
+    </section>
     <section className="card full">
       <div className="card-head"><div><span className="eyebrow">Saved weekly reports</span><h2>{filtered.length} report{filtered.length === 1 ? '' : 's'}</h2></div></div>
       {loading ? <p>Loading saved reports…</p> : filtered.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Money in</th><th>Money out</th><th>Balance</th><th>Attendance</th><th>Actions</th></tr></thead><tbody>{filtered.map(report => {
