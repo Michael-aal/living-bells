@@ -45,6 +45,7 @@ export const api = {
   dashboard: () => apiRequest('/api/dashboard'),
   activities: () => apiRequest('/api/activities'),
   createActivity: payload => apiRequest('/api/activities', { method: 'POST', body: JSON.stringify(payload) }),
+  updateActivity: (id, payload) => apiRequest(`/api/activities/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   attendance: () => apiRequest('/api/attendance'),
   createAttendance: payload => apiRequest('/api/attendance', { method: 'POST', body: JSON.stringify(payload) }),
   expenses: () => apiRequest('/api/expenses'),
