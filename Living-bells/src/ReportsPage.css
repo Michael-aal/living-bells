@@ -48,3 +48,5 @@
   .reports-print-sheet table{width:100%;border-collapse:collapse;margin-bottom:8px}.reports-print-sheet th,.reports-print-sheet td{border:1px solid #333;padding:4px 5px;color:#111}.reports-print-sheet th{font-weight:700}
   .reports-print-balance{border:1px solid #111;padding:7px;text-align:right;font-weight:800;margin-top:10px}
 }
+
+.archive-section-grid{display:grid;gap:18px}.archive-card{overflow:hidden}.archive-card .card-subtitle{max-width:700px}.archive-card table{min-width:760px}
