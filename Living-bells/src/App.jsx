@@ -226,6 +226,10 @@ function App() {
     }
   }
 
+  async function saveAttendanceEdit(payload) {
+    return addAttendance(payload)
+  }
+
   async function addActivity(payload) {
     if (user.demo) {
       const demoRecord = { ...payload, id: `demo-activity-${Date.now()}` }
@@ -244,6 +248,27 @@ function App() {
       return true
     } catch (error) {
       setSync(error.message || 'Could not save activity')
+      return false
+    }
+  }
+
+  async function updateActivity(payload) {
+    if (!payload?.id) return addActivity(payload)
+    if (user.demo) {
+      setActivities(current => current.map(item => item.id === payload.id ? { ...item, ...payload } : item))
+      setModal(null)
+      setSync('Demo mode')
+      return true
+    }
+    try {
+      setSync('Saving activity changes...')
+      const saved = await api.updateActivity(payload.id, payload)
+      setActivities(current => [saved, ...current.filter(item => item.id !== saved.id)])
+      setModal(null)
+      setSync('Backend connected')
+      return true
+    } catch (error) {
+      setSync(error.message || 'Could not update activity')
       return false
     }
   }
@@ -306,6 +331,19 @@ function App() {
     setPage('activities')
   }
 
+  function openFinanceEditor(date) {
+    setReportEditDate(date)
+    setPage('finance')
+  }
+
+  function openActivityEditor(record) {
+    setModal({ type: 'activity-edit', record })
+  }
+
+  function openAttendanceEditor(record) {
+    setModal({ type: 'attendance-edit', record })
+  }
+
   function printReport(titleText) {
     document.title = `Living Bells - ${titleText}`
     window.print()
@@ -337,13 +375,14 @@ function App() {
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
-        {!loading && page === 'reports' && <ReportsPage user={user} onEdit={openReportEditor} />}
+        {!loading && page === 'reports' && <ReportsPage user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
         
       </section>
     </main>
 
     {modal === 'profile' && <ProfileForm user={user} close={() => setModal(null)} save={saveProfile} />}
     {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} />}
+    {modal?.type === 'attendance-edit' && <AttendanceForm initial={modal.record} close={() => setModal(null)} save={saveAttendanceEdit} />}
     {modal === 'finance' && <FinanceForm close={() => setModal(null)} save={async payload => {
       if (user.demo) {
         setFinances(current => [{ id: `demo-finance-${Date.now()}`, ...payload, amount: Number(payload.amount), date: formatDate(payload.recordDate) }, ...current])
@@ -364,6 +403,7 @@ function App() {
       }
     }} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
+    {modal?.type === 'activity-edit' && <ActivityForm initial={modal.record} close={() => setModal(null)} save={updateActivity} />}
     <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['finance','₦'],['activities','▣'],['reports','⌁'],...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
   </div>
 }
@@ -426,8 +466,13 @@ function ProfileForm({ user, close, save }) {
     <button className="primary wide" disabled={saving || name.trim().length < 2 || name.trim() === (user.name || '').trim()} onClick={submit}>{saving ? 'Saving…' : 'Save username'}</button>
   </Modal>
 }
-function ActivityForm({ close, save }) {
-  const [form, setForm] = useState({ name: '', type: 'Service', date: new Date().toISOString().slice(0, 10) })
+function ActivityForm({ close, save, initial = null }) {
+  const [form, setForm] = useState(() => ({
+    id: initial?.id,
+    name: initial?.name || '',
+    type: initial?.type || 'Service',
+    date: String(initial?.date || new Date().toISOString()).slice(0, 10),
+  }))
   const [saving, setSaving] = useState(false)
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
 
@@ -438,26 +483,41 @@ function ActivityForm({ close, save }) {
     if (!success) setSaving(false)
   }
 
-  return <Modal title="Submit activity" close={close}>
+  return <Modal title={initial ? 'Edit activity' : 'Submit activity'} close={close}>
     <label>Activity name<input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sunday Worship Service" /></label>
     <label>Type<select value={form.type} onChange={e => set('type', e.target.value)}>{['Service', 'Meeting', 'Outreach', 'Youth', 'Children', 'Choir', 'Other'].map(x => <option key={x}>{x}</option>)}</select></label>
     <label>Date<input type="date" value={form.date} onChange={e => set('date', e.target.value)} /></label>
-    <button type="button" className="primary wide" disabled={saving || !form.name || !form.date} onClick={submit}>{saving ? 'Saving…' : 'Submit activity'}</button>
+    <button type="button" className="primary wide" disabled={saving || !form.name || !form.date} onClick={submit}>{saving ? 'Saving…' : initial ? 'Save changes' : 'Submit activity'}</button>
   </Modal>
 }
-function AttendanceForm({ close, save }) {
-  const [service, setService] = useState('Sunday Service'), [date, setDate] = useState(new Date().toISOString().slice(0, 10)), [groups, setGroups] = useState(Object.fromEntries(['Children', 'Teenagers', 'Youth', 'Adults'].map(x => [x, { male: '', female: '' }])))
+function AttendanceForm({ close, save, initial = null }) {
+  const activity = initial?.activity || {}
+  const [service, setService] = useState(initial?.service || activity.name || 'Sunday Service')
+  const [date, setDate] = useState(String(initial?.dateRaw || activity.date || new Date().toISOString()).slice(0, 10))
+  const [groups, setGroups] = useState(() => ({
+    Children: { male: initial?.childrenMale ?? '', female: initial?.childrenFemale ?? '' },
+    Teenagers: { male: initial?.teenagersMale ?? '', female: initial?.teenagersFemale ?? '' },
+    Youth: { male: initial?.youthMale ?? '', female: initial?.youthFemale ?? '' },
+    Adults: { male: initial?.adultsMale ?? '', female: initial?.adultsFemale ?? '' },
+  }))
   const [saving, setSaving] = useState(false)
-  const update = (g, s, v) => setGroups(x => ({ ...x, [g]: { ...x[g], [s]: v } })), total = Object.values(groups).reduce((a, g) => a + Number(g.male || 0) + Number(g.female || 0), 0)
+  const update = (g, s, v) => setGroups(x => ({ ...x, [g]: { ...x[g], [s]: v } }))
+  const total = Object.values(groups).reduce((a, g) => a + Number(g.male || 0) + Number(g.female || 0), 0)
 
   async function submit() {
     if (saving || !service || !date) return
     setSaving(true)
-    const success = await save({ service, date, groups })
+    const success = await save({ activityId: initial?.activityId || initial?.activity?.id, service, date, groups })
     if (!success) setSaving(false)
   }
 
-  return <Modal title="Record attendance" close={close}><label>Service<input value={service} onChange={e => setService(e.target.value)} /></label><label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><div className="attendance-form"><div className="frow header"><span>Group</span><span>Male</span><span>Female</span></div>{Object.entries(groups).map(([g, v]) => <div className="frow" key={g}><b>{g}</b><input type="number" min="0" value={v.male} onChange={e => update(g, 'male', e.target.value)} placeholder="0" /><input type="number" min="0" value={v.female} onChange={e => update(g, 'female', e.target.value)} placeholder="0" /></div>)}</div><div className="total">Total attendance <b>{total}</b></div><button type="button" className="primary wide" onClick={submit} disabled={saving || !service || !date}>{saving ? 'Saving…' : 'Save attendance'}</button></Modal>
+  return <Modal title={initial ? 'Edit attendance' : 'Record attendance'} close={close}>
+    <label>Service<input value={service} onChange={e => setService(e.target.value)} /></label>
+    <label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+    <div className="attendance-form"><div className="frow header"><span>Group</span><span>Male</span><span>Female</span></div>{Object.entries(groups).map(([g, v]) => <div className="frow" key={g}><b>{g}</b><input type="number" min="0" value={v.male} onChange={e => update(g, 'male', e.target.value)} placeholder="0" /><input type="number" min="0" value={v.female} onChange={e => update(g, 'female', e.target.value)} placeholder="0" /></div>)}</div>
+    <div className="total">Total attendance <b>{total}</b></div>
+    <button type="button" className="primary wide" onClick={submit} disabled={saving || !service || !date}>{saving ? 'Saving…' : initial ? 'Save changes' : 'Save attendance'}</button>
+  </Modal>
 }
 function ReviewForm({ staff, close, save }) {
   const today = new Date()
