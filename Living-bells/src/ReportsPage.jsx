@@ -181,6 +181,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     </section>
 
     {review && <DailyReview review={review} close={() => setReview(null)} />}
+    <ReportsPrintSheet day={day} selectedDate={selectedDate} />
   </div>
 }
 
@@ -208,7 +209,7 @@ function DailyReview({ review, close }) {
       <div className="modal-head"><div><span className="eyebrow">Daily record</span><h2>{type[0].toUpperCase() + type.slice(1)} · {displayDate(type === 'finance' ? item.reportDate : type === 'activity' ? item.date : item.activity?.date)}</h2></div><button className="close" onClick={close}>×</button></div>
       {type === 'activity' && <div className="review-detail-list"><Detail label="Activity" value={item.name} /><Detail label="Type" value={item.type || '—'} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div>}
       {type === 'attendance' && <><div className="review-total-grid"><Detail label="Service" value={item.activity?.name || 'Service'} /><Detail label="Total people" value={attendanceTotalFor(item).toLocaleString('en-NG')} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div><div className="review-detail-list">{[['Children male',item.childrenMale],['Children female',item.childrenFemale],['Teenagers male',item.teenagersMale],['Teenagers female',item.teenagersFemale],['Youth male',item.youthMale],['Youth female',item.youthFemale],['Adults male',item.adultsMale],['Adults female',item.adultsFemale]].map(([label,value])=><Detail key={label} label={label} value={Number(value||0).toLocaleString('en-NG')} />)}</div></>}
-      {type === 'finance' && <><div className="review-total-grid"><Detail label="Money in" value={money(item.totalIncome)} /><Detail label="Money out" value={money(item.totalExpenditure)} /><Detail label="Balance" value={money(item.balance)} /></div><div className="review-finance"><h3>Money in details</h3>{(item.income || []).filter(row => Number(row.amount) > 0).map(row => <p key={row.sn}><span>{row.name || 'Other'}</span><b>{money(row.amount)}</b></p>)}<h3>Money out details</h3>{(item.expenditure || []).filter(row => Number(row.amount) > 0).map(row => <p key={row.sn}><span>{row.name || 'Other'}</span><b>{money(row.amount)}</b></p>)}</div></>}
+      {type === 'finance' && <><div className="review-total-grid"><Detail label="Money in" value={money(item.totalIncome)} /><Detail label="Money out" value={money(item.totalExpenditure)} /><Detail label="Balance" value={money(item.balance)} /></div><div className="review-finance"><h3>Money in details</h3>{(item.income || []).map(row => <p key={row.sn}><span>{row.name || 'Other income'}</span><b>{money(row.amount)}</b></p>)}<h3>Money out details</h3>{(item.expenditure || []).map(row => <p key={row.sn}><span>{row.name || 'Other expenditure'}</span><b>{money(row.amount)}</b></p>)}</div></>}
       <div className="record-actions"><button className="secondary" onClick={() => window.print()}>Print / PDF</button><button className="primary" onClick={close}>Done</button></div>
     </div>
   </div>
@@ -216,4 +217,20 @@ function DailyReview({ review, close }) {
 
 function Detail({ label, value }) {
   return <div className="detail-item"><small>{label}</small><b>{value}</b></div>
+}
+
+function ReportsPrintSheet({ day, selectedDate }) {
+  const finance = day.finance
+  return <section className="reports-print-sheet" aria-label="Printable church report">
+    <header className="reports-print-header"><strong>FOURSQUARE GOSPEL CHURCH, THE BELLS</strong><span>DAILY RECORD REPORT</span><small>DATE: {displayDate(selectedDate)}</small></header>
+    <h3>1. ATTENDANCE</h3>
+    <table><thead><tr><th>Service</th><th>Children M</th><th>Children F</th><th>Teenagers M</th><th>Teenagers F</th><th>Youth M</th><th>Youth F</th><th>Adults M</th><th>Adults F</th><th>Total</th></tr></thead><tbody>{day.attendance.length ? day.attendance.map(item => <tr key={item.id}><td>{item.activity?.name || 'Service'}</td><td>{Number(item.childrenMale||0)}</td><td>{Number(item.childrenFemale||0)}</td><td>{Number(item.teenagersMale||0)}</td><td>{Number(item.teenagersFemale||0)}</td><td>{Number(item.youthMale||0)}</td><td>{Number(item.youthFemale||0)}</td><td>{Number(item.adultsMale||0)}</td><td>{Number(item.adultsFemale||0)}</td><td>{attendanceTotalFor(item)}</td></tr>) : <tr><td colSpan="10">No attendance record saved.</td></tr>}</tbody></table>
+    <h3>2. ACTIVITIES</h3>
+    <table><thead><tr><th>Activity</th><th>Type</th><th>Recorded by</th></tr></thead><tbody>{day.activities.length ? day.activities.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.type || 'Activity'}</td><td>{item.recordedBy?.name || 'Unknown'}</td></tr>) : <tr><td colSpan="3">No activity record saved.</td></tr>}</tbody></table>
+    <h3>3. FINANCE — MONEY IN</h3>
+    <table><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>{finance?.income?.length ? finance.income.map(row => <tr key={row.sn}><td>{row.name || 'Other income'}</td><td>{money(row.amount)}</td></tr>) : <tr><td>No finance report saved</td><td>{money(0)}</td></tr>}<tr><th>TOTAL MONEY IN</th><th>{money(day.income)}</th></tr></tbody></table>
+    <h3>4. FINANCE — MONEY OUT</h3>
+    <table><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>{finance?.expenditure?.length ? finance.expenditure.map(row => <tr key={row.sn}><td>{row.name || 'Other expenditure'}</td><td>{money(row.amount)}</td></tr>) : <tr><td>No finance report saved</td><td>{money(0)}</td></tr>}<tr><th>TOTAL MONEY OUT</th><th>{money(day.out)}</th></tr></tbody></table>
+    <div className="reports-print-balance">BALANCE: {money(day.balance)}</div>
+  </section>
 }
