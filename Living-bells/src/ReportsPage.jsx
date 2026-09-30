@@ -162,17 +162,10 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       </DailyCard>
     </section>
 
-    <section className="card full">
-      <div className="card-head">
-        <div><span className="eyebrow">Date search</span><h2>Find another saved date</h2><p className="card-subtitle">Use the date, year or amount to jump through the archive.</p></div>
-        <button type="button" className="secondary" onClick={clearFilters}>Clear filters</button>
-      </div>
-      <div className="report-filters">
-        <label>Date<input type="date" value={date} onChange={e => { setDate(e.target.value); if (e.target.value) setSelectedDate(e.target.value) }} /></label>
-        <label>Year<input type="number" min="2000" max="2100" placeholder="2026" value={year} onChange={e => setYear(e.target.value)} /></label>
-        <label>Amount<input type="number" min="0" step="0.01" placeholder="Search amount" value={amount} onChange={e => setAmount(e.target.value)} /></label>
-      </div>
-      {loading ? <p>Loading saved records…</p> : filteredReports.length ? <div className="table-wrap archive-table"><table><thead><tr><th>Date</th><th>Money in</th><th>Money out</th><th>Balance</th><th>Actions</th></tr></thead><tbody>{filteredReports.map(report => <tr key={report.id}><td><b>{dateLabel(report.reportDate)}</b></td><td>{money(report.totalIncome)}</td><td>{money(report.totalExpenditure)}</td><td>{money(report.balance)}</td><td><div className="report-row-actions"><button className="secondary small-button" onClick={() => { setSelectedDate(keyOf(report.reportDate)); setReview({ type: 'finance', item: report }) }}>Review</button><button className="secondary small-button" onClick={() => (onEditFinance || onEdit)?.(keyOf(report.reportDate))}>Edit</button></div></td></tr>)}</tbody></table></div> : <p>No saved weekly finance reports match these filters.</p>}
+    <section className="archive-section-grid">
+      <ArchiveAttendance reports={reports} attendance={attendance} />
+      <ArchiveActivities reports={reports} activities={activities} />
+      <ArchiveFinance reports={reports} onReview={item => { setSelectedDate(keyOf(item.reportDate)); setReview({ type: 'finance', item }) }} onEdit={date => (onEditFinance || onEdit)?.(date)} />
     </section>
 
     <section className="card full">
@@ -188,6 +181,37 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
 function attendanceTotalFor(item) {
   return ['childrenMale', 'childrenFemale', 'teenagersMale', 'teenagersFemale', 'youthMale', 'youthFemale', 'adultsMale', 'adultsFemale']
     .reduce((sum, key) => sum + Number(item[key] || 0), 0)
+}
+
+function ArchiveAttendance({ reports, attendance }) {
+  const rows = useMemo(() => attendance.reduce((map, item) => {
+    const date = keyOf(item.activity?.date || item.date || item.recordDate)
+    if (!date) return map
+    const current = map.get(date) || { date, children: 0, teenagers: 0, youth: 0, adults: 0, total: 0 }
+    current.children += Number(item.childrenMale || 0) + Number(item.childrenFemale || 0)
+    current.teenagers += Number(item.teenagersMale || 0) + Number(item.teenagersFemale || 0)
+    current.youth += Number(item.youthMale || 0) + Number(item.youthFemale || 0)
+    current.adults += Number(item.adultsMale || 0) + Number(item.adultsFemale || 0)
+    current.total = current.children + current.teenagers + current.youth + current.adults
+    map.set(date, current); return map
+  }, new Map()), [attendance])
+  return <section className="card full archive-card"><div className="card-head"><div><span className="eyebrow">Past attendance</span><h2>Attendance history</h2><p className="card-subtitle">Attendance totals only: children, teenagers, youth and adults.</p></div></div>{rows.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Children</th><th>Teenagers</th><th>Youth</th><th>Adults</th><th>Total</th></tr></thead><tbody>{Array.from(rows.values()).sort((a,b)=>b.date.localeCompare(a.date)).map(row=><tr key={row.date}><td><b>{dateLabel(row.date)}</b></td><td>{row.children}</td><td>{row.teenagers}</td><td>{row.youth}</td><td>{row.adults}</td><td><b>{row.total}</b></td></tr>)}</tbody></table></div> : <p>No past attendance records.</p>}</section>
+}
+
+function ArchiveActivities({ reports, activities }) {
+  const rows = useMemo(() => reports.map(report => {
+    const numerical = Array.isArray(report.numerical) ? report.numerical : []
+    const adult = numerical.reduce((sum,row)=>sum+Number(row.adult||0),0)
+    const children = numerical.reduce((sum,row)=>sum+Number(row.children||0),0)
+    const visitor = numerical.reduce((sum,row)=>sum+Number(row.visitor||0),0)
+    const spiritual = report.spiritual || {}
+    return { date:keyOf(report.reportDate), services:numerical.length, adult, children, visitor, total:adult+children+visitor, decisions:Number(spiritual['No. of Decision']||0), baptisms:Number(spiritual['No. of Water Baptism']||0) }
+  }).sort((a,b)=>b.date.localeCompare(a.date)), [reports])
+  return <section className="card full archive-card"><div className="card-head"><div><span className="eyebrow">Past activities</span><h2>Activities history</h2><p className="card-subtitle">Activity report totals only: people recorded across the services and key spiritual results.</p></div></div>{rows.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Services</th><th>Adults</th><th>Children</th><th>Visitors</th><th>Total people</th><th>Decisions</th><th>Water Baptism</th></tr></thead><tbody>{rows.map(row=><tr key={row.date}><td><b>{dateLabel(row.date)}</b></td><td>{row.services}</td><td>{row.adult}</td><td>{row.children}</td><td>{row.visitor}</td><td><b>{row.total}</b></td><td>{row.decisions}</td><td>{row.baptisms}</td></tr>)}</tbody></table></div> : <p>No past activity reports.</p>}</section>
+}
+
+function ArchiveFinance({ reports, onReview, onEdit }) {
+  return <section className="card full archive-card"><div className="card-head"><div><span className="eyebrow">Past finance</span><h2>Finance history</h2><p className="card-subtitle">Finance totals only: money in, money out and balance.</p></div></div>{reports.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Money in</th><th>Money out</th><th>Balance</th><th>Actions</th></tr></thead><tbody>{reports.map(report=><tr key={report.id}><td><b>{dateLabel(report.reportDate)}</b></td><td>{money(report.totalIncome)}</td><td>{money(report.totalExpenditure)}</td><td>{money(report.balance)}</td><td><div className="report-row-actions"><button className="secondary small-button" onClick={()=>onReview(report)}>Review</button><button className="secondary small-button" onClick={()=>onEdit(keyOf(report.reportDate))}>Edit</button></div></td></tr>)}</tbody></table></div> : <p>No past finance reports.</p>}</section>
 }
 
 function MoneyCard({ title, value, note }) {
