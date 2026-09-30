@@ -1,1 +1,39 @@
-.reports-page{display:grid;gap:18px}.report-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:8px}.report-filters label{display:grid;gap:7px;font-weight:700;font-size:13px}.report-filters input{width:100%}.report-money-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.money-summary h3{font-size:26px;margin:6px 0 14px}.money-lines{display:grid;gap:8px}.money-lines span{display:flex;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid var(--border,#e5e7eb)}.money-lines b{font-weight:600}.report-row-actions{display:flex;gap:7px}.report-review-modal{max-width:980px}.review-total-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}.review-total-grid>div{padding:13px;border:1px solid var(--border,#e5e7eb);border-radius:10px;display:grid;gap:4px}.review-total-grid small{opacity:.7}.review-total-grid b{font-size:18px}.review-finance{margin-top:18px}.review-finance h3{margin:15px 0 7px}.review-finance p{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border,#e5e7eb);margin:0}.positive{font-weight:700}.negative{font-weight:700}@media(max-width:800px){.report-filters,.report-money-grid,.review-total-grid{grid-template-columns:1fr}.report-row-actions{flex-wrap:wrap}}
+.reports-page{display:grid;gap:18px}
+.report-date-hero{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.report-date-hero h2{margin:5px 0 8px}
+.report-date-picker{display:grid;gap:7px;font-weight:700;font-size:13px;min-width:190px}
+.report-date-picker input{width:100%}
+.report-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:8px}
+.report-filters label{display:grid;gap:7px;font-weight:700;font-size:13px}
+.report-filters input{width:100%}
+.report-money-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.money-summary h3{font-size:26px;margin:6px 0 8px}
+.money-summary p{margin:0;opacity:.72;font-size:13px}
+.daily-record-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.daily-card{min-width:0}
+.daily-card .card-head{align-items:center}
+.record-count{min-width:32px;height:32px;border-radius:999px;display:grid;place-items:center;background:rgba(99,78,180,.1);font-weight:800}
+.daily-record-list{display:grid;gap:10px}
+.daily-record-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--border,#e5e7eb)}
+.daily-record-row:first-child{border-top:0;padding-top:0}
+.daily-record-row>div:first-child{min-width:0}
+.daily-record-row b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.daily-record-row small{display:block;margin-top:4px;opacity:.68}
+.report-row-actions{display:flex;gap:7px;flex-shrink:0}
+.small-button{padding:7px 10px}
+.archive-table{margin-top:14px}
+.report-review-modal{max-width:980px}
+.review-total-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.review-total-grid>div{padding:13px;border:1px solid var(--border,#e5e7eb);border-radius:10px;display:grid;gap:4px}
+.review-total-grid small{opacity:.7}
+.review-total-grid b{font-size:18px}
+.review-detail-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.detail-item{padding:12px;border:1px solid var(--border,#e5e7eb);border-radius:10px;display:grid;gap:4px}
+.detail-item small{opacity:.68}
+.review-finance{margin-top:18px}
+.review-finance h3{margin:15px 0 7px}
+.review-finance p{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border,#e5e7eb);margin:0}
+.positive{font-weight:700}
+.negative{font-weight:700}
+@media(max-width:1000px){.daily-record-grid{grid-template-columns:1fr}.report-date-hero{align-items:stretch;flex-direction:column}.report-date-picker{min-width:0}.report-filters,.report-money-grid,.review-total-grid{grid-template-columns:1fr}}
+@media(max-width:650px){.daily-record-row{align-items:flex-start;flex-direction:column}.report-row-actions{width:100%}.review-detail-list{grid-template-columns:1fr}}
