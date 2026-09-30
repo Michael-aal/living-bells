@@ -21,7 +21,6 @@ function amountMatches(report, amount) {
 
 export default function ReportsPage({ user, onEdit }) {
   const [reports, setReports] = useState([])
-  const [finances, setFinances] = useState([])
   const [expenses, setExpenses] = useState([])
   const [date, setDate] = useState('')
   const [year, setYear] = useState('')
@@ -36,10 +35,9 @@ export default function ReportsPage({ user, onEdit }) {
       try {
         setLoading(true)
         setError('')
-        const [weekly, finance, legacyExpenses] = await Promise.all([api.weeklyReports(), api.finances(), api.expenses()])
+        const [weekly, legacyExpenses] = await Promise.all([api.weeklyReports(), api.expenses()])
         if (cancelled) return
         setReports(weekly || [])
-        setFinances((finance || []).map(item => ({ ...item, amount: Number(item.amount || 0) })))
         setExpenses((legacyExpenses || []).map(item => ({ ...item, amount: Number(item.amount || 0) })))
       } catch (e) {
         if (!cancelled) setError(e.message || 'Could not load reports')
@@ -59,26 +57,49 @@ export default function ReportsPage({ user, onEdit }) {
   }), [reports, date, year, amount])
 
   const now = new Date()
-  const todayKey = now.toISOString().slice(0, 10)
+  const pad = value => String(value).padStart(2, '0')
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
   const monthKey = todayKey.slice(0, 7)
   const yearKey = todayKey.slice(0, 4)
 
+  // WeeklyReport is the source of truth for this page because Finance/Activities
+  // save the official weekly form into WeeklyReport. Do not mix it with the
+  // separate FinancialRecord ledger here: doing so would double-count money
+  // that is already represented inside a saved weekly report.
   const financeTotals = useMemo(() => {
-    const total = key => finances.filter(item => {
-      const value = String(item.recordDate || item.date || '').slice(0, 10)
-      return value === key || (key.length === 7 && value.startsWith(key)) || (key.length === 4 && value.startsWith(key))
-    }).reduce((sum, item) => sum + (item.type === 'INCOME' ? Number(item.amount || 0) : -Number(item.amount || 0)), 0)
-    const sumType = (key, type) => finances.filter(item => {
-      const value = String(item.recordDate || item.date || '').slice(0, 10)
-      return (key.length === 10 ? value === key : value.startsWith(key)) && item.type === type
-    }).reduce((sum, item) => sum + Number(item.amount || 0), 0)
+    const inFor = key => reports
+      .filter(report => {
+        const value = String(report.reportDate || '').slice(0, 10)
+        return key.length === 10 ? value === key : value.startsWith(key)
+      })
+      .reduce((sum, report) => sum + Number(report.totalIncome || 0), 0)
+
+    const outFor = key => reports
+      .filter(report => {
+        const value = String(report.reportDate || '').slice(0, 10)
+        return key.length === 10 ? value === key : value.startsWith(key)
+      })
+      .reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0)
+
+    const dayIn = inFor(todayKey)
+    const dayOut = outFor(todayKey)
+    const monthIn = inFor(monthKey)
+    const monthOut = outFor(monthKey)
+    const yearIn = inFor(yearKey)
+    const yearOut = outFor(yearKey)
+
     return {
-      dayIn: sumType(todayKey, 'INCOME'), dayOut: sumType(todayKey, 'EXPENSE'),
-      monthIn: sumType(monthKey, 'INCOME'), monthOut: sumType(monthKey, 'EXPENSE'),
-      yearIn: sumType(yearKey, 'INCOME'), yearOut: sumType(yearKey, 'EXPENSE'),
-      dayNet: total(todayKey), monthNet: total(monthKey), yearNet: total(yearKey),
+      dayIn,
+      dayOut,
+      monthIn,
+      monthOut,
+      yearIn,
+      yearOut,
+      dayNet: dayIn - dayOut,
+      monthNet: monthIn - monthOut,
+      yearNet: yearIn - yearOut,
     }
-  }, [finances, todayKey, monthKey, yearKey])
+  }, [reports, todayKey, monthKey, yearKey])
 
   function review(report) {
     setSelected(report)
@@ -96,7 +117,7 @@ export default function ReportsPage({ user, onEdit }) {
         <div>
           <span className="eyebrow">Central archive</span>
           <h2>Reports</h2>
-          <p className="card-subtitle">Every saved weekly report lives here. Review it, edit it, or print it without opening three different forms.</p>
+          <p className="card-subtitle">The official saved Weekly Report is the source of truth for money in, money out, attendance, and report details.</p>
         </div>
         <button type="button" className="secondary" onClick={clearFilters}>Clear filters</button>
       </div>
@@ -117,7 +138,7 @@ export default function ReportsPage({ user, onEdit }) {
     {error && <div className="toast toast-error" role="alert">{error}</div>}
     <section className="card full">
       <div className="card-head"><div><span className="eyebrow">Stored expense records</span><h2>Money out records</h2><p className="card-subtitle">These are legacy Expense records stored in the database. They are shown separately from Weekly Report totals so the same expense is not counted twice.</p></div></div>
-      {expenses.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Money out</th></tr></thead><tbody>{expenses.slice(0, 50).map(item => <tr key={item.id}><td>{dateLabel(item.date)}</td><td><b>{item.description || item.title || 'Expense'}</b></td><td>{item.category || 'General'}</td><td>{money(item.amount)}</td></tr>)}</tbody></table></div> : <p>No legacy Expense records are currently returned by the database.</p>}
+      {expenses.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Money out</th></tr></thead><tbody>{expenses.slice(0, 50).map(item => <tr key={item.id}><td>{dateLabel(item.date || item.recordDate)}</td><td><b>{item.description || item.title || 'Expense'}</b></td><td>{item.category || 'General'}</td><td>{money(item.amount)}</td></tr>)}</tbody></table></div> : <p>No legacy Expense records are currently returned by the database.</p>}
     </section>
     <section className="card full">
       <div className="card-head"><div><span className="eyebrow">Saved weekly reports</span><h2>{filtered.length} report{filtered.length === 1 ? '' : 's'}</h2></div></div>
