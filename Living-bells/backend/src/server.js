@@ -43,54 +43,76 @@ function currentUserId(req) {
   return Number(req.user?.sub)
 }
 
+app.get('/api/auth/staff-invitation', async (req, res, next) => {
+  try {
+    const code = String(req.query.code || '').trim().toUpperCase()
+    if (!code) return res.status(400).json({ message: 'Staff code is required' })
+
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex')
+    const invitation = await prisma.staffInvitation.findFirst({
+      where: { codeHash, usedAt: null, expiresAt: { gt: new Date() } },
+      select: { id: true, name: true, email: true, department: true, expiresAt: true },
+    })
+    if (!invitation) return res.status(404).json({ message: 'Invalid, expired or already used staff code' })
+
+    res.json(invitation)
+  } catch (error) {
+    next(error)
+  }
+})
+
 app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const { name, email, password, role = 'STAFF', adminKey, inviteCode, department } = req.body
-    const normalizedEmail = String(email || '').trim().toLowerCase()
+    const { name, email, password, role = 'STAFF', adminKey, inviteCode } = req.body
     const normalizedRole = String(role).toUpperCase()
 
-    if (!name?.trim() || !normalizedEmail || !password) {
-      return res.status(400).json({ message: 'Name, email and password are required' })
-    }
-    if (String(password).length < 8) {
-      return res.status(400).json({ message: 'Password must be at least 8 characters' })
-    }
-    if (!['STAFF', 'ADMIN'].includes(normalizedRole)) {
-      return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
-    }
-    if (normalizedRole === 'STAFF' && !String(inviteCode || '').trim()) {
-      return res.status(400).json({ message: 'A staff invitation code is required' })
-    }
-    if (normalizedRole === 'ADMIN' && (!ADMIN_REGISTRATION_KEY || adminKey !== ADMIN_REGISTRATION_KEY)) {
-      return res.status(403).json({ message: 'A valid admin registration key is required' })
-    }
-    if (await prisma.user.findUnique({ where: { email: normalizedEmail } })) {
-      return res.status(409).json({ message: 'An account with this email already exists' })
-    }
+    if (!password) return res.status(400).json({ message: 'Password is required' })
+    if (String(password).length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' })
+    if (!['STAFF', 'ADMIN'].includes(normalizedRole)) return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
 
+    let registrationName = String(name || '').trim()
+    let registrationEmail = String(email || '').trim().toLowerCase()
     let invitation = null
+
     if (normalizedRole === 'STAFF') {
-      const codeHash = crypto.createHash('sha256').update(String(inviteCode).trim().toUpperCase()).digest('hex')
+      const code = String(inviteCode || '').trim().toUpperCase()
+      if (!code) return res.status(400).json({ message: 'A staff code is required' })
+
+      const codeHash = crypto.createHash('sha256').update(code).digest('hex')
       invitation = await prisma.staffInvitation.findFirst({
-        where: { email: normalizedEmail, codeHash, usedAt: null, expiresAt: { gt: new Date() } },
+        where: { codeHash, usedAt: null, expiresAt: { gt: new Date() } },
         orderBy: { createdAt: 'desc' },
       })
-      if (!invitation) return res.status(403).json({ message: 'Invalid, expired or already used staff invitation code' })
-      if (invitation.name.toLowerCase() !== name.trim().toLowerCase()) return res.status(403).json({ message: 'The invited name does not match this registration' })
+      if (!invitation) return res.status(403).json({ message: 'Invalid, expired or already used staff code' })
+
+      registrationName = invitation.name
+      registrationEmail = invitation.email
+    } else {
+      if (!registrationName || !registrationEmail) return res.status(400).json({ message: 'Name and email are required' })
+      if (!ADMIN_REGISTRATION_KEY || adminKey !== ADMIN_REGISTRATION_KEY) {
+        return res.status(403).json({ message: 'A valid admin registration key is required' })
+      }
+    }
+
+    if (await prisma.user.findUnique({ where: { email: registrationEmail } })) {
+      return res.status(409).json({ message: 'An account with this email already exists' })
     }
 
     const passwordHash = await bcrypt.hash(String(password), 12)
     const user = await prisma.user.create({
       data: {
-        name: name.trim(),
-        email: normalizedEmail,
+        name: registrationName,
+        email: registrationEmail,
         passwordHash,
         role: normalizedRole,
-        department: normalizedRole === 'STAFF' ? (invitation?.department || String(department || '').trim() || null) : null,
+        department: normalizedRole === 'STAFF' ? invitation.department : null,
         emailVerifiedAt: new Date(),
       },
     })
-    if (invitation) await prisma.staffInvitation.update({ where: { id: invitation.id }, data: { usedAt: new Date() } })
+
+    if (invitation) {
+      await prisma.staffInvitation.update({ where: { id: invitation.id }, data: { usedAt: new Date() } })
+    }
 
     const safeUser = {
       id: user.id,
@@ -566,50 +588,47 @@ app.post('/api/admin/staff/invitations', requireAdmin, async (req, res, next) =>
     const name = String(req.body.name || '').trim()
     const email = String(req.body.email || '').trim().toLowerCase()
     const department = String(req.body.department || '').trim()
-    const allowedDepartments = ['Media', 'Technical', 'Security', 'Secretary', 'Others']
+    const allowedDepartments = ['Treasurer', 'Secretary']
+
     if (name.length < 2 || !email || !email.includes('@') || !allowedDepartments.includes(department)) {
       return res.status(400).json({ message: 'Name, valid email and department are required' })
     }
     if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
       return res.status(409).json({ message: 'An account with this email already exists' })
     }
+
     const code = crypto.randomBytes(5).toString('hex').toUpperCase()
     const codeHash = crypto.createHash('sha256').update(code).digest('hex')
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
-    await prisma.staffInvitation.updateMany({ where: { email, usedAt: null }, data: { expiresAt: new Date() } })
-    const invitation = await prisma.staffInvitation.create({ data: { name, email, department, codeHash, invitedById: currentUserId(req), expiresAt } })
-    if (!RESEND_API_KEY) {
-      await prisma.staffInvitation.delete({ where: { id: invitation.id } })
-      return res.status(503).json({ message: 'Email service is not configured. Add RESEND_API_KEY and EMAIL_FROM before sending invitations.' })
-    }
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: EMAIL_FROM,
-        to: [email],
-        subject: 'Your Living Bells staff invitation',
-        html: '<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>Living Bells staff invitation</h2><p>Hello ' + name.replace(/[<>&"]/g, '') + ',</p><p>You have been invited to join Living Bells as a staff member in the <b>' + department + '</b> department.</p><p>Your invitation code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:5px">' + code + '</p><p>This code expires in 48 hours.</p><p>Open <a href="' + APP_URL + '">' + APP_URL + '</a>, choose Staff registration and enter this code.</p></div>',
-      }),
+
+    await prisma.staffInvitation.updateMany({
+      where: { email, usedAt: null },
+      data: { expiresAt: new Date() },
     })
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '')
-      await prisma.staffInvitation.delete({ where: { id: invitation.id } })
-      console.error('Resend error:', detail)
-      return res.status(502).json({ message: 'The invitation email could not be sent' })
-    }
-    res.status(201).json({ message: 'Invitation sent successfully', invitation: { id: invitation.id, name, email, department, expiresAt } })
-  } catch (error) { next(error) }
+
+    const invitation = await prisma.staffInvitation.create({
+      data: { name, email, department, codeHash, invitedById: currentUserId(req), expiresAt },
+    })
+
+    res.status(201).json({
+      message: 'Staff code generated successfully',
+      invitation: { id: invitation.id, name, email, department, code, expiresAt, usedAt: null, status: 'Unused' },
+    })
+  } catch (error) {
+    next(error)
+  }
 })
 
 app.get('/api/admin/staff/invitations', requireAdmin, async (_req, res, next) => {
   try {
     const invitations = await prisma.staffInvitation.findMany({
-      where: { usedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, email: true, department: true, expiresAt: true, createdAt: true },
+      select: { id: true, name: true, email: true, department: true, expiresAt: true, usedAt: true, createdAt: true },
     })
-    res.json(invitations)
+    res.json(invitations.map(item => ({
+      ...item,
+      status: item.usedAt ? 'Used' : item.expiresAt <= new Date() ? 'Expired' : 'Unused',
+    })))
   } catch (error) { next(error) }
 })
 
