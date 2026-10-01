@@ -35,6 +35,7 @@ model User {
   resetTokenExpiresAt  DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+  department           String?
 
   recordedActivities   Activity[]   @relation("ActivityRecorder")
   reportingMonthsCreated ReportingMonth[] @relation("ReportingMonthCreator")
@@ -46,6 +47,7 @@ model User {
   attendanceRecords    AttendanceRecord[] @relation("AttendanceRecordCreator")
   financialRecords     FinancialRecord[] @relation("FinancialRecordCreator")
   weeklyReportsCreated WeeklyReport[]    @relation("WeeklyReportCreator")
+  invitationsSent      StaffInvitation[]  @relation("InvitationSender")
 }
 
 model Activity {
@@ -255,4 +257,23 @@ model ReportingWeek {
   @@unique([monthId, weekNumber])
   @@index([startDate, endDate])
   @@index([monthId])
+}
+
+
+model StaffInvitation {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String
+  department  String
+  codeHash    String    @unique
+  invitedById Int
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  invitedBy User @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([expiresAt])
+  @@index([usedAt])
 }
