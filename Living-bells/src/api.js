@@ -64,6 +64,8 @@ export const api = {
   staffInvitationPreview: code => apiRequest('/api/auth/staff-invitation?code=' + encodeURIComponent(code)),
   createStaffInvitation: payload => apiRequest('/api/admin/staff/invitations', { method: 'POST', body: JSON.stringify(payload) }),
   staffCount: () => apiRequest('/api/admin/staff/count'),
+  updateStaffStatus: (staffId, isActive) => apiRequest(`/api/admin/staff/${staffId}/status`, { method: 'PATCH', body: JSON.stringify({ isActive }) }),
+  deleteStaff: staffId => apiRequest(`/api/admin/staff/${staffId}`, { method: 'DELETE' }),
   reportingCurrent: () => apiRequest('/api/reporting/current'),
   reportingMonths: year => apiRequest('/api/reporting/months?year=' + encodeURIComponent(year)),
   reportingMonth: id => apiRequest('/api/reporting/months/' + id),
