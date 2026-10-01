@@ -710,7 +710,7 @@ app.get('/api/admin/staff/invitations', requireAdmin, async (_req, res, next) =>
 app.get('/api/admin/staff/count', requireAdmin, async (_req, res, next) => {
   try {
     const [active, pending] = await Promise.all([
-      prisma.user.count({ where: { role: 'STAFF' } }),
+      prisma.user.count({ where: { role: 'STAFF', isActive: true } }),
       prisma.staffInvitation.count({ where: { usedAt: null, expiresAt: { gt: new Date() } } }),
     ])
     res.json({ active, pending, total: active + pending })
