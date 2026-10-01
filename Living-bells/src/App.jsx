@@ -242,6 +242,7 @@ function App() {
 
   function logout() {
     localStorage.removeItem('living_bells_token')
+    localStorage.removeItem('living_bells_offline_session')
     localStorage.removeItem('living_bells_user')
     setUser(null)
     setAttendance([])
