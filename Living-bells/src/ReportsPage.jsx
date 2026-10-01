@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
-import { dateLabel, money } from './weeklyReportConfig'
+import { money } from './weeklyReportConfig'
 import './ReportsPage.css'
 
 const pad = value => String(value).padStart(2, '0')
@@ -9,35 +9,86 @@ const todayKey = () => {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 const keyOf = value => String(value || '').slice(0, 10)
-const displayDate = value => {
+
+function parseDate(value) {
   const key = keyOf(value)
-  if (!key) return '—'
+  if (!key) return null
   const [year, month, day] = key.split('-').map(Number)
-  return new Date(year, month - 1, day).toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' })
+  return new Date(year, month - 1, day, 12)
 }
-const relativeDate = value => {
-  const key = keyOf(value)
-  const today = todayKey()
-  const yesterdayDate = new Date(`${today}T12:00:00`)
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-  const yesterday = `${yesterdayDate.getFullYear()}-${pad(yesterdayDate.getMonth() + 1)}-${pad(yesterdayDate.getDate())}`
-  if (key === today) return 'Today'
-  if (key === yesterday) return 'Yesterday'
-  return new Date(`${key}T12:00:00`).toLocaleDateString('en-NG', { weekday: 'long' })
+
+function displayDate(value) {
+  const date = parseDate(value)
+  return date ? date.toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'
+}
+
+function formatNumber(value, decimals = 0) {
+  return Number(value || 0).toLocaleString('en-NG', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+}
+
+function average(total, count) {
+  return count ? total / count : 0
+}
+
+function roundAverage(value) {
+  return Number.isInteger(value) ? value : Number(value.toFixed(2))
+}
+
+function startOfWeek(value) {
+  const date = parseDate(value) || new Date()
+  const start = new Date(date)
+  start.setDate(date.getDate() - date.getDay())
+  start.setHours(0, 0, 0, 0)
+  return start
+}
+
+function endOfWeek(value) {
+  const start = startOfWeek(value)
+  const end = new Date(start)
+  end.setDate(start.getDate() + 6)
+  end.setHours(23, 59, 59, 999)
+  return end
+}
+
+function inRange(value, start, end) {
+  const date = parseDate(value)
+  return date && date >= start && date <= end
+}
+
+function periodLabel(mode, anchor) {
+  if (mode === 'week') {
+    return `Week of ${startOfWeek(anchor).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}`
+  }
+  if (mode === 'month') {
+    const date = parseDate(anchor)
+    return date.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
+  }
+  return String(parseDate(anchor)?.getFullYear() || new Date().getFullYear())
+}
+
+function rowsFromJson(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function numberFromRow(row, keys) {
+  for (const key of keys) {
+    if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== '') return Number(row[key]) || 0
+  }
+  return 0
 }
 
 export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinance, onEditActivity, onEditAttendance }) {
   const [reports, setReports] = useState([])
   const [activities, setActivities] = useState([])
   const [attendance, setAttendance] = useState([])
-  const [expenses, setExpenses] = useState([])
-  const [selectedDate, setSelectedDate] = useState(todayKey())
-  const [date, setDate] = useState('')
-  const [year, setYear] = useState('')
-  const [amount, setAmount] = useState('')
-  const [review, setReview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [mode, setMode] = useState('week')
+  const [anchor, setAnchor] = useState(todayKey())
+  const [review, setReview] = useState(null)
 
   const canEditOperational = user?.role === 'STAFF'
 
@@ -47,17 +98,15 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       try {
         setLoading(true)
         setError('')
-        const [weekly, activityRows, attendanceRows, legacyExpenses] = await Promise.all([
+        const [weekly, activityRows, attendanceRows] = await Promise.all([
           api.weeklyReports(),
           api.activities(),
           api.attendance(),
-          api.expenses(),
         ])
         if (cancelled) return
         setReports(weekly || [])
         setActivities(activityRows || [])
         setAttendance(attendanceRows || [])
-        setExpenses((legacyExpenses || []).map(item => ({ ...item, amount: Number(item.amount || 0) })))
       } catch (e) {
         if (!cancelled) setError(e.message || 'Could not load reports')
       } finally {
@@ -68,114 +117,291 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     return () => { cancelled = true }
   }, [refreshKey])
 
-  const filteredReports = useMemo(() => reports.filter(report => {
-    const reportDate = keyOf(report.reportDate)
-    const target = date || selectedDate
-    const amountTarget = Number(amount)
-    const amountMatch = !amount || [report.totalIncome, report.totalExpenditure, report.balance]
-      .some(value => Math.abs(Number(value || 0) - amountTarget) < 0.005)
-    return reportDate === target && (!year || reportDate.startsWith(year)) && amountMatch
-  }), [reports, date, selectedDate, year, amount])
-
-  const day = useMemo(() => {
-    const target = selectedDate
-    const finance = reports.find(report => keyOf(report.reportDate) === target) || null
-    const dayActivities = activities.filter(item => keyOf(item.date) === target)
-    const dayAttendance = attendance.filter(item => keyOf(item.activity?.date) === target)
-    const dayExpenses = expenses.filter(item => keyOf(item.date || item.recordDate) === target)
-    const income = finance ? Number(finance.totalIncome || 0) : 0
-    const out = finance ? Number(finance.totalExpenditure || 0) : 0
-    const attendanceTotal = dayAttendance.reduce((sum, item) => sum + attendanceTotalFor(item), 0)
-    return {
-      finance,
-      activities: dayActivities,
-      attendance: dayAttendance,
-      expenses: dayExpenses,
-      income,
-      out,
-      balance: income - out,
-      attendanceTotal,
+  const range = useMemo(() => {
+    const selected = parseDate(anchor) || new Date()
+    if (mode === 'week') return { start: startOfWeek(anchor), end: endOfWeek(anchor) }
+    if (mode === 'month') return {
+      start: new Date(selected.getFullYear(), selected.getMonth(), 1, 0, 0, 0, 0),
+      end: new Date(selected.getFullYear(), selected.getMonth() + 1, 0, 23, 59, 59, 999),
     }
-  }, [selectedDate, reports, activities, attendance, expenses])
+    return {
+      start: new Date(selected.getFullYear(), 0, 1, 0, 0, 0, 0),
+      end: new Date(selected.getFullYear(), 11, 31, 23, 59, 59, 999),
+    }
+  }, [mode, anchor])
 
-  function clearFilters() {
-    setDate('')
-    setYear('')
-    setAmount('')
-  }
+  const selectedReports = useMemo(
+    () => reports.filter(report => inRange(report.reportDate, range.start, range.end)),
+    [reports, range],
+  )
 
-  function chooseDate(value) {
-    setSelectedDate(value)
-    setDate('')
-  }
+  const selectedAttendance = useMemo(
+    () => attendance.filter(item => inRange(item.activity?.date || item.date || item.recordDate, range.start, range.end)),
+    [attendance, range],
+  )
+
+  const selectedActivities = useMemo(
+    () => activities.filter(item => inRange(item.date, range.start, range.end)),
+    [activities, range],
+  )
+
+  const attendanceSummary = useMemo(() => {
+    const keys = [
+      ['Children male', 'childrenMale'],
+      ['Children female', 'childrenFemale'],
+      ['Teenagers male', 'teenagersMale'],
+      ['Teenagers female', 'teenagersFemale'],
+      ['Youth male', 'youthMale'],
+      ['Youth female', 'youthFemale'],
+      ['Adults male', 'adultsMale'],
+      ['Adults female', 'adultsFemale'],
+    ]
+    const values = keys.map(([label, key]) => {
+      const total = selectedAttendance.reduce((sum, item) => sum + Number(item[key] || 0), 0)
+      return { label, total, average: roundAverage(average(total, selectedAttendance.length)) }
+    })
+    const groups = [
+      ['Children', ['childrenMale', 'childrenFemale']],
+      ['Teenagers', ['teenagersMale', 'teenagersFemale']],
+      ['Youth', ['youthMale', 'youthFemale']],
+      ['Adults', ['adultsMale', 'adultsFemale']],
+    ].map(([label, groupKeys]) => {
+      const total = selectedAttendance.reduce((sum, item) => sum + groupKeys.reduce((n, key) => n + Number(item[key] || 0), 0), 0)
+      return { label, total, average: roundAverage(average(total, selectedAttendance.length)) }
+    })
+    const maleTotal = selectedAttendance.reduce((sum, item) => sum + Number(item.childrenMale || 0) + Number(item.teenagersMale || 0) + Number(item.youthMale || 0) + Number(item.adultsMale || 0), 0)
+    const femaleTotal = selectedAttendance.reduce((sum, item) => sum + Number(item.childrenFemale || 0) + Number(item.teenagersFemale || 0) + Number(item.youthFemale || 0) + Number(item.adultsFemale || 0), 0)
+    const total = maleTotal + femaleTotal
+    return {
+      rows: values,
+      groups,
+      maleTotal,
+      femaleTotal,
+      total,
+      average: roundAverage(average(total, selectedAttendance.length)),
+      recordCount: selectedAttendance.length,
+    }
+  }, [selectedAttendance])
+
+  const activitySummary = useMemo(() => {
+    const total = { adults: 0, children: 0, visitors: 0 }
+    let serviceRows = 0
+    let decisions = 0
+    let waterBaptism = 0
+
+    selectedReports.forEach(report => {
+      const numerical = rowsFromJson(report.numerical)
+      serviceRows += numerical.length
+      numerical.forEach(row => {
+        total.adults += numberFromRow(row, ['adult', 'adults'])
+        total.children += numberFromRow(row, ['children', 'child'])
+        total.visitors += numberFromRow(row, ['visitor', 'visitors'])
+      })
+      const spiritual = report.spiritual || {}
+      decisions += Number(spiritual['No. of Decision'] || spiritual.decisions || 0)
+      waterBaptism += Number(spiritual['No. of Water Baptism'] || spiritual.waterBaptism || 0)
+    })
+
+    const overall = total.adults + total.children + total.visitors
+    const denominator = selectedReports.length || 0
+    return {
+      rows: [
+        { label: 'Adults', total: total.adults, average: roundAverage(average(total.adults, denominator)) },
+        { label: 'Children', total: total.children, average: roundAverage(average(total.children, denominator)) },
+        { label: 'Visitors', total: total.visitors, average: roundAverage(average(total.visitors, denominator)) },
+      ],
+      total: overall,
+      average: roundAverage(average(overall, denominator)),
+      reports: selectedReports.length,
+      serviceRows,
+      decisions,
+      waterBaptism,
+    }
+  }, [selectedReports])
+
+  const financeSummary = useMemo(() => {
+    let income = 0
+    let expenditure = 0
+    const incomeMap = new Map()
+    const expenditureMap = new Map()
+
+    selectedReports.forEach(report => {
+      income += Number(report.totalIncome || 0)
+      expenditure += Number(report.totalExpenditure || 0)
+
+      rowsFromJson(report.income).forEach(row => {
+        const name = String(row.name || row.category || 'Other income').trim() || 'Other income'
+        const value = Number(row.amount || 0)
+        incomeMap.set(name, (incomeMap.get(name) || 0) + value)
+      })
+
+      rowsFromJson(report.expenditure).forEach(row => {
+        const name = String(row.name || row.category || 'Other expenditure').trim() || 'Other expenditure'
+        const value = Number(row.amount || 0)
+        expenditureMap.set(name, (expenditureMap.get(name) || 0) + value)
+      })
+    })
+
+    const categories = Array.from(new Set([...incomeMap.keys(), ...expenditureMap.keys()])).sort()
+      .map(category => ({
+        category,
+        income: incomeMap.get(category) || 0,
+        expenditure: expenditureMap.get(category) || 0,
+      }))
+
+    return {
+      income,
+      expenditure,
+      balance: income - expenditure,
+      incomeAverage: roundAverage(average(income, selectedReports.length)),
+      expenditureAverage: roundAverage(average(expenditure, selectedReports.length)),
+      balanceAverage: roundAverage(average(income - expenditure, selectedReports.length)),
+      categories,
+      records: selectedReports.length,
+    }
+  }, [selectedReports])
+
+  const periodRows = useMemo(() => {
+    if (mode === 'year') {
+      const year = range.start.getFullYear()
+      return Array.from({ length: 12 }, (_, month) => {
+        const start = new Date(year, month, 1)
+        const end = new Date(year, month + 1, 0, 23, 59, 59, 999)
+        const rows = reports.filter(report => inRange(report.reportDate, start, end))
+        return buildPeriodRow(start, rows, attendance, activities)
+      })
+    }
+    if (mode === 'month') {
+      const rows = selectedReports.slice().sort((a, b) => keyOf(a.reportDate).localeCompare(keyOf(b.reportDate)))
+      return rows.map(report => {
+        const start = parseDate(report.reportDate)
+        return buildPeriodRow(start, [report], attendance, activities)
+      })
+    }
+    return selectedReports.length
+      ? selectedReports.slice().sort((a, b) => keyOf(a.reportDate).localeCompare(keyOf(b.reportDate))).map(report => buildPeriodRow(parseDate(report.reportDate), [report], attendance, activities))
+      : [{ date: range.start, reports: 0, attendance: 0, activities: 0, income: 0, expenditure: 0, balance: 0 }]
+  }, [mode, range, reports, selectedReports, attendance, activities])
 
   return <div className="reports-page">
-    <section className="card full report-date-hero">
+    <section className="card full reports-hero">
       <div>
-        <span className="eyebrow">Daily archive</span>
-        <h2>{relativeDate(selectedDate)} · {displayDate(selectedDate)}</h2>
-        <p className="card-subtitle">One date connects the saved attendance, finance and activity records. Pick any date to see what was recorded that day.</p>
+        <span className="eyebrow">Reports</span>
+        <h2>Weekly, monthly and yearly summaries</h2>
+        <p className="card-subtitle">Attendance, activities and finance are calculated separately from the records that were actually saved.</p>
       </div>
-      <label className="report-date-picker">Date<input type="date" value={selectedDate} onChange={e => chooseDate(e.target.value)} /></label>
+      <button className="secondary" onClick={() => window.print()}>Print report</button>
     </section>
 
-    <section className="report-money-grid">
-      <MoneyCard title="Money in" value={day.income} note={day.finance ? 'From saved weekly finance report' : 'No saved finance report for this date'} />
-      <MoneyCard title="Money out" value={day.out} note={day.finance ? 'From saved weekly finance report' : 'No saved finance report for this date'} />
-      <MoneyCard title="Balance" value={day.balance} note={`${day.attendanceTotal.toLocaleString('en-NG')} attendance recorded`} />
+    <section className="card full report-controls">
+      <div className="report-period-tabs" role="tablist" aria-label="Report period">
+        {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
+      </div>
+      <label>
+        {mode === 'week' ? 'Choose a date in the week' : mode === 'month' ? 'Choose a month' : 'Choose a year'}
+        <input type={mode === 'year' ? 'number' : mode === 'month' ? 'month' : 'date'} value={mode === 'year' ? String(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) : mode === 'month' ? keyOf(anchor).slice(0, 7) : anchor} onChange={e => {
+          const value = e.target.value
+          setAnchor(mode === 'year' ? `${value}-01-01` : mode === 'month' ? `${value}-01` : value)
+        }} />
+      </label>
+      <div className="period-summary">
+        <span className="eyebrow">Selected period</span>
+        <strong>{periodLabel(mode, anchor)}</strong>
+        <small>{selectedReports.length} official weekly report{selectedReports.length === 1 ? '' : 's'} · {selectedAttendance.length} attendance record{selectedAttendance.length === 1 ? '' : 's'}</small>
+      </div>
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
+    {loading ? <section className="card full"><p>Loading reports…</p></section> : <>
+      <ReportSection title="Attendance" eyebrow="Special services" description="Attendance is kept separate from activities. Every gender and age category is shown with its period total and average." action={canEditOperational ? () => onEditAttendance?.() : null}>
+        <SummaryTable headers={['Category', 'Total', 'Average']} rows={attendanceSummary.rows.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} totalRow={['Overall attendance', formatNumber(attendanceSummary.total), formatNumber(attendanceSummary.average, Number.isInteger(attendanceSummary.average) ? 0 : 2)]} />
+        <div className="report-subtable-grid">
+          <MiniTable title="Gender breakdown" headers={['Gender', 'Total', 'Average']} rows={[
+            ['Male', formatNumber(attendanceSummary.maleTotal), formatNumber(roundAverage(average(attendanceSummary.maleTotal, attendanceSummary.recordCount)))],
+            ['Female', formatNumber(attendanceSummary.femaleTotal), formatNumber(roundAverage(average(attendanceSummary.femaleTotal, attendanceSummary.recordCount)))],
+          ]} />
+          <MiniTable title="Age-group breakdown" headers={['Group', 'Total', 'Average']} rows={attendanceSummary.groups.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} />
+        </div>
+      </ReportSection>
 
-    <section className="daily-record-grid">
-      <DailyCard
-        eyebrow="Section 1"
-        title="Attendance"
-        count={day.attendance.length}
-        empty="No attendance was saved for this date."
-        onReview={item => setReview({ type: 'attendance', item })}
-        onEdit={canEditOperational ? onEditAttendance : null}
-      >
-        {day.attendance.map(item => <RecordRow key={item.id} title={item.activity?.name || 'Service attendance'} meta={`${attendanceTotalFor(item).toLocaleString('en-NG')} people · ${item.recordedBy?.name || 'Unknown'}`} actionLabel="Review" onAction={() => setReview({ type: 'attendance', item })} edit={canEditOperational ? () => onEditAttendance(item) : null} />)}
-      </DailyCard>
+      <ReportSection title="Activities" eyebrow="Weekly activity report" description="Activities are calculated independently from attendance using the Adults, Children and Visitors columns in each saved weekly report." action={canEditOperational ? () => onEditActivity?.() : null}>
+        <SummaryTable headers={['Category', 'Total', 'Average']} rows={activitySummary.rows.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} totalRow={['Overall activity attendance', formatNumber(activitySummary.total), formatNumber(activitySummary.average, Number.isInteger(activitySummary.average) ? 0 : 2)]} />
+        <div className="report-subtable-grid">
+          <MiniTable title="Activity records" headers={['Measure', 'Value']} rows={[
+            ['Weekly reports', formatNumber(activitySummary.reports)],
+            ['Service/activity rows', formatNumber(activitySummary.serviceRows)],
+            ['Decisions', formatNumber(activitySummary.decisions)],
+            ['Water baptism', formatNumber(activitySummary.waterBaptism)],
+          ]} />
+          <PeriodBreakdown title={mode === 'year' ? 'Monthly activity/attendance totals' : 'Records inside this period'} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), formatNumber(row.activities), formatNumber(row.attendance)])} headers={['Period', 'Activity', 'Attendance']} />
+        </div>
+      </ReportSection>
 
-      <DailyCard
-        eyebrow="Section 2"
-        title="Finance"
-        count={day.finance ? 1 : 0}
-        empty="No weekly finance report was saved for this date."
-        onReview={item => setReview({ type: 'finance', item })}
-        onEdit={onEditFinance || onEdit}
-      >
-        {day.finance && <RecordRow title="Weekly finance report" meta={`In ${money(day.income)} · Out ${money(day.out)} · Balance ${money(day.balance)}`} actionLabel="Review" onAction={() => setReview({ type: 'finance', item: day.finance })} edit={() => (onEditFinance || onEdit)?.(selectedDate)} />}
-      </DailyCard>
+      <ReportSection title="Finance" eyebrow="Money in and money out" description="Finance uses the saved weekly finance reports. Money in, money out and balance are totaled for the period; category totals stay visible." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
+        <div className="finance-total-grid">
+          <Metric label="Total money in" value={money(financeSummary.income)} />
+          <Metric label="Total money out" value={money(financeSummary.expenditure)} />
+          <Metric label="Net balance" value={money(financeSummary.balance)} />
+        </div>
+        <SummaryTable headers={['Finance measure', 'Total', 'Average per saved weekly report']} rows={[
+          ['Money in', money(financeSummary.income), money(financeSummary.incomeAverage)],
+          ['Money out', money(financeSummary.expenditure), money(financeSummary.expenditureAverage)],
+          ['Balance', money(financeSummary.balance), money(financeSummary.balanceAverage)],
+        ]} />
+        <div className="report-subtable-grid">
+          <MiniTable title="Finance categories" headers={['Category', 'Money in', 'Money out']} rows={financeSummary.categories.map(row => [row.category, money(row.income), money(row.expenditure)])} empty="No finance categories were saved in this period." />
+          <PeriodBreakdown title={mode === 'year' ? 'Monthly finance totals' : 'Saved weekly reports'} headers={['Period', 'Money in', 'Money out', 'Balance']} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), money(row.income), money(row.expenditure), money(row.balance)])} />
+        </div>
+      </ReportSection>
 
-      <DailyCard
-        eyebrow="Section 3"
-        title="Activities"
-        count={day.activities.length}
-        empty="No activities were saved for this date."
-        onReview={item => setReview({ type: 'activity', item })}
-        onEdit={canEditOperational ? onEditActivity : null}
-      >
-        {day.activities.map(item => <RecordRow key={item.id} title={item.name} meta={`${item.type || 'Activity'} · ${item.recordedBy?.name || 'Unknown'}`} actionLabel="Review" onAction={() => setReview({ type: 'activity', item })} edit={canEditOperational ? () => onEditActivity(item) : null} />)}
-      </DailyCard>
-    </section>
-
-    <section className="archive-section-grid">
-      <ArchiveAttendance reports={reports} attendance={attendance} />
-      <ArchiveActivities reports={reports} activities={activities} />
-      <ArchiveFinance reports={reports} onReview={item => { setSelectedDate(keyOf(item.reportDate)); setReview({ type: 'finance', item }) }} onEdit={date => (onEditFinance || onEdit)?.(date)} />
-    </section>
-
-    <section className="card full">
-      <div className="card-head"><div><span className="eyebrow">Stored legacy records</span><h2>Money out records</h2><p className="card-subtitle">Legacy Expense records remain visible here separately so they are not double-counted inside the official weekly finance totals.</p></div></div>
-      {day.expenses.length ? <div className="table-wrap"><table><thead><tr><th>Description</th><th>Category</th><th>Money out</th></tr></thead><tbody>{day.expenses.map(item => <tr key={item.id}><td><b>{item.description || item.title || 'Expense'}</b></td><td>{item.category || 'General'}</td><td>{money(item.amount)}</td></tr>)}</tbody></table></div> : <p>No legacy Expense records for this date.</p>}
-    </section>
+      <section className="card full">
+        <div className="card-head">
+          <div>
+            <span className="eyebrow">Period records</span>
+            <h2>{periodLabel(mode, anchor)} breakdown</h2>
+            <p className="card-subtitle">A compact table of the records contributing to this report period.</p>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Period</th><th>Reports</th><th>Attendance</th><th>Activities</th><th>Money in</th><th>Money out</th><th>Balance</th></tr></thead>
+            <tbody>{periodRows.map((row, index) => <tr key={`${keyOf(row.date)}-${index}`}><td><b>{formatPeriodDate(row.date, mode)}</b></td><td>{formatNumber(row.reports)}</td><td>{formatNumber(row.attendance)}</td><td>{formatNumber(row.activities)}</td><td>{money(row.income)}</td><td>{money(row.expenditure)}</td><td>{money(row.balance)}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </section>
+    </>}
 
     {review && <DailyReview review={review} close={() => setReview(null)} />}
-    <ReportsPrintSheet day={day} selectedDate={selectedDate} />
   </div>
+}
+
+function buildPeriodRow(date, reports, attendance, activities) {
+  const start = date instanceof Date ? date : parseDate(date)
+  const key = keyOf(start)
+  const reportKeys = new Set(reports.map(report => keyOf(report.reportDate)))
+  const attendanceRows = attendance.filter(item => {
+    const itemDate = keyOf(item.activity?.date || item.date || item.recordDate)
+    return reportKeys.has(itemDate) || (start && itemDate === key)
+  })
+  const activityRows = activities.filter(item => keyOf(item.date) === key)
+  const income = reports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0)
+  const expenditure = reports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0)
+  return {
+    date: start,
+    reports: reports.length,
+    attendance: attendanceRows.reduce((sum, item) => sum + attendanceTotalFor(item), 0),
+    activities: reports.reduce((sum, report) => sum + rowsFromJson(report.numerical).reduce((n, row) => n + numberFromRow(row, ['adult', 'adults']) + numberFromRow(row, ['children', 'child']) + numberFromRow(row, ['visitor', 'visitors']), 0), 0) || activityRows.length,
+    income,
+    expenditure,
+    balance: income - expenditure,
+  }
+}
+
+function formatPeriodDate(value, mode) {
+  const date = value instanceof Date ? value : parseDate(value)
+  if (!date) return '—'
+  if (mode === 'year') return date.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
+  return date.toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function attendanceTotalFor(item) {
@@ -183,57 +409,71 @@ function attendanceTotalFor(item) {
     .reduce((sum, key) => sum + Number(item[key] || 0), 0)
 }
 
-function ArchiveAttendance({ reports, attendance }) {
-  const rows = useMemo(() => attendance.reduce((map, item) => {
-    const date = keyOf(item.activity?.date || item.date || item.recordDate)
-    if (!date) return map
-    const current = map.get(date) || { date, children: 0, teenagers: 0, youth: 0, adults: 0, total: 0 }
-    current.children += Number(item.childrenMale || 0) + Number(item.childrenFemale || 0)
-    current.teenagers += Number(item.teenagersMale || 0) + Number(item.teenagersFemale || 0)
-    current.youth += Number(item.youthMale || 0) + Number(item.youthFemale || 0)
-    current.adults += Number(item.adultsMale || 0) + Number(item.adultsFemale || 0)
-    current.total = current.children + current.teenagers + current.youth + current.adults
-    map.set(date, current); return map
-  }, new Map()), [attendance])
-  return <section className="card full archive-card"><div className="card-head"><div><span className="eyebrow">Past attendance</span><h2>Attendance history</h2><p className="card-subtitle">Attendance totals only: children, teenagers, youth and adults.</p></div></div>{rows.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Children</th><th>Teenagers</th><th>Youth</th><th>Adults</th><th>Total</th></tr></thead><tbody>{Array.from(rows.values()).sort((a,b)=>b.date.localeCompare(a.date)).map(row=><tr key={row.date}><td><b>{dateLabel(row.date)}</b></td><td>{row.children}</td><td>{row.teenagers}</td><td>{row.youth}</td><td>{row.adults}</td><td><b>{row.total}</b></td></tr>)}</tbody></table></div> : <p>No past attendance records.</p>}</section>
+function ReportSection({ eyebrow, title, description, action, children }) {
+  return <section className="card full report-section">
+    <div className="card-head">
+      <div>
+        <span className="eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p className="card-subtitle">{description}</p>
+      </div>
+      {action && <button className="secondary small-button" onClick={action}>Open record</button>}
+    </div>
+    {children}
+  </section>
 }
 
-function ArchiveActivities({ reports, activities }) {
-  const rows = useMemo(() => reports.map(report => {
-    const numerical = Array.isArray(report.numerical) ? report.numerical : []
-    const adult = numerical.reduce((sum,row)=>sum+Number(row.adult||0),0)
-    const children = numerical.reduce((sum,row)=>sum+Number(row.children||0),0)
-    const visitor = numerical.reduce((sum,row)=>sum+Number(row.visitor||0),0)
-    const spiritual = report.spiritual || {}
-    return { date:keyOf(report.reportDate), services:numerical.length, adult, children, visitor, total:adult+children+visitor, decisions:Number(spiritual['No. of Decision']||0), baptisms:Number(spiritual['No. of Water Baptism']||0) }
-  }).sort((a,b)=>b.date.localeCompare(a.date)), [reports])
-  return <section className="card full archive-card"><div className="card-head"><div><span className="eyebrow">Past activities</span><h2>Activities history</h2><p className="card-subtitle">Activity report totals only: people recorded across the services and key spiritual results.</p></div></div>{rows.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Services</th><th>Adults</th><th>Children</th><th>Visitors</th><th>Total people</th><th>Decisions</th><th>Water Baptism</th></tr></thead><tbody>{rows.map(row=><tr key={row.date}><td><b>{dateLabel(row.date)}</b></td><td>{row.services}</td><td>{row.adult}</td><td>{row.children}</td><td>{row.visitor}</td><td><b>{row.total}</b></td><td>{row.decisions}</td><td>{row.baptisms}</td></tr>)}</tbody></table></div> : <p>No past activity reports.</p>}</section>
+function SummaryTable({ headers, rows, totalRow }) {
+  return <div className="table-wrap report-table"><table>
+    <thead><tr>{headers.map(header => <th key={header}>{header}</th>)}</tr></thead>
+    <tbody>
+      {rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex} className={cellIndex === 0 ? 'label-cell' : ''}>{cell}</td>)}</tr>)}
+      {totalRow && <tr className="summary-total">{totalRow.map((cell, index) => <td key={index}>{cell}</td>)}</tr>}
+    </tbody>
+  </table></div>
 }
 
-function ArchiveFinance({ reports, onReview, onEdit }) {
-  return <section className="card full archive-card"><div className="card-head"><div><span className="eyebrow">Past finance</span><h2>Finance history</h2><p className="card-subtitle">Finance totals only: money in, money out and balance.</p></div></div>{reports.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Money in</th><th>Money out</th><th>Balance</th><th>Actions</th></tr></thead><tbody>{reports.map(report=><tr key={report.id}><td><b>{dateLabel(report.reportDate)}</b></td><td>{money(report.totalIncome)}</td><td>{money(report.totalExpenditure)}</td><td>{money(report.balance)}</td><td><div className="report-row-actions"><button className="secondary small-button" onClick={()=>onReview(report)}>Review</button><button className="secondary small-button" onClick={()=>onEdit(keyOf(report.reportDate))}>Edit</button></div></td></tr>)}</tbody></table></div> : <p>No past finance reports.</p>}</section>
+function MiniTable({ title, headers, rows, empty = 'No records were saved in this period.' }) {
+  return <section className="report-mini-table">
+    <h3>{title}</h3>
+    <div className="table-wrap"><table><thead><tr>{headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>
+      {rows.length ? rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex} className={cellIndex === 0 ? 'label-cell' : ''}>{cell}</td>)}</tr>) : <tr><td colSpan={headers.length}>{empty}</td></tr>}
+    </tbody></table></div>
+  </section>
 }
 
-function MoneyCard({ title, value, note }) {
-  return <section className="card money-summary"><span className="eyebrow">{title}</span><h3>{money(value)}</h3><p>{note}</p></section>
+function PeriodBreakdown({ title, headers, rows }) {
+  return <MiniTable title={title} headers={headers} rows={rows} />
 }
 
-function DailyCard({ eyebrow, title, count, empty, children }) {
-  return <section className="card daily-card"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><span className="record-count">{count}</span></div>{count ? <div className="daily-record-list">{children}</div> : <p>{empty}</p>}</section>
-}
-
-function RecordRow({ title, meta, onAction, edit }) {
-  return <div className="daily-record-row"><div><b>{title}</b><small>{meta}</small></div><div className="report-row-actions"><button className="secondary small-button" onClick={onAction}>Review</button>{edit && <button className="secondary small-button" onClick={edit}>Edit</button>}</div></div>
+function Metric({ label, value }) {
+  return <div className="finance-metric"><small>{label}</small><strong>{value}</strong></div>
 }
 
 function DailyReview({ review, close }) {
   const { type, item } = review
+  const date = type === 'finance' ? item.reportDate : type === 'activity' ? item.date : item.activity?.date
   return <div className="backdrop" onMouseDown={close}>
-    <div className="modal report-review-modal" onMouseDown={e => e.stopPropagation()}>
-      <div className="modal-head"><div><span className="eyebrow">Daily record</span><h2>{type[0].toUpperCase() + type.slice(1)} · {displayDate(type === 'finance' ? item.reportDate : type === 'activity' ? item.date : item.activity?.date)}</h2></div><button className="close" onClick={close}>×</button></div>
-      {type === 'activity' && <div className="review-detail-list"><Detail label="Activity" value={item.name} /><Detail label="Type" value={item.type || '—'} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div>}
-      {type === 'attendance' && <><div className="review-total-grid"><Detail label="Service" value={item.activity?.name || 'Service'} /><Detail label="Total people" value={attendanceTotalFor(item).toLocaleString('en-NG')} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div><div className="review-detail-list">{[['Children male',item.childrenMale],['Children female',item.childrenFemale],['Teenagers male',item.teenagersMale],['Teenagers female',item.teenagersFemale],['Youth male',item.youthMale],['Youth female',item.youthFemale],['Adults male',item.adultsMale],['Adults female',item.adultsFemale]].map(([label,value])=><Detail key={label} label={label} value={Number(value||0).toLocaleString('en-NG')} />)}</div></>}
-      {type === 'finance' && <><div className="review-total-grid"><Detail label="Money in" value={money(item.totalIncome)} /><Detail label="Money out" value={money(item.totalExpenditure)} /><Detail label="Balance" value={money(item.balance)} /></div><div className="review-finance"><h3>Money in details</h3>{(item.income || []).map(row => <p key={row.sn}><span>{row.name || 'Other income'}</span><b>{money(row.amount)}</b></p>)}<h3>Money out details</h3>{(item.expenditure || []).map(row => <p key={row.sn}><span>{row.name || 'Other expenditure'}</span><b>{money(row.amount)}</b></p>)}</div></>}
+    <div className="modal report-review-modal" onMouseDown={event => event.stopPropagation()}>
+      <div className="modal-head">
+        <div><span className="eyebrow">Record</span><h2>{type[0].toUpperCase() + type.slice(1)} · {displayDate(date)}</h2></div>
+        <button className="close" onClick={close}>×</button>
+      </div>
+      {type === 'attendance' && <div className="review-detail-list">
+        {[
+          ['Service', item.activity?.name || 'Service'],
+          ['Children male', item.childrenMale], ['Children female', item.childrenFemale],
+          ['Teenagers male', item.teenagersMale], ['Teenagers female', item.teenagersFemale],
+          ['Youth male', item.youthMale], ['Youth female', item.youthFemale],
+          ['Adults male', item.adultsMale], ['Adults female', item.adultsFemale],
+        ].map(([label, value]) => <Detail key={label} label={label} value={typeof value === 'number' ? formatNumber(value) : value} />)}
+      </div>}
+      {type === 'activity' && <div className="review-detail-list"><Detail label="Activity" value={item.name} /><Detail label="Type" value={item.type || 'Activity'} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div>}
+      {type === 'finance' && <div className="review-finance">
+        <div className="review-total-grid"><Detail label="Money in" value={money(item.totalIncome)} /><Detail label="Money out" value={money(item.totalExpenditure)} /><Detail label="Balance" value={money(item.balance)} /></div>
+        <h3>Money in details</h3>{rowsFromJson(item.income).map((row, index) => <p key={index}><span>{row.name || 'Other income'}</span><b>{money(row.amount)}</b></p>)}
+        <h3>Money out details</h3>{rowsFromJson(item.expenditure).map((row, index) => <p key={index}><span>{row.name || 'Other expenditure'}</span><b>{money(row.amount)}</b></p>)}
+      </div>}
       <div className="record-actions"><button className="secondary" onClick={() => window.print()}>Print / PDF</button><button className="primary" onClick={close}>Done</button></div>
     </div>
   </div>
@@ -241,20 +481,4 @@ function DailyReview({ review, close }) {
 
 function Detail({ label, value }) {
   return <div className="detail-item"><small>{label}</small><b>{value}</b></div>
-}
-
-function ReportsPrintSheet({ day, selectedDate }) {
-  const finance = day.finance
-  return <section className="reports-print-sheet" aria-label="Printable church report">
-    <header className="reports-print-header"><strong>FOURSQUARE GOSPEL CHURCH, THE BELLS</strong><span>DAILY RECORD REPORT</span><small>DATE: {displayDate(selectedDate)}</small></header>
-    <h3>1. ATTENDANCE</h3>
-    <table><thead><tr><th>Service</th><th>Children M</th><th>Children F</th><th>Teenagers M</th><th>Teenagers F</th><th>Youth M</th><th>Youth F</th><th>Adults M</th><th>Adults F</th><th>Total</th></tr></thead><tbody>{day.attendance.length ? day.attendance.map(item => <tr key={item.id}><td>{item.activity?.name || 'Service'}</td><td>{Number(item.childrenMale||0)}</td><td>{Number(item.childrenFemale||0)}</td><td>{Number(item.teenagersMale||0)}</td><td>{Number(item.teenagersFemale||0)}</td><td>{Number(item.youthMale||0)}</td><td>{Number(item.youthFemale||0)}</td><td>{Number(item.adultsMale||0)}</td><td>{Number(item.adultsFemale||0)}</td><td>{attendanceTotalFor(item)}</td></tr>) : <tr><td colSpan="10">No attendance record saved.</td></tr>}</tbody></table>
-    <h3>2. ACTIVITIES</h3>
-    <table><thead><tr><th>Activity</th><th>Type</th><th>Recorded by</th></tr></thead><tbody>{day.activities.length ? day.activities.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.type || 'Activity'}</td><td>{item.recordedBy?.name || 'Unknown'}</td></tr>) : <tr><td colSpan="3">No activity record saved.</td></tr>}</tbody></table>
-    <h3>3. FINANCE — MONEY IN</h3>
-    <table><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>{finance?.income?.length ? finance.income.map(row => <tr key={row.sn}><td>{row.name || 'Other income'}</td><td>{money(row.amount)}</td></tr>) : <tr><td>No finance report saved</td><td>{money(0)}</td></tr>}<tr><th>TOTAL MONEY IN</th><th>{money(day.income)}</th></tr></tbody></table>
-    <h3>4. FINANCE — MONEY OUT</h3>
-    <table><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody>{finance?.expenditure?.length ? finance.expenditure.map(row => <tr key={row.sn}><td>{row.name || 'Other expenditure'}</td><td>{money(row.amount)}</td></tr>) : <tr><td>No finance report saved</td><td>{money(0)}</td></tr>}<tr><th>TOTAL MONEY OUT</th><th>{money(day.out)}</th></tr></tbody></table>
-    <div className="reports-print-balance">BALANCE: {money(day.balance)}</div>
-  </section>
 }
