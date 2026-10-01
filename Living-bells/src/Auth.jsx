@@ -4,7 +4,7 @@ import './auth.css'
 
 export default function Auth({ onAuthenticated }) {
   const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'STAFF', adminKey: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'STAFF', adminKey: '', inviteCode: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -36,6 +36,7 @@ export default function Auth({ onAuthenticated }) {
         password: form.password,
         role: form.role,
         adminKey: form.role === 'ADMIN' ? form.adminKey : undefined,
+        inviteCode: form.role === 'STAFF' ? form.inviteCode : undefined,
       })
 
       // Registration is complete immediately. The API returns a signed token,
@@ -60,7 +61,7 @@ export default function Auth({ onAuthenticated }) {
       <p className="auth-subtitle">
         {isLogin
           ? 'Sign in with the account registered for your church workspace.'
-          : 'Register once, then sign in directly with your email and password.'}
+          : 'Staff accounts are created through an invitation from your church admin. Admin registration remains restricted.'}
       </p>
 
       {error && <div className="auth-error" role="alert">{error}</div>}
@@ -73,6 +74,7 @@ export default function Auth({ onAuthenticated }) {
         {!isLogin && <label>Confirm password<input type="password" minLength="8" value={form.confirmPassword} onChange={e => update('confirmPassword', e.target.value)} autoComplete="new-password" required /></label>}
 
         {!isLogin && <label>Account type<select value={form.role} onChange={e => update('role', e.target.value)}><option value="STAFF">Staff</option><option value="ADMIN">Admin</option></select></label>}
+        {!isLogin && form.role === 'STAFF' && <label>Staff invitation code<input value={form.inviteCode} onChange={e => update('inviteCode', e.target.value.toUpperCase())} autoComplete="one-time-code" placeholder="Enter the code from your invitation" required /></label>}
         {!isLogin && form.role === 'ADMIN' && <label>Admin registration key<input type="password" value={form.adminKey} onChange={e => update('adminKey', e.target.value)} autoComplete="off" required /></label>}
 
         <button className="primary auth-submit" disabled={loading}>
