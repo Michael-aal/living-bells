@@ -884,6 +884,8 @@ function ReviewForm({ staff, close, save }) {
 }
 function FinanceForm({ close, save, recordingDate = null }) {
   const [form, setForm] = useState({ type: 'INCOME', category: '', amount: '', description: '', recordDate: recordingDate || new Date().toISOString().slice(0, 10) })
+  const [options, setOptions] = useState([])
+  useEffect(() => { api.options(form.type === 'INCOME' ? 'FINANCE_INCOME' : 'FINANCE_EXPENSE').then(setOptions).catch(() => {}) }, [form.type])
   const [saving, setSaving] = useState(false)
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
 
@@ -894,7 +896,7 @@ function FinanceForm({ close, save, recordingDate = null }) {
     if (!success) setSaving(false)
   }
 
-  return <Modal title={form.type === 'INCOME' ? 'Submit money in' : 'Submit money out'} close={close}><label>Type<select value={form.type} onChange={e => set('type', e.target.value)}><option value="INCOME">Money in</option><option value="EXPENSE">Money out</option></select></label><label>Category<input value={form.category} onChange={e => set('category', e.target.value)} placeholder="e.g. Offering" /></label><label>Description<input value={form.description} onChange={e => set('description', e.target.value)} placeholder="Optional description" /></label><label>Amount<input type="number" min="0.01" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" /></label><label>Date<input type="date" value={form.recordDate} onChange={e => set('recordDate', e.target.value)} /></label><button type="button" className="primary wide" disabled={saving || !form.category || !form.amount || Number(form.amount) <= 0} onClick={submit}>{saving ? 'Saving…' : 'Submit transaction'}</button></Modal>
+  return <Modal title={form.type === 'INCOME' ? 'Submit money in' : 'Submit money out'} close={close}><label>Type<select value={form.type} onChange={e => set('type', e.target.value)}><option value="INCOME">Money in</option><option value="EXPENSE">Money out</option></select></label><label>Category<input list="finance-options" value={form.category} onChange={e => set('category', e.target.value)} placeholder="e.g. Offering" /><datalist id="finance-options">{options.map(option => <option key={option.id || option.name} value={option.name} />)}</datalist></label><button type="button" className="secondary" onClick={async () => { const name = window.prompt(form.type === 'INCOME' ? 'New money-in option name' : 'New money-out option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: form.type === 'INCOME' ? 'FINANCE_INCOME' : 'FINANCE_EXPENSE', name: name.trim() }); setOptions(current => [...current.filter(x => x.name !== created.name), created]); set('category', created.name) } catch (error) { alert(error.message || 'Could not create option') } }}>Create category</button><label>Description<input value={form.description} onChange={e => set('description', e.target.value)} placeholder="Optional description" /></label><label>Amount<input type="number" min="0.01" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" /></label><label>Date<input type="date" value={form.recordDate} onChange={e => set('recordDate', e.target.value)} /></label><button type="button" className="primary wide" disabled={saving || !form.category || !form.amount || Number(form.amount) <= 0} onClick={submit}>{saving ? 'Saving…' : 'Submit transaction'}</button></Modal>
 }
 
 
