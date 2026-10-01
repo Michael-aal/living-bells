@@ -50,6 +50,7 @@ model User {
   financialRecords     FinancialRecord[] @relation("FinancialRecordCreator")
   weeklyReportsCreated WeeklyReport[]    @relation("WeeklyReportCreator")
   invitationsSent      StaffInvitation[]  @relation("InvitationSender")
+  createdOptions       ConfigOption[]    @relation("OptionCreator")
 }
 
 model Activity {
@@ -261,6 +262,21 @@ model ReportingWeek {
   @@index([monthId])
 }
 
+
+
+model ConfigOption {
+  id          Int      @id @default(autoincrement())
+  kind        String
+  name        String
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User? @relation("OptionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([kind, name])
+  @@index([kind])
+}
 
 model StaffInvitation {
   id          Int       @id @default(autoincrement())

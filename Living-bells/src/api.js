@@ -1,3 +1,5 @@
+import { enqueueRequest, getQueue, removeQueuedRequest, cacheResponse, getCachedResponse, queueCount } from './offlineStore'
+
 const BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 function authHeaders() {
@@ -5,36 +7,101 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+function cacheKey(path) {
+  const user = localStorage.getItem('living_bells_user') || 'anonymous'
+  return `${user}::${BASE + path}`
+}
+
+function dispatchSyncState() {
+  window.dispatchEvent(new CustomEvent('living-bells-sync'))
+}
+
 export async function apiRequest(path, options = {}) {
-  let response
+  const method = String(options.method || 'GET').toUpperCase()
+  const headers = { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) }
 
   try {
-    response = await fetch(BASE + path, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) },
+    const response = await fetch(BASE + path, { ...options, method, headers })
+    const contentType = response.headers.get('content-type') || ''
+    const data = contentType.includes('application/json') ? await response.json().catch(() => ({})) : {}
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('living_bells_token')
+        localStorage.removeItem('living_bells_user')
+        throw new Error(data.message || 'Your session has expired. Please sign in again.')
+      }
+      if (response.status === 403) throw new Error(data.message || 'You do not have permission to perform this action.')
+      throw new Error(data.message || 'API request failed (' + response.status + ')')
+    }
+
+    if (method === 'GET') {
+      await cacheResponse(cacheKey(path), data).catch(() => {})
+    }
+    return data
+  } catch (error) {
+    const networkFailure = error instanceof TypeError || /Cannot reach|Failed to fetch|NetworkError|Load failed/i.test(error.message || '')
+    if (!networkFailure) throw error
+
+    if (method === 'GET') {
+      const cached = await getCachedResponse(cacheKey(path)).catch(() => null)
+      if (cached !== null) return cached
+      throw new Error('Offline and this data has not been cached on this device yet.')
+    }
+
+    if (!localStorage.getItem('living_bells_token') || path.startsWith('/api/auth/')) {
+      throw new Error('You are offline. Sign in while online before using offline recording.')
+    }
+
+    const id = await enqueueRequest({
+      path,
+      method,
+      body: options.body || null,
+      headers: { 'Content-Type': 'application/json' },
+      clientRequestId: crypto.randomUUID(),
     })
-  } catch {
-    throw new Error('Cannot reach the Living Bells API. Start the backend on port 5000 or use a demo account.')
+    dispatchSyncState()
+    const body = options.body ? JSON.parse(options.body) : {}
+    return { ...body, id: `offline-${id}`, offline: true, queued: true }
+  }
+}
+
+export async function syncOfflineQueue() {
+  if (!navigator.onLine) return { synced: 0, pending: await queueCount() }
+  const queue = await getQueue().catch(() => [])
+  let synced = 0
+
+  for (const item of queue.sort((a, b) => a.createdAt - b.createdAt)) {
+    const token = localStorage.getItem('living_bells_token')
+    if (!token) break
+
+    try {
+      const response = await fetch(BASE + item.path, {
+        method: item.method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Client-Request-Id': item.clientRequestId || item.id,
+        },
+        body: item.body || undefined,
+      })
+
+      if (response.status === 401) break
+      if (response.status >= 500) break
+
+      if (response.ok || response.status === 409) {
+        await removeQueuedRequest(item.id)
+        synced += 1
+      } else {
+        await removeQueuedRequest(item.id)
+      }
+    } catch {
+      break
+    }
   }
 
-  const contentType = response.headers.get('content-type') || ''
-  const data = contentType.includes('application/json')
-    ? await response.json().catch(() => ({}))
-    : {}
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem('living_bells_token')
-      localStorage.removeItem('living_bells_user')
-      throw new Error(data.message || 'Your session has expired. Please sign in again.')
-    }
-    if (response.status === 403) {
-      throw new Error(data.message || 'You do not have permission to perform this action.')
-    }
-    throw new Error(data.message || 'API request failed (' + response.status + ')')
-  }
-
-  return data
+  dispatchSyncState()
+  return { synced, pending: await queueCount() }
 }
 
 export const api = {
@@ -72,4 +139,6 @@ export const api = {
   createReportingWeek: payload => apiRequest('/api/reporting/weeks', { method: 'POST', body: JSON.stringify(payload) }),
   updateReportingWeek: (id, payload) => apiRequest('/api/reporting/weeks/' + id, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteReportingWeek: id => apiRequest('/api/reporting/weeks/' + id, { method: 'DELETE' }),
+  options: kind => apiRequest('/api/options' + (kind ? '?kind=' + encodeURIComponent(kind) : '')),
+  createOption: payload => apiRequest('/api/options', { method: 'POST', body: JSON.stringify(payload) }),
 }
