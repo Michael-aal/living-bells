@@ -1,10 +1,10 @@
-import { enqueueRequest, getQueue, removeQueuedRequest, cacheResponse, getCachedResponse, queueCount } from './offlineStore'
+import { enqueueRequest, getQueue, removeQueuedRequest, cacheResponse, getCachedResponse, queueCount, saveOfflineIdentity, verifyOfflineIdentity } from './offlineStore'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 function authHeaders() {
   const token = localStorage.getItem('living_bells_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  return token && token !== 'offline-session' ? { Authorization: `Bearer ${token}` } : {}
 }
 
 function cacheKey(path) {
@@ -49,7 +49,7 @@ export async function apiRequest(path, options = {}) {
       throw new Error('Offline and this data has not been cached on this device yet.')
     }
 
-    if (!localStorage.getItem('living_bells_token') || path.startsWith('/api/auth/')) {
+    if ((!localStorage.getItem('living_bells_token') && !localStorage.getItem('living_bells_offline_session')) || path.startsWith('/api/auth/')) {
       throw new Error('You are offline. Sign in while online before using offline recording.')
     }
 
@@ -107,8 +107,22 @@ export async function syncOfflineQueue() {
 }
 
 export const api = {
-  register: payload => apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
-  login: payload => apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  register: async payload => {
+    const result = await apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) })
+    await saveOfflineIdentity(result.user, payload.password).catch(() => {})
+    return result
+  },
+  login: async payload => {
+    try {
+      const result = await apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) })
+      await saveOfflineIdentity(result.user, payload.password).catch(() => {})
+      return result
+    } catch (error) {
+      const offline = await verifyOfflineIdentity(payload.email, payload.password).catch(() => null)
+      if (!offline) throw error
+      return { offline: true, token: null, user: offline }
+    }
+  },
   me: () => apiRequest('/api/auth/me'),
   updateProfile: payload => apiRequest('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
   dashboard: () => apiRequest('/api/dashboard'),
