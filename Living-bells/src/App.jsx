@@ -90,6 +90,7 @@ function App() {
   const [page, setPage] = useState('dashboard')
   const [reportEditDate, setReportEditDate] = useState(null)
   const [reportRefresh, setReportRefresh] = useState(0)
+  const [dataRefreshKey, setDataRefreshKey] = useState(0)
   const [attendance, setAttendance] = useState([])
   const [attendanceOptions, setAttendanceOptions] = useState([])
   const [expenses, setExpenses] = useState([])
@@ -112,10 +113,13 @@ function App() {
     if (!user || user.demo) return
     let mounted = true
     const refresh = async () => {
-      if (navigator.onLine) await syncOfflineQueue().catch(() => {})
+      const syncResult = navigator.onLine ? await syncOfflineQueue().catch(() => null) : null
       const pending = await queueCount().catch(() => 0)
       if (!mounted) return
-      setSync(navigator.onLine ? (pending ? `Sync pending: ${pending}` : 'Backend connected') : (pending ? `Offline · ${pending} pending` : 'Offline · saved on device'))
+      if (syncResult?.synced > 0) setDataRefreshKey(value => value + 1)
+      if (!navigator.onLine) setSync(pending ? `Offline · ${pending} pending` : 'Offline · saved on device')
+      else if (pending) setSync(`Sync pending: ${pending}`)
+      else setSync('Backend connected')
     }
     const onOnline = () => refresh()
     const onOffline = () => refresh()
@@ -217,7 +221,7 @@ function App() {
 
     loadData()
     return () => { cancelled = true }
-  }, [user])
+  }, [user, dataRefreshKey])
 
   useEffect(() => {
     if (!user || user.role !== 'ADMIN' || !selectedStaff) return
