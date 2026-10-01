@@ -6,10 +6,11 @@ import { CURRENCY, money, normalizeReport, reportPayload, totals, dateLabel, emp
 const canEdit = role => ['ADMIN','SECRETARY','PASTOR','STAFF'].includes(role)
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b)
 
-export default function FinancePage({ user }) {
-  const [reports,setReports]=useState([]),[report,setReport]=useState(emptyReport()),[saved,setSaved]=useState(emptyReport())
+export default function FinancePage({ user, initialDate = null }) {
+  const baseReport = emptyReport(initialDate || undefined)
+  const [reports,setReports]=useState([]),[report,setReport]=useState(baseReport),[saved,setSaved]=useState(baseReport)
   const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
-  const [selectedDate,setSelectedDate]=useState(emptyReport().reportDate)
+  const [selectedDate,setSelectedDate]=useState(baseReport.reportDate)
   const editable=canEdit(user.role),dirty=useMemo(()=>!same(reportPayload(report),reportPayload(saved)),[report,saved]),summary=useMemo(()=>totals(report),[report])
   useEffect(()=>{loadHistory()},[])
   useEffect(()=>{const handler=e=>{if(dirty)e.preventDefault()};window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler)},[dirty])
