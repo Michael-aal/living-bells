@@ -428,7 +428,10 @@ function App() {
     {modal?.type === 'staff-code' && <StaffCodeModal invitation={modal.invitation} close={() => setModal(null)} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
     {modal?.type === 'activity-edit' && <ActivityForm initial={modal.record} close={() => setModal(null)} save={updateActivity} />}
-    <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['finance','₦'],['activities','▣'],['reports','⌁'],...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
+    <nav className="mobile-nav" aria-label="Mobile navigation">{[
+      ['dashboard','⌂'], ['attendance','◉'], ['activities','▣'], ['finance','₦'],
+      ['reports','⌁'], ['reporting','▦'], ...(isAdmin ? [['staff','♙']] : [])
+    ].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i aria-hidden="true">{icon}</i><span>{title(id)}</span></button>)}</nav>
   </div>
 }
 
