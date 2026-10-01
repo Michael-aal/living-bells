@@ -78,9 +78,9 @@ export async function apiRequest(path, options = {}) {
 }
 
 export async function syncOfflineQueue() {
-  if (!navigator.onLine) return { synced: 0, pending: await queueCount() }
+  if (!navigator.onLine) return { synced: 0, pending: await queueCountForOwner(currentOwnerKey()) }
   const ownerKey = currentOwnerKey()
-  if (!ownerKey) return { synced: 0, pending: await queueCount() }
+  if (!ownerKey) return { synced: 0, pending: 0 }
   const queue = (await getQueue().catch(() => [])).filter(item => item.ownerKey === ownerKey)
   let synced = 0
   let blocked = false
@@ -117,17 +117,17 @@ export async function syncOfflineQueue() {
         await removeQueuedRequest(item.id)
         synced += 1
       } else if (response.status >= 400 && response.status < 500) {
-        // Keep the item queued so a transient auth/validation issue does not silently lose user data.
-        // A future sync can retry after the session or server state is corrected.
+        // Keep rejected work queued. The user can correct the session/server state and retry.
+        blocked = true
         break
       }
     } catch {
+      blocked = true
       break
     }
   }
 
-  dispatchSyncState()
-  return { synced, pending: await queueCount() }
+  return { synced, pending: await queueCountForOwner(ownerKey), blocked }
 }
 
 export const api = {
