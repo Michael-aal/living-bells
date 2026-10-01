@@ -39,7 +39,9 @@ export default function Auth({ onAuthenticated }) {
 
       if (mode === 'login') {
         const result = await api.login({ email, password: form.password })
-        localStorage.setItem('living_bells_token', result.token)
+        if (result.token) localStorage.setItem('living_bells_token', result.token)
+        if (result.offline) localStorage.setItem('living_bells_offline_session', '1')
+        else localStorage.removeItem('living_bells_offline_session')
         localStorage.setItem('living_bells_user', JSON.stringify(result.user))
         onAuthenticated(result.user)
         return
@@ -63,6 +65,7 @@ export default function Auth({ onAuthenticated }) {
       })
 
       localStorage.setItem('living_bells_token', result.token)
+      localStorage.removeItem('living_bells_offline_session')
       localStorage.setItem('living_bells_user', JSON.stringify(result.user))
       onAuthenticated(result.user)
     } catch (err) {
