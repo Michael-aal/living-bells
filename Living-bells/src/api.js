@@ -49,6 +49,10 @@ export async function apiRequest(path, options = {}) {
       throw new Error('Offline and this data has not been cached on this device yet.')
     }
 
+    if (!localStorage.getItem('living_bells_token') || path.startsWith('/api/auth/')) {
+      throw new Error('You are offline. Sign in while online before using offline recording.')
+    }
+
     const id = await enqueueRequest({
       path,
       method,
