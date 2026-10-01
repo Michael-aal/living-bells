@@ -363,7 +363,7 @@ app.post('/api/reporting/weeks', requireAdmin, async (req,res,next)=>{
     res.status(201).json(reportingMonthDto(full))
   }catch(e){if(e?.code==='P2002')return res.status(409).json({message:'That reporting week already exists'});next(e)}
 })
-\nfunction requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY','PASTOR','STAFF'].includes(req.user?.role))return res.status(403).json({message:'Only Admin, Pastor or Secretary accounts can create or edit weekly reports'});next()}
+function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY','PASTOR','STAFF'].includes(req.user?.role))return res.status(403).json({message:'Only Admin, Pastor or Secretary accounts can create or edit weekly reports'});next()}
 function requireWeeklyReportView(req,res,next){next()}
 const WEEKLY_SERVICES=['Pre-Sunday Prayer','Sunday School','Worship Service','Bible Study','House Fellowship','Prayer Meeting','Vigil','Revival Service','Intercessory Prayer','Anointing Service']
 const WEEKLY_SPIRITUAL=['No. of Decision','No. of Water Baptism','No. of Healing','No. of Conversion','No. of Holy Spirit Baptism','No. of Deliverance']
