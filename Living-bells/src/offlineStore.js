@@ -44,6 +44,19 @@ export function removeQueuedRequest(id) {
   return tx('queue', 'readwrite', store => store.delete(id))
 }
 
+export function updateQueuedRequest(id, patch) {
+  return tx('queue', 'readwrite', store => new Promise((resolve, reject) => {
+    const request = store.get(id)
+    request.onsuccess = () => {
+      const current = request.result
+      if (!current) return resolve(null)
+      store.put({ ...current, ...patch })
+      resolve({ ...current, ...patch })
+    }
+    request.onerror = () => reject(request.error)
+  }))
+}
+
 export function getQueueForOwner(ownerKey) {
   return getQueue().then(queue => queue.filter(item => item.ownerKey === ownerKey))
 }

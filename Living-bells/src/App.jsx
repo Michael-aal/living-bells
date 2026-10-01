@@ -6,7 +6,7 @@ import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import Auth from './Auth'
 import { api, syncOfflineQueue } from './api'
-import { queueCountForOwner } from './offlineStore'
+import { getQueueForOwner } from './offlineStore'
 
 function formatDate(value) {
   if (!value) return '—'
@@ -115,10 +115,13 @@ function App() {
     const refresh = async () => {
       const syncResult = navigator.onLine ? await syncOfflineQueue().catch(() => null) : null
       const ownerKey = (() => { try { const value = JSON.parse(localStorage.getItem('living_bells_user') || 'null'); return String(value?.id || value?.email || '').trim().toLowerCase() } catch { return '' } })()
-      const pending = await queueCountForOwner(ownerKey)
+      const queue = await getQueueForOwner(ownerKey).catch(() => [])
+      const pending = queue.length
+      const conflicts = queue.filter(item => item.status === 'conflict').length
       if (!mounted) return
       if (syncResult?.synced > 0) setDataRefreshKey(value => value + 1)
-      if (!navigator.onLine) setSync(pending ? `Offline · ${pending} pending` : 'Offline · saved on device')
+      if (!navigator.onLine) setSync(conflicts ? `Offline · ${conflicts} conflict${conflicts === 1 ? '' : 's'}` : pending ? `Offline · ${pending} pending` : 'Offline · saved on device')
+      else if (conflicts) setSync(`Sync needs review · ${conflicts} conflict${conflicts === 1 ? '' : 's'}`)
       else if (syncResult?.blocked && pending) setSync(`Sync paused · ${pending} pending`)
       else if (pending) setSync(`Sync pending: ${pending}`)
       else setSync('Backend connected')

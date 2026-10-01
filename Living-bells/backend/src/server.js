@@ -464,19 +464,46 @@ app.get('/api/weekly-reports',requireWeeklyReportView,async(req,res,next)=>{
 app.get('/api/weekly-reports/:id',requireWeeklyReportView,async(req,res,next)=>{
  try{const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'});const r=await prisma.weeklyReport.findUnique({where:{id},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}});if(!r)return res.status(404).json({message:'Weekly report not found'});res.json(reportDto(r))}catch(e){next(e)}
 })
+function sameWeeklyReport(a,b){
+ return a.reportDate.getTime()===b.reportDate.getTime()
+  && JSON.stringify(a.numerical)===JSON.stringify(b.numerical)
+  && JSON.stringify(a.spiritual)===JSON.stringify(b.spiritual)
+  && JSON.stringify(a.income)===JSON.stringify(b.income)
+  && JSON.stringify(a.expenditure)===JSON.stringify(b.expenditure)
+  && Number(a.totalIncome)===Number(b.totalIncome)
+  && Number(a.totalExpenditure)===Number(b.totalExpenditure)
+  && Number(a.balance)===Number(b.balance)
+}
+
 app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
  try{
   const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
   const d=v.data
+  const clientRequestId=String(req.get('X-Client-Request-Id')||'').trim().slice(0,120)||null
+
+  if(clientRequestId){
+   const previous=await prisma.weeklyReport.findUnique({where:{clientRequestId},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
+   if(previous)return res.status(200).json({...reportDto(previous),duplicate:true,idempotent:true})
+  }
+
   const reportingWeek=await findReportingWeekForDate(d.reportDate)
-  const r=await prisma.weeklyReport.upsert({
-   where:{reportDate:d.reportDate},
-   update:{numerical:d.numerical,spiritual:d.spiritual,income:d.income,expenditure:d.expenditure,totalIncome:d.totalIncome,totalExpenditure:d.totalExpenditure,balance:d.balance,reportingWeekId:reportingWeek?.id||null},
-   create:{...d,reportingWeekId:reportingWeek?.id||null,createdById:currentUserId(req)},
+  const r=await prisma.weeklyReport.create({
+   data:{...d,reportingWeekId:reportingWeek?.id||null,createdById:currentUserId(req),clientRequestId},
    include:{createdBy:{select:{id:true,name:true,email:true,role:true}}},
   })
   res.status(201).json(reportDto(r))
- }catch(e){if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that date. Refresh and try again.'});next(e)}
+ }catch(e){
+  if(e?.code==='P2002'){
+   const existing=await prisma.weeklyReport.findUnique({where:{reportDate:validateWeeklyPayload(req.body).data.reportDate},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}}).catch(()=>null)
+   if(existing){
+    const submitted=validateWeeklyPayload(req.body).data
+    if(sameWeeklyReport(existing,submitted))return res.status(200).json({...reportDto(existing),duplicate:true})
+    return res.status(409).json({message:'A weekly report already exists for that date with different data.',conflict:true,existing:reportDto(existing)})
+   }
+   return res.status(409).json({message:'This offline submission was already processed.',duplicate:true})
+  }
+  next(e)
+ }
 })
 app.put('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=>{
  try{
