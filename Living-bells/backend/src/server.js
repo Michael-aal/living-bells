@@ -9,7 +9,6 @@ import { prisma } from './db.js'
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
-const ADMIN_REGISTRATION_KEY = process.env.ADMIN_REGISTRATION_KEY || ''
 
 app.use(cors())
 app.use(express.json())
@@ -60,7 +59,7 @@ app.get('/api/auth/staff-invitation', async (req, res, next) => {
 
 app.post('/api/auth/register', async (req, res, next) => {
   try {
-    const { name, email, password, role = 'STAFF', adminKey, inviteCode } = req.body
+    const { name, email, password, role = 'STAFF', inviteCode } = req.body
     const normalizedRole = String(role).toUpperCase()
 
     if (!password) return res.status(400).json({ message: 'Password is required' })
@@ -86,9 +85,6 @@ app.post('/api/auth/register', async (req, res, next) => {
       registrationEmail = invitation.email
     } else {
       if (!registrationName || !registrationEmail) return res.status(400).json({ message: 'Name and email are required' })
-      if (!ADMIN_REGISTRATION_KEY || adminKey !== ADMIN_REGISTRATION_KEY) {
-        return res.status(403).json({ message: 'A valid admin registration key is required' })
-      }
     }
 
     if (await prisma.user.findUnique({ where: { email: registrationEmail } })) {
