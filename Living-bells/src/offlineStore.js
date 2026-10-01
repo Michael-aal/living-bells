@@ -44,6 +44,14 @@ export function removeQueuedRequest(id) {
   return tx('queue', 'readwrite', store => store.delete(id))
 }
 
+export function getQueueForOwner(ownerKey) {
+  return getQueue().then(queue => queue.filter(item => item.ownerKey === ownerKey))
+}
+
+export function queueCountForOwner(ownerKey) {
+  return getQueueForOwner(ownerKey).then(items => items.length).catch(() => 0)
+}
+
 export async function cacheResponse(key, data) {
   await tx('cache', 'readwrite', store => store.put({ key, data, cachedAt: Date.now() }))
 }
