@@ -6,7 +6,7 @@ import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import Auth from './Auth'
 import { api, syncOfflineQueue } from './api'
-import { queueCount } from './offlineStore'
+import { getQueueForOwner } from './offlineStore'
 
 function formatDate(value) {
   if (!value) return '—'
@@ -90,6 +90,7 @@ function App() {
   const [page, setPage] = useState('dashboard')
   const [reportEditDate, setReportEditDate] = useState(null)
   const [reportRefresh, setReportRefresh] = useState(0)
+  const [dataRefreshKey, setDataRefreshKey] = useState(0)
   const [attendance, setAttendance] = useState([])
   const [attendanceOptions, setAttendanceOptions] = useState([])
   const [expenses, setExpenses] = useState([])
@@ -112,10 +113,18 @@ function App() {
     if (!user || user.demo) return
     let mounted = true
     const refresh = async () => {
-      if (navigator.onLine) await syncOfflineQueue().catch(() => {})
-      const pending = await queueCount().catch(() => 0)
+      const syncResult = navigator.onLine ? await syncOfflineQueue().catch(() => null) : null
+      const ownerKey = (() => { try { const value = JSON.parse(localStorage.getItem('living_bells_user') || 'null'); return String(value?.id || value?.email || '').trim().toLowerCase() } catch { return '' } })()
+      const queue = await getQueueForOwner(ownerKey).catch(() => [])
+      const pending = queue.length
+      const conflicts = queue.filter(item => item.status === 'conflict').length
       if (!mounted) return
-      setSync(navigator.onLine ? (pending ? `Sync pending: ${pending}` : 'Backend connected') : (pending ? `Offline · ${pending} pending` : 'Offline · saved on device'))
+      if (syncResult?.synced > 0) setDataRefreshKey(value => value + 1)
+      if (!navigator.onLine) setSync(conflicts ? `Offline · ${conflicts} conflict${conflicts === 1 ? '' : 's'}` : pending ? `Offline · ${pending} pending` : 'Offline · saved on device')
+      else if (conflicts) setSync(`Sync needs review · ${conflicts} conflict${conflicts === 1 ? '' : 's'}`)
+      else if (syncResult?.blocked && pending) setSync(`Sync paused · ${pending} pending`)
+      else if (pending) setSync(`Sync pending: ${pending}`)
+      else setSync('Backend connected')
     }
     const onOnline = () => refresh()
     const onOffline = () => refresh()
@@ -217,7 +226,7 @@ function App() {
 
     loadData()
     return () => { cancelled = true }
-  }, [user])
+  }, [user, dataRefreshKey])
 
   useEffect(() => {
     if (!user || user.role !== 'ADMIN' || !selectedStaff) return
@@ -242,6 +251,7 @@ function App() {
 
   function logout() {
     localStorage.removeItem('living_bells_token')
+    localStorage.removeItem('living_bells_offline_session')
     localStorage.removeItem('living_bells_user')
     setUser(null)
     setAttendance([])
@@ -284,6 +294,8 @@ function App() {
       setSync(error.message || 'Could not save username')
     }
   }
+
+  async function deleteAttendanceRecord(id) { if(!id||!window.confirm('Delete this attendance record? This cannot be undone.')) return; try { await api.deleteAttendance(id); setAttendance(current=>current.filter(r=>r.id!==id)); setSync('Backend connected'); } catch(error){setSync(error.message||'Could not delete attendance record')} }
 
   async function addAttendance(payload) {
     if (user.demo) {
@@ -490,7 +502,7 @@ function App() {
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
         {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={attendance} expenses={visibleExpenses} activities={visibleActivities} weeklyReports={weeklyReports} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
-        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} onCreate={async () => { const name = window.prompt('New attendance option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: 'ATTENDANCE', name: name.trim() }); setAttendanceOptions(current => [...current.filter(x => x.name !== created.name), created]); setSync(created.offline ? 'Attendance option saved offline' : 'Backend connected') } catch (error) { setSync(error.message || 'Could not create attendance option') } }} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
+        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} onCreate={async () => { const name = window.prompt('New attendance option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: 'ATTENDANCE', name: name.trim() }); setAttendanceOptions(current => [...current.filter(x => x.name !== created.name), created]); setSync(created.offline ? 'Attendance option saved offline' : 'Backend connected') } catch (error) { setSync(error.message || 'Could not create attendance option') } }} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}<th>Action</th></tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}<td><button type="button" className="danger-button" onClick={()=>deleteAttendanceRecord(r.id)}>Delete</button></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
@@ -660,7 +672,7 @@ function ActivityTrend({ activities = [] }) {
 function Stat({ icon, name, value, note }) { return <div className="stat"><span className="stat-icon">{icon}</span><div><small>{name}</small><strong>{value}</strong><em>{note}</em></div></div> }
 function Action({ icon, title, text, onClick }) { return <button type="button" className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
-function Records({ title, eyebrow, action, onAdd, onCreate, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button type="button" className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <><button type="button" className="secondary" onClick={onCreate}>Create</button><button type="button" className="primary" onClick={onAdd}>{action}</button></>}</div></div><div className="table-wrap">{children}</div></section> }
+function Records({ title, eyebrow, action, onAdd, onCreate, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{!isAdmin && <button type="button" className="primary" onClick={onAdd}>{action}</button>}<details className="action-menu"><summary className="secondary">More</summary><div className="action-menu-panel">{!isAdmin && <button type="button" onClick={onCreate}>Create option</button>}{isAdmin && <button type="button" onClick={onPrint}>Print table</button>}</div></details></div></div><div className="table-wrap">{children}</div></section> }
 function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', calendar: 'Calendar', staff: 'Staff', settings: 'Settings' })[p] || 'Dashboard' }
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.',  })[p] }
 

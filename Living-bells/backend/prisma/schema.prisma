@@ -212,6 +212,7 @@ model WeeklyReport {
   createdById      Int?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  clientRequestId  String?  @unique
 
   reportingWeek ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   createdBy User? @relation("WeeklyReportCreator", fields: [createdById], references: [id], onDelete: SetNull)

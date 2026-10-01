@@ -1,4 +1,4 @@
-const CACHE = 'living-bells-shell-v1'
+const CACHE = 'living-bells-shell-v2'
 const FALLBACK = '/'
 
 self.addEventListener('install', event => {
