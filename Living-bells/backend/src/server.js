@@ -145,7 +145,7 @@ app.get('/api/auth/me', authenticate, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: Number(req.user.sub) },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, role: true, department: true },
     })
     if (!user) return res.status(401).json({ message: 'User account not found' })
     res.json({ ...user, emailVerified: true })
@@ -578,7 +578,10 @@ app.post('/api/admin/staff/invitations', requireAdmin, async (req, res, next) =>
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
     await prisma.staffInvitation.updateMany({ where: { email, usedAt: null }, data: { expiresAt: new Date() } })
     const invitation = await prisma.staffInvitation.create({ data: { name, email, department, codeHash, invitedById: currentUserId(req), expiresAt } })
-    if (!RESEND_API_KEY) return res.status(503).json({ message: 'Email service is not configured. Add RESEND_API_KEY and EMAIL_FROM before sending invitations.' })
+    if (!RESEND_API_KEY) {
+      await prisma.staffInvitation.delete({ where: { id: invitation.id } })
+      return res.status(503).json({ message: 'Email service is not configured. Add RESEND_API_KEY and EMAIL_FROM before sending invitations.' })
+    }
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
