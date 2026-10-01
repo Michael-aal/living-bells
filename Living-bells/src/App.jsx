@@ -59,6 +59,8 @@ function App() {
   const [sync, setSync] = useState('Connecting...')
   const [query, setQuery] = useState('')
   const [reportingContext, setReportingContext] = useState(null)
+  const [staffInvitations, setStaffInvitations] = useState([])
+  const [staffCount, setStaffCount] = useState({ active: 0, pending: 0, total: 0 })
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
   const moneyIn = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports])
@@ -126,6 +128,8 @@ function App() {
       try {
         const [data, weeklyData, currentReporting] = await Promise.all([api.dashboard(), api.weeklyReports(), api.reportingCurrent()])
         const staffData = user.role === 'ADMIN' ? await api.staff() : []
+        const invitationData = user.role === 'ADMIN' ? await api.staffInvitations() : []
+        const countData = user.role === 'ADMIN' ? await api.staffCount() : { active: 0, pending: 0, total: 0 }
         if (cancelled) return
         setAttendance((data.attendance || []).map(normalizeAttendance))
         setExpenses((data.expenses || []).map(normalizeExpense))
@@ -134,6 +138,8 @@ function App() {
         setReportingContext(currentReporting || null)
         setActivities(data.activities || [])
         setStaff(staffData)
+        setStaffInvitations(invitationData || [])
+        setStaffCount(countData || { active: 0, pending: 0, total: 0 })
         setSync('Backend connected')
       } catch (error) {
         if (!cancelled) setSync(error.message || 'Backend unavailable')
@@ -177,6 +183,8 @@ function App() {
     setWeeklyReports([])
     setActivities([])
     setStaff([])
+    setStaffInvitations([])
+    setStaffCount({ active: 0, pending: 0, total: 0 })
     setSelectedStaff(null)
     setReviews([])
   }
@@ -383,11 +391,11 @@ function App() {
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
-        {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} todayMoneyIn={todayMoneyIn} todayMoneyOut={todayMoneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
+        {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={visibleAttendance} expenses={visibleExpenses} activities={visibleActivities} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} todayMoneyIn={todayMoneyIn} todayMoneyOut={todayMoneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
-        {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
+        {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
         {!loading && page === 'reporting' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
         
@@ -416,13 +424,14 @@ function App() {
         return false
       }
     }} />}
+    {modal === 'invite-staff' && <InviteStaffForm close={() => setModal(null)} onSaved={async invitation => { setStaffInvitations(current => [invitation, ...current]); setStaffCount(current => ({ ...current, pending: current.pending + 1, total: current.total + 1 })); setModal(null) }} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
     {modal?.type === 'activity-edit' && <ActivityForm initial={modal.record} close={() => setModal(null)} save={updateActivity} />}
     <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['finance','₦'],['activities','▣'],['reports','⌁'],...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
   </div>
 }
 
-function Dashboard({ user, reportingContext, attendance, expenses, activitiesCount, spend, money, moneyIn, moneyOut, todayMoneyIn, todayMoneyOut, netMoney, open, go, isAdmin }) {
+function Dashboard({ user, reportingContext, attendance, expenses, activities, spend, money, moneyIn, moneyOut, todayMoneyIn, todayMoneyOut, netMoney, open, go, isAdmin }) {
   const todayValue = reportingContext?.date || new Date().toISOString().slice(0, 10)
   const today = new Date(todayValue + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
   const monthLabel = reportingContext?.month ? new Date(Date.UTC(2026, Number(reportingContext.month.month) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null
@@ -442,8 +451,33 @@ function Dashboard({ user, reportingContext, attendance, expenses, activitiesCou
     <div className="stats"><Stat icon="◉" name="Attendance" value={attendance[0]?.total || 0} note="Latest service" /><Stat icon="₦" name="Total money in" value={money(moneyIn)} note="All saved weekly reports" /><Stat icon="₦" name="Total money out" value={money(moneyOut)} note="All saved weekly reports" /><Stat icon="⌁" name="Total balance" value={money(netMoney)} note="Total in minus total out" /></div>
     <section className="card dashboard-today"><div><span className="eyebrow">Today</span><h2>Today's finance snapshot</h2><p className="card-subtitle">Only records saved for today's date.</p></div><div className="today-money"><div><small>Money in</small><b>{money(todayMoneyIn)}</b></div><div><small>Money out</small><b>{money(todayMoneyOut)}</b></div><div><small>Balance</small><b>{money(todayMoneyIn - todayMoneyOut)}</b></div></div></section>
     <div className="quick">{!isAdmin && <><Action icon="₦" title="Record money in or out" text="Record income received or expenses paid." onClick={() => go('finance')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} /></>}{isAdmin && <Action icon="▤" title="Print reports" text="Print attendance, expense and activity tables." onClick={() => go('reports')} />}</div>
-    <div className="dash-grid"><Card title="Attendance trend"><div className="bars">{attendance.slice(0, 7).reverse().map(r => <div className="bar-col" key={r.id}><b>{r.total}</b><div className="bar" style={{ height: Math.max(25, Math.min(100, r.total / 4)) + '%' }} /><small>{r.date.slice(0, 6)}</small></div>)}</div>{!attendance.length && <p>No attendance data yet.</p>}</Card><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
+    <div className="dash-grid"><ActivityTrend activities={activities} /><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
   </>
+}
+
+function ActivityTrend({ activities = [] }) {
+  const years = [...new Set(activities.map(item => new Date(item.date).getFullYear()).filter(Number.isFinite))].sort((a, b) => b - a)
+  const currentYear = years[0] || new Date().getFullYear()
+  const [year, setYear] = useState(currentYear)
+  const names = [...new Set(activities.map(item => String(item.name || '').trim()).filter(Boolean))].sort()
+  const [selectedActivity, setSelectedActivity] = useState('')
+  useEffect(() => { if (selectedActivity && !names.includes(selectedActivity)) setSelectedActivity('') }, [names.join('|')])
+  const monthLabels = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(year, i, 1)).toLocaleDateString('en-NG', { month: 'short', timeZone: 'UTC' }))
+  const values = monthLabels.map((_, month) => activities.filter(item => {
+    const d = new Date(item.date)
+    return d.getUTCFullYear() === Number(year) && d.getUTCMonth() === month && (!selectedActivity || item.name === selectedActivity)
+  }).length)
+  const max = Math.max(1, ...values)
+  const total = values.reduce((a, b) => a + b, 0)
+  return <Card title="Activity trend">
+    <div className="trend-controls">
+      <label>Year<select value={year} onChange={e => setYear(Number(e.target.value))}>{years.length ? years.map(y => <option key={y} value={y}>{y}</option>) : <option value={currentYear}>{currentYear}</option>}</select></label>
+      <label>Activity<select value={selectedActivity} onChange={e => setSelectedActivity(e.target.value)}><option value="">All activities</option>{names.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
+    </div>
+    <div className="monthly-bars">{values.map((value, index) => <div className="monthly-bar-col" key={monthLabels[index]}><b>{value}</b><div className="monthly-bar-track"><div className="monthly-bar" style={{ height: Math.max(4, (value / max) * 100) + '%' }} /></div><small>{monthLabels[index]}</small></div>)}</div>
+    {!activities.length && <p>No activity data yet.</p>}
+    <p className="trend-summary">{selectedActivity ? <><b>{selectedActivity}</b> was recorded {total} time{total === 1 ? '' : 's'} in {year}.</> : <><b>{total}</b> activities were recorded in {year}.</>}</p>
+  </Card>
 }
 
 function Stat({ icon, name, value, note }) { return <div className="stat"><span className="stat-icon">{icon}</span><div><small>{name}</small><strong>{value}</strong><em>{note}</em></div></div> }
@@ -454,13 +488,15 @@ function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', acti
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.',  })[p] }
 
 
-function StaffPage({ staff, selectedStaff, setSelectedStaff, reviews, attendance, expenses, activities, onReview, onPrint }) {
+function StaffPage({ staff, invitations = [], staffCount = { active: 0, pending: 0, total: 0 }, selectedStaff, setSelectedStaff, reviews, attendance, expenses, activities, onReview, onPrint }) {
   const ratingLabel = value => ({ EXCELLENT: 'Excellent', GOOD: 'Good', FAIR: 'Fair', POOR: 'Poor', BAD: 'Bad' }[value] || value || '—')
   return <div className="staff-layout">
+    <div className="staff-counts"><div><small>Active staff</small><b>{staffCount.active}</b></div><div><small>Pending invitations</small><b>{staffCount.pending}</b></div><div><small>Staff pipeline</small><b>{staffCount.total}</b></div></div>
     <section className="card full">
-      <div className="card-head"><div><span className="eyebrow">Administration</span><h2>Staff management</h2><p className="card-subtitle">Monitor staff activity and complete the Sunday review for each staff member.</p></div><button className="secondary print-button" onClick={onPrint}>🖨 Print</button></div>
+      <div className="card-head"><div><span className="eyebrow">Administration</span><h2>Staff management</h2><p className="card-subtitle">Invite staff, track who has joined and review their church activity.</p></div><div className="record-actions"><button className="primary" onClick={onInvite}>Invite staff</button><button className="secondary print-button" onClick={onPrint}>🖨 Print</button></div></div>
       <div className="table-wrap"><table><thead><tr><th>Staff</th><th>Email</th><th>Status</th><th>Records</th><th>Reviews</th><th></th></tr></thead><tbody>{staff.map(item => <tr key={item.id} className={selectedStaff?.id === item.id ? 'selected-row' : ''}><td><b>{item.name}</b></td><td>{item.email}</td><td><span className="pill">{item.emailVerified ? 'Active' : 'Pending'}</span></td><td><b>{item.recordCount || 0}</b></td><td>{item.reviewCount || 0}</td><td><button className="secondary small-button" onClick={() => setSelectedStaff(item)}>Review</button></td></tr>)}</tbody></table>{!staff.length && <p>No staff members found.</p>}</div>
     </section>
+    <section className="card full"><div className="card-head"><div><span className="eyebrow">Invitations</span><h2>Pending staff invitations</h2></div></div><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Expires</th></tr></thead><tbody>{invitations.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.email}</td><td>{item.department}</td><td>{formatDate(item.expiresAt)}</td></tr>)}</tbody></table>{!invitations.length && <p>No pending invitations.</p>}</div></section>
     {selectedStaff && <section className="card full">
       <div className="card-head"><div><span className="eyebrow">Sunday review</span><h2>{selectedStaff.name}</h2><p className="card-subtitle">{selectedStaff.email} · {selectedStaff.recordCount || 0} operational records</p></div><button className="primary" onClick={onReview}>+ Sunday review</button></div>
       <div className="staff-record-summary">
@@ -475,6 +511,28 @@ function StaffPage({ staff, selectedStaff, setSelectedStaff, reviews, attendance
       <div className="review-history">{reviews.map(review => <div className="review-card" key={review.id}><div><b>{formatDate(review.reviewDate)}</b><span className={`review-rating rating-${String(review.rating || '').toLowerCase()}`}>{ratingLabel(review.rating)}</span></div><p>{review.comment || 'No comment added.'}</p><small>Reviewed by {review.admin?.name || 'Admin'}</small></div>)}{!reviews.length && <p>No Sunday review has been recorded for this staff member yet.</p>}</div>
     </section>}
   </div>
+}
+
+function InviteStaffForm({ close, onSaved }) {
+  const [form, setForm] = useState({ name: '', email: '', department: 'Media' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
+  async function submit() {
+    if (saving) return
+    setSaving(true); setError('')
+    try { const result = await api.createStaffInvitation(form); await onSaved(result.invitation) }
+    catch (e) { setError(e.message || 'Could not send invitation') }
+    finally { setSaving(false) }
+  }
+  return <Modal title="Invite staff member" close={close}>
+    <p className="review-intro">The staff member will receive a one-time invitation code by email. The code expires in 48 hours.</p>
+    {error && <div className="auth-error">{error}</div>}
+    <label>Full name<input value={form.name} onChange={e => set('name', e.target.value)} required /></label>
+    <label>Email<input type="email" value={form.email} onChange={e => set('email', e.target.value)} required /></label>
+    <label>Department<select value={form.department} onChange={e => set('department', e.target.value)}>{['Media','Technical','Security','Secretary','Others'].map(x => <option key={x}>{x}</option>)}</select></label>
+    <button className="primary wide" disabled={saving || form.name.trim().length < 2 || !form.email.includes('@')} onClick={submit}>{saving ? 'Sending invitation…' : 'Send invitation'}</button>
+  </Modal>
 }
 
 function Modal({ title, children, close }) { return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">Living Bells</span><h2>{title}</h2></div><button type="button" className="close" onClick={close}>×</button></div>{children}</div></div> }
