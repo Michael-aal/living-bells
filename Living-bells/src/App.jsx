@@ -61,6 +61,7 @@ function App() {
   const [reportingContext, setReportingContext] = useState(null)
   const [staffInvitations, setStaffInvitations] = useState([])
   const [staffCount, setStaffCount] = useState({ active: 0, pending: 0, total: 0 })
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
   const moneyIn = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports])
@@ -377,7 +378,7 @@ function App() {
       <span className="label">Workspace</span>
       {[
         ['dashboard', 'Dashboard'], ['attendance', 'Attendance'],
-        ['activities', 'Activities'], ['finance', 'Finance'], ['reports', 'Reports'], ['reporting', 'Reporting'], ...(isAdmin ? [['staff', 'Staff']] : [])
+        ['activities', 'Activities'], ['finance', 'Finance'], ['reports', 'Reports'], ['calendar', 'Calendar'], ...(isAdmin ? [['staff', 'Staff']] : [])
       ].map(([id, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
     </aside>
@@ -396,7 +397,7 @@ function App() {
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
-        {!loading && page === 'reporting' && <ReportingCalendar user={user} current={reportingContext} />}
+        {!loading && page === 'calendar' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
         
       </section>
@@ -428,10 +429,22 @@ function App() {
     {modal?.type === 'staff-code' && <StaffCodeModal invitation={modal.invitation} close={() => setModal(null)} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
     {modal?.type === 'activity-edit' && <ActivityForm initial={modal.record} close={() => setModal(null)} save={updateActivity} />}
-    <nav className="mobile-nav" aria-label="Mobile navigation">{[
-      ['dashboard','⌂'], ['attendance','◉'], ['activities','▣'], ['finance','₦'],
-      ['reports','⌁'], ['reporting','▦'], ...(isAdmin ? [['staff','♙']] : [])
-    ].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i aria-hidden="true">{icon}</i><span>{title(id)}</span></button>)}</nav>
+    <nav className="mobile-nav" aria-label="Mobile navigation">
+      {[
+        ['dashboard','⌂'], ['attendance','◉'], ['activities','▣'], ['finance','₦']
+      ].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setMobileMoreOpen(false) }}><i aria-hidden="true">{icon}</i><span>{title(id)}</span></button>)}
+      <button type="button" className={mobileMoreOpen || ['reports','calendar','staff'].includes(page) ? 'active' : ''} onClick={() => setMobileMoreOpen(value => !value)} aria-expanded={mobileMoreOpen}>
+        <i aria-hidden="true">•••</i><span>More</span>
+      </button>
+    </nav>
+    {mobileMoreOpen && <div className="mobile-more-panel" role="dialog" aria-label="More navigation">
+      <div className="mobile-more-head"><div><b>More</b><small>Reports and settings</small></div><button type="button" onClick={() => setMobileMoreOpen(false)} aria-label="Close menu">×</button></div>
+      <div className="mobile-more-grid">
+        {[
+          ['reports','Reports'], ['calendar','Calendar'], ...(isAdmin ? [['staff','Staff']] : [])
+        ].map(([id, label]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setMobileMoreOpen(false) }}><span>{label}</span><small>{id === 'calendar' ? 'Set seven-day periods' : id === 'reports' ? 'View summaries' : 'Manage team'}</small></button>)}
+      </div>
+    </div>}
   </div>
 }
 
@@ -488,7 +501,7 @@ function Stat({ icon, name, value, note }) { return <div className="stat"><span 
 function Action({ icon, title, text, onClick }) { return <button type="button" className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
 function Records({ title, eyebrow, action, onAdd, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button type="button" className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <button type="button" className="primary" onClick={onAdd}>{action}</button>}</div></div><div className="table-wrap">{children}</div></section> }
-function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', reporting: 'Reporting Calendar', staff: 'Staff' })[p] || 'Dashboard' }
+function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', calendar: 'Calendar', staff: 'Staff' })[p] || 'Dashboard' }
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.',  })[p] }
 
 
