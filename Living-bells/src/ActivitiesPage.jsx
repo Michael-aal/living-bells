@@ -7,7 +7,7 @@ const canEdit = role => ['ADMIN','SECRETARY','PASTOR','STAFF'].includes(role)
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b)
 
 export default function ActivitiesPage({ user, initialDate = null, onInitialDateHandled }) {
-  const base=emptyReport(),[reports,setReports]=useState([]),[report,setReport]=useState(base),[saved,setSaved]=useState(base)
+  const base=emptyReport(initialDate || undefined),[reports,setReports]=useState([]),[report,setReport]=useState(base),[saved,setSaved]=useState(base)
   const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[selectedDate,setSelectedDate]=useState(base.reportDate)
   const editable=canEdit(user.role),dirty=useMemo(()=>!same(reportPayload(report),reportPayload(saved)),[report,saved])
   useEffect(()=>{loadHistory()},[])
