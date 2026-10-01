@@ -195,6 +195,35 @@ app.patch('/api/auth/me', authenticate, async (req, res, next) => {
 
 app.use('/api', authenticate)
 
+const OPTION_KINDS = ['ACTIVITY', 'ATTENDANCE', 'FINANCE_INCOME', 'FINANCE_EXPENSE']
+
+app.get('/api/options', async (req, res, next) => {
+  try {
+    const kind = String(req.query.kind || '').trim().toUpperCase()
+    const where = kind ? { kind } : {}
+    if (kind && !OPTION_KINDS.includes(kind)) return res.status(400).json({ message: 'Invalid option kind' })
+    const options = await prisma.configOption.findMany({ where, orderBy: { name: 'asc' } })
+    res.json(options)
+  } catch (error) { next(error) }
+})
+
+app.post('/api/options', requireStaff, async (req, res, next) => {
+  try {
+    const kind = String(req.body?.kind || '').trim().toUpperCase()
+    const name = String(req.body?.name || '').trim()
+    if (!OPTION_KINDS.includes(kind)) return res.status(400).json({ message: 'Invalid option kind' })
+    if (name.length < 2 || name.length > 100) return res.status(400).json({ message: 'Option name must be between 2 and 100 characters' })
+
+    const option = await prisma.configOption.create({
+      data: { kind, name, createdById: currentUserId(req) },
+    })
+    res.status(201).json(option)
+  } catch (error) {
+    if (error?.code === 'P2002') return res.status(409).json({ message: 'That option already exists' })
+    next(error)
+  }
+})
+
 function currentChurchDate(){
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Lagos',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
   const map=Object.fromEntries(parts.filter(p=>p.type!=='literal').map(p=>[p.type,p.value]))
