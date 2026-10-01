@@ -370,7 +370,7 @@ function App() {
       {[
         ['dashboard', 'Dashboard'], ['attendance', 'Attendance'],
         ['activities', 'Activities'], ['finance', 'Finance'], ['reports', 'Reports'], ['reporting', 'Reporting'], ...(isAdmin ? [['staff', 'Staff']] : [])
-      ].map(([id, icon, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}>{name}</button>)}
+      ].map(([id, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
     </aside>
 
