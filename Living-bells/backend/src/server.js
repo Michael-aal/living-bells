@@ -47,7 +47,7 @@ app.get('/api/auth/staff-invitation', async (req, res, next) => {
     const codeHash = crypto.createHash('sha256').update(code).digest('hex')
     const invitation = await prisma.staffInvitation.findFirst({
       where: { codeHash, usedAt: null, expiresAt: { gt: new Date() } },
-      select: { id: true, name: true, email: true, department: true, expiresAt: true },
+      select: { id: true, name: true, email: true, department: true, position: true, expiresAt: true },
     })
     if (!invitation) return res.status(404).json({ message: 'Invalid, expired or already used staff code' })
 
@@ -139,6 +139,7 @@ app.post('/api/auth/login', async (req, res, next) => {
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ message: 'Invalid email or password' })
     }
+    if (!user.isActive) return res.status(401).json({ message: 'This staff account is inactive. Contact an admin.' })
 
     res.json({
       token: signToken(user),
@@ -148,6 +149,8 @@ app.post('/api/auth/login', async (req, res, next) => {
         email: user.email,
         role: user.role,
         department: user.department,
+        position: user.position,
+        isActive: user.isActive,
         emailVerified: true,
       },
     })
@@ -663,10 +666,11 @@ app.post('/api/admin/staff/invitations', requireAdmin, async (req, res, next) =>
     const name = String(req.body.name || '').trim()
     const email = String(req.body.email || '').trim().toLowerCase()
     const department = String(req.body.department || '').trim()
-    const allowedDepartments = ['Treasurer', 'Secretary']
+    const position = String(req.body.position || '').trim()
+    const allowedDepartments = ['Media', 'Technical', 'Security', 'Secretary', 'Others']
 
-    if (name.length < 2 || !email || !email.includes('@') || !allowedDepartments.includes(department)) {
-      return res.status(400).json({ message: 'Name, valid email and department are required' })
+    if (name.length < 2 || !email || !email.includes('@') || !allowedDepartments.includes(department) || position.length < 2) {
+      return res.status(400).json({ message: 'Name, valid email, department and position are required' })
     }
     if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
       return res.status(409).json({ message: 'An account with this email already exists' })
@@ -676,22 +680,17 @@ app.post('/api/admin/staff/invitations', requireAdmin, async (req, res, next) =>
     const codeHash = crypto.createHash('sha256').update(code).digest('hex')
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
 
-    await prisma.staffInvitation.updateMany({
-      where: { email, usedAt: null },
-      data: { expiresAt: new Date() },
-    })
+    await prisma.staffInvitation.updateMany({ where: { email, usedAt: null }, data: { expiresAt: new Date() } })
 
     const invitation = await prisma.staffInvitation.create({
-      data: { name, email, department, codeHash, invitedById: currentUserId(req), expiresAt },
+      data: { name, email, department, position, codeHash, invitedById: currentUserId(req), expiresAt },
     })
 
     res.status(201).json({
-      message: 'Staff code generated successfully',
-      invitation: { id: invitation.id, name, email, department, code, expiresAt, usedAt: null, status: 'Unused' },
+      message: 'Staff invitation created successfully',
+      invitation: { id: invitation.id, name, email, department, position, code, expiresAt, usedAt: null, status: 'Unused' },
     })
-  } catch (error) {
-    next(error)
-  }
+  } catch (error) { next(error) }
 })
 
 app.get('/api/admin/staff/invitations', requireAdmin, async (_req, res, next) => {
@@ -723,17 +722,40 @@ app.get('/api/admin/staff', requireAdmin, async (_req, res, next) => {
       where: { role: 'STAFF' },
       orderBy: { name: 'asc' },
       select: {
-        id: true, name: true, email: true, role: true, department: true, emailVerifiedAt: true, createdAt: true,
-        _count: { select: { recordedActivities: true, recordedAttendances: true, recordedExpenses: true, staffReviews: true } },
+        id: true, name: true, email: true, role: true, department: true, position: true, isActive: true, emailVerifiedAt: true, createdAt: true,
+        _count: { select: { recordedActivities: true, recordedAttendances: true, recordedExpenses: true, financialRecords: true, weeklyReportsCreated: true, staffReviews: true } },
       },
     })
     res.json(staff.map(item => ({
       ...item,
       emailVerified: Boolean(item.emailVerifiedAt),
-      recordCount: item._count.recordedActivities + item._count.recordedAttendances + item._count.recordedExpenses,
+      recordCount: item._count.recordedActivities + item._count.recordedAttendances + item._count.recordedExpenses + item._count.financialRecords + item._count.weeklyReportsCreated,
       reviewCount: item._count.staffReviews,
       _count: undefined,
     })))
+  } catch (error) { next(error) }
+})
+
+app.patch('/api/admin/staff/:staffId/status', requireAdmin, async (req, res, next) => {
+  try {
+    const staffId = Number(req.params.staffId)
+    if (!Number.isInteger(staffId)) return res.status(400).json({ message: 'Invalid staff id' })
+    const isActive = Boolean(req.body?.isActive)
+    const staff = await prisma.user.findFirst({ where: { id: staffId, role: 'STAFF' }, select: { id: true, isActive: true } })
+    if (!staff) return res.status(404).json({ message: 'Staff member not found' })
+    const updated = await prisma.user.update({ where: { id: staffId }, data: { isActive }, select: { id: true, isActive: true } })
+    res.json(updated)
+  } catch (error) { next(error) }
+})
+
+app.delete('/api/admin/staff/:staffId', requireAdmin, async (req, res, next) => {
+  try {
+    const staffId = Number(req.params.staffId)
+    if (!Number.isInteger(staffId)) return res.status(400).json({ message: 'Invalid staff id' })
+    const staff = await prisma.user.findFirst({ where: { id: staffId, role: 'STAFF' }, select: { id: true, name: true } })
+    if (!staff) return res.status(404).json({ message: 'Staff member not found' })
+    await prisma.user.delete({ where: { id: staffId } })
+    res.json({ message: 'Staff account permanently deleted', id: staffId })
   } catch (error) { next(error) }
 })
 
