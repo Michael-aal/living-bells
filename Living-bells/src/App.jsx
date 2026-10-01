@@ -39,6 +39,49 @@ function normalizeExpense(record) {
   }
 }
 
+function dateKey(value) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString().slice(0, 10)
+}
+
+function periodRange(duration, reference = new Date()) {
+  const current = new Date(reference)
+  const year = current.getUTCFullYear()
+  const month = current.getUTCMonth()
+  const day = current.getUTCDate()
+
+  if (duration === 'yearly') {
+    return {
+      start: new Date(Date.UTC(year, 0, 1)),
+      end: new Date(Date.UTC(year + 1, 0, 1)),
+    }
+  }
+
+  if (duration === 'monthly') {
+    return {
+      start: new Date(Date.UTC(year, month, 1)),
+      end: new Date(Date.UTC(year, month + 1, 1)),
+    }
+  }
+
+  const currentDay = new Date(Date.UTC(year, month, day))
+  const dayOfWeek = currentDay.getUTCDay()
+  const start = new Date(currentDay)
+  start.setUTCDate(currentDay.getUTCDate() - dayOfWeek)
+  const end = new Date(start)
+  end.setUTCDate(start.getUTCDate() + 7)
+  return { start, end }
+}
+
+function inPeriod(value, range) {
+  const key = dateKey(value)
+  if (!key) return false
+  const date = new Date(key + 'T00:00:00Z')
+  return date >= range.start && date < range.end
+}
+
 function App() {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('living_bells_user') || 'null') } catch { return null }
@@ -393,7 +436,7 @@ function App() {
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
-        {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={visibleAttendance} expenses={visibleExpenses} activities={visibleActivities} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} todayMoneyIn={todayMoneyIn} todayMoneyOut={todayMoneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
+        {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={attendance} expenses={visibleExpenses} activities={visibleActivities} weeklyReports={weeklyReports} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
@@ -450,10 +493,40 @@ function App() {
   </div>
 }
 
-function Dashboard({ user, reportingContext, attendance, expenses, activities, spend, money, moneyIn, moneyOut, todayMoneyIn, todayMoneyOut, netMoney, open, go, isAdmin }) {
+function Dashboard({ user, reportingContext, attendance, expenses, activities, weeklyReports, money, open, go, isAdmin }) {
+  const [duration, setDuration] = useState('weekly')
   const todayValue = reportingContext?.date || new Date().toISOString().slice(0, 10)
   const today = new Date(todayValue + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
   const monthLabel = reportingContext?.month ? new Date(Date.UTC(2026, Number(reportingContext.month.month) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null
+
+  const range = useMemo(() => periodRange(duration, new Date()), [duration])
+  const periodAttendance = useMemo(
+    () => attendance.filter(item => inPeriod(item.activity?.date, range)),
+    [attendance, range],
+  )
+  const latestAttendance = useMemo(
+    () => [...periodAttendance].sort((a, b) => new Date(b.activity?.date || 0) - new Date(a.activity?.date || 0))[0],
+    [periodAttendance],
+  )
+  const periodReports = useMemo(
+    () => weeklyReports.filter(report => inPeriod(report.reportDate, range)),
+    [weeklyReports, range],
+  )
+  const periodMoneyIn = useMemo(
+    () => periodReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0),
+    [periodReports],
+  )
+  const periodMoneyOut = useMemo(
+    () => periodReports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0),
+    [periodReports],
+  )
+  const periodBalance = periodMoneyIn - periodMoneyOut
+  const durationLabel = duration === 'weekly' ? 'Weekly' : duration === 'monthly' ? 'Monthly' : 'Yearly'
+  const latestService = latestAttendance?.service || 'No service yet'
+  const latestServiceDate = latestAttendance?.activity?.date
+    ? new Date(latestAttendance.activity.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    : null
+
   return <>
     <section className="welcome-card">
       <span className="eyebrow">Living Bells</span>
@@ -467,8 +540,40 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, s
       </div>
       {reportingContext?.week ? <p className="reporting-context"><b>{monthLabel} · Week {reportingContext.week.weekNumber}</b><span>{reportingContext.day} · {reportingContext.date}</span></p> : <div className="reporting-context"><b>Calendar week not configured</b><span>An administrator needs to assign today's date to a saved seven-day calendar week.</span>{isAdmin && <button type="button" className="secondary reporting-setup-button" onClick={() => go('calendar')}>Define this week in Calendar settings</button>}</div>}
     </section>
-    <div className="stats"><Stat icon="◉" name="Attendance" value={attendance[0]?.total || 0} note="Latest service" /><Stat icon="₦" name="Total money in" value={money(moneyIn)} note="All saved weekly reports" /><Stat icon="₦" name="Total money out" value={money(moneyOut)} note="All saved weekly reports" /><Stat icon="⌁" name="Total balance" value={money(netMoney)} note="Total in minus total out" /></div>
-    <section className="card dashboard-today"><div><span className="eyebrow">Today</span><h2>Today's finance snapshot</h2><p className="card-subtitle">Only records saved for today's date.</p></div><div className="today-money"><div><small>Money in</small><b>{money(todayMoneyIn)}</b></div><div><small>Money out</small><b>{money(todayMoneyOut)}</b></div><div><small>Balance</small><b>{money(todayMoneyIn - todayMoneyOut)}</b></div></div></section>
+
+    <section className="dashboard-period card">
+      <div>
+        <span className="eyebrow">Dashboard summary</span>
+        <h2>{durationLabel} overview</h2>
+        <p className="card-subtitle">Choose a duration to update the dashboard totals.</p>
+      </div>
+      <label className="duration-select">
+        <span>Select duration</span>
+        <select value={duration} onChange={e => setDuration(e.target.value)} aria-label="Select duration">
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </label>
+    </section>
+
+    <div className="stats">
+      <Stat icon="◷" name="Latest service" value={latestService} note={latestServiceDate || 'No attendance recorded'} />
+      <Stat icon="◉" name="People" value={latestAttendance?.total || 0} note="People in latest service" />
+      <Stat icon="₦" name="Total money in" value={money(periodMoneyIn)} note={durationLabel} />
+      <Stat icon="₦" name="Total money out" value={money(periodMoneyOut)} note={durationLabel} />
+      <Stat icon="⌁" name="Total balance" value={money(periodBalance)} note="Money in minus money out" />
+    </div>
+
+    <section className="card dashboard-today">
+      <div><span className="eyebrow">{durationLabel}</span><h2>{durationLabel} finance snapshot</h2><p className="card-subtitle">Only records saved within the selected duration.</p></div>
+      <div className="today-money">
+        <div><small>Money in</small><b>{money(periodMoneyIn)}</b></div>
+        <div><small>Money out</small><b>{money(periodMoneyOut)}</b></div>
+        <div><small>Balance</small><b>{money(periodBalance)}</b></div>
+      </div>
+    </section>
+
     <div className="quick">{!isAdmin && <><Action icon="₦" title="Record money in or out" text="Record income received or expenses paid." onClick={() => go('finance')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} /></>}{isAdmin && <Action icon="▤" title="Print reports" text="Print attendance, expense and activity tables." onClick={() => go('reports')} />}</div>
     <div className="dash-grid"><ActivityTrend activities={activities} /><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
   </>
