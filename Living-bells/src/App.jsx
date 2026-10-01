@@ -424,7 +424,8 @@ function App() {
         return false
       }
     }} />}
-    {modal === 'invite-staff' && <InviteStaffForm close={() => setModal(null)} onSaved={async invitation => { setStaffInvitations(current => [invitation, ...current]); setStaffCount(current => ({ ...current, pending: current.pending + 1, total: current.total + 1 })); setModal(null) }} />}
+    {modal === 'invite-staff' && <InviteStaffForm close={() => setModal(null)} onSaved={async invitation => { setStaffInvitations(current => [invitation, ...current]); setStaffCount(current => ({ ...current, pending: current.pending + 1, total: current.total + 1 })); setModal({ type: 'staff-code', invitation }) }} />}
+    {modal?.type === 'staff-code' && <StaffCodeModal invitation={modal.invitation} close={() => setModal(null)} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
     {modal?.type === 'activity-edit' && <ActivityForm initial={modal.record} close={() => setModal(null)} save={updateActivity} />}
     <nav className="mobile-nav">{[['dashboard','⌂'],['attendance','◉'],['finance','₦'],['activities','▣'],['reports','⌁'],...(isAdmin ? [['staff','♙']] : [])].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><i>{icon}</i><span>{title(id)}</span></button>)}</nav>
@@ -496,7 +497,7 @@ function StaffPage({ staff, invitations = [], staffCount = { active: 0, pending:
       <div className="card-head"><div><span className="eyebrow">Administration</span><h2>Staff management</h2><p className="card-subtitle">Invite staff, track who has joined and review their church activity.</p></div><div className="record-actions"><button className="primary" onClick={onInvite}>Invite staff</button><button className="secondary print-button" onClick={onPrint}>🖨 Print</button></div></div>
       <div className="table-wrap"><table><thead><tr><th>Staff</th><th>Email</th><th>Status</th><th>Records</th><th>Reviews</th><th></th></tr></thead><tbody>{staff.map(item => <tr key={item.id} className={selectedStaff?.id === item.id ? 'selected-row' : ''}><td><b>{item.name}</b></td><td>{item.email}</td><td><span className="pill">{item.emailVerified ? 'Active' : 'Pending'}</span></td><td><b>{item.recordCount || 0}</b></td><td>{item.reviewCount || 0}</td><td><button className="secondary small-button" onClick={() => setSelectedStaff(item)}>Review</button></td></tr>)}</tbody></table>{!staff.length && <p>No staff members found.</p>}</div>
     </section>
-    <section className="card full"><div className="card-head"><div><span className="eyebrow">Invitations</span><h2>Pending staff invitations</h2></div></div><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Expires</th></tr></thead><tbody>{invitations.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.email}</td><td>{item.department}</td><td>{formatDate(item.expiresAt)}</td></tr>)}</tbody></table>{!invitations.length && <p>No pending invitations.</p>}</div></section>
+    <section className="card full"><div className="card-head"><div><span className="eyebrow">Staff codes</span><h2>Registration codes</h2><p className="card-subtitle">Track every generated staff code and whether it has been used.</p></div></div><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Status</th><th>Expires</th></tr></thead><tbody>{invitations.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.email}</td><td>{item.department}</td><td><span className="pill">{item.status || 'Unused'}</span></td><td>{formatDate(item.expiresAt)}</td></tr>)}</tbody></table>{!invitations.length && <p>No staff codes generated yet.</p>}</div></section>
     {selectedStaff && <section className="card full">
       <div className="card-head"><div><span className="eyebrow">Sunday review</span><h2>{selectedStaff.name}</h2><p className="card-subtitle">{selectedStaff.email} · {selectedStaff.recordCount || 0} operational records</p></div><button className="primary" onClick={onReview}>+ Sunday review</button></div>
       <div className="staff-record-summary">
@@ -514,24 +515,44 @@ function StaffPage({ staff, invitations = [], staffCount = { active: 0, pending:
 }
 
 function InviteStaffForm({ close, onSaved }) {
-  const [form, setForm] = useState({ name: '', email: '', department: 'Media' })
+  const [form, setForm] = useState({ name: '', email: '', department: 'Secretary' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
+
   async function submit() {
     if (saving) return
-    setSaving(true); setError('')
-    try { const result = await api.createStaffInvitation(form); await onSaved(result.invitation) }
-    catch (e) { setError(e.message || 'Could not send invitation') }
-    finally { setSaving(false) }
+    setSaving(true)
+    setError('')
+    try {
+      const result = await api.createStaffInvitation(form)
+      await onSaved(result.invitation)
+    } catch (e) {
+      setError(e.message || 'Could not generate staff code')
+    } finally {
+      setSaving(false)
+    }
   }
-  return <Modal title="Invite staff member" close={close}>
-    <p className="review-intro">The staff member will receive a one-time invitation code by email. The code expires in 48 hours.</p>
+
+  return <Modal title="Generate staff code" close={close}>
+    <p className="review-intro">Enter the staff member's basic details. Living Bells will generate a one-time code that you can give to the staff member manually.</p>
     {error && <div className="auth-error">{error}</div>}
     <label>Full name<input value={form.name} onChange={e => set('name', e.target.value)} required /></label>
     <label>Email<input type="email" value={form.email} onChange={e => set('email', e.target.value)} required /></label>
-    <label>Department<select value={form.department} onChange={e => set('department', e.target.value)}>{['Media','Technical','Security','Secretary','Others'].map(x => <option key={x}>{x}</option>)}</select></label>
-    <button className="primary wide" disabled={saving || form.name.trim().length < 2 || !form.email.includes('@')} onClick={submit}>{saving ? 'Sending invitation…' : 'Send invitation'}</button>
+    <label>Department<select value={form.department} onChange={e => set('department', e.target.value)}><option>Secretary</option><option>Treasurer</option></select></label>
+    <button className="primary wide" disabled={saving || form.name.trim().length < 2 || !form.email.includes('@')} onClick={submit}>{saving ? 'Generating…' : 'Generate code'}</button>
+  </Modal>
+}
+
+function StaffCodeModal({ invitation, close }) {
+  return <Modal title="Staff code generated" close={close}>
+    <p className="review-intro">Give this code to <b>{invitation.name}</b>. The staff member will use it to load the name, email and department, then set a password.</p>
+    <div className="staff-code-box">
+      <span className="eyebrow">One-time code</span>
+      <strong>{invitation.code}</strong>
+      <small>{invitation.department} · Expires {formatDate(invitation.expiresAt)}</small>
+    </div>
+    <button className="primary wide" onClick={close}>Done</button>
   </Modal>
 }
 
