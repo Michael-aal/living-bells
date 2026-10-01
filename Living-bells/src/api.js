@@ -42,6 +42,7 @@ export async function apiRequest(path, options = {}) {
   } catch (error) {
     const networkFailure = error instanceof TypeError || /Cannot reach|Failed to fetch|NetworkError|Load failed/i.test(error.message || '')
     if (!networkFailure) throw error
+    error.networkFailure = true
 
     if (method === 'GET') {
       const cached = await getCachedResponse(cacheKey(path)).catch(() => null)
@@ -118,6 +119,10 @@ export const api = {
       await saveOfflineIdentity(result.user, payload.password).catch(() => {})
       return result
     } catch (error) {
+      // Only fall back to the local verifier when the network/server cannot be reached.
+      // A real 401/403 must remain a normal authentication failure.
+      const networkUnavailable = error?.networkFailure === true || !navigator.onLine
+      if (!networkUnavailable) throw error
       const offline = await verifyOfflineIdentity(payload.email, payload.password).catch(() => null)
       if (!offline) throw error
       return { offline: true, token: null, user: offline }
