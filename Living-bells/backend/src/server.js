@@ -99,6 +99,7 @@ app.post('/api/auth/register', async (req, res, next) => {
         passwordHash,
         role: normalizedRole,
         department: normalizedRole === 'STAFF' ? invitation.department : null,
+        position: normalizedRole === 'STAFF' ? invitation.position : null,
         emailVerifiedAt: new Date(),
       },
     })
