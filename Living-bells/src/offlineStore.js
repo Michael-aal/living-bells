@@ -1,5 +1,5 @@
 const DB_NAME = 'living-bells-offline'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -8,6 +8,7 @@ function openDb() {
       const db = request.result
       if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id' })
       if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' })
+      if (!db.objectStoreNames.contains('credentials')) db.createObjectStore('credentials', { keyPath: 'email' })
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
@@ -57,4 +58,47 @@ export function getCachedResponse(key) {
 
 export async function queueCount() {
   try { return (await getQueue()).length } catch { return 0 }
+}
+
+
+async function deriveVerifier(password, saltBytes) {
+  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: 120000, hash: 'SHA-256' }, material, 256)
+  return Array.from(new Uint8Array(bits), byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function bytesToBase64(bytes) {
+  let binary = ''
+  bytes.forEach(byte => { binary += String.fromCharCode(byte) })
+  return btoa(binary)
+}
+
+function base64ToBytes(value) {
+  return Uint8Array.from(atob(value), char => char.charCodeAt(0))
+}
+
+export async function saveOfflineIdentity(user, password) {
+  if (!user?.email || !password) return
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const verifier = await deriveVerifier(password, salt)
+  await tx('credentials', 'readwrite', store => store.put({
+    email: String(user.email).trim().toLowerCase(),
+    user,
+    salt: bytesToBase64(salt),
+    verifier,
+    updatedAt: Date.now(),
+  }))
+}
+
+export async function verifyOfflineIdentity(email, password) {
+  const normalized = String(email || '').trim().toLowerCase()
+  if (!normalized || !password) return null
+  const record = await tx('credentials', 'readonly', store => new Promise((resolve, reject) => {
+    const request = store.get(normalized)
+    request.onsuccess = () => resolve(request.result || null)
+    request.onerror = () => reject(request.error)
+  }))
+  if (!record) return null
+  const verifier = await deriveVerifier(password, base64ToBytes(record.salt))
+  return verifier === record.verifier ? record.user : null
 }
