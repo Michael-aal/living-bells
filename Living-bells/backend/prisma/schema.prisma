@@ -37,6 +37,8 @@ model User {
   updatedAt            DateTime  @updatedAt
 
   recordedActivities   Activity[]   @relation("ActivityRecorder")
+  reportingMonthsCreated ReportingMonth[] @relation("ReportingMonthCreator")
+  reportingWeeksCreated ReportingWeek[] @relation("ReportingWeekCreator")
   recordedAttendances  Attendance[] @relation("AttendanceRecorder")
   recordedExpenses     Expense[]    @relation("ExpenseRecorder")
   adminReviews         SundayReview[] @relation("ReviewAdmin")
@@ -56,10 +58,13 @@ model Activity {
   updatedAt    DateTime     @updatedAt
   attendance   Attendance?
   expenses     Expense[]
+  reportingWeekId Int?
+  reportingWeek   ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   recordedBy   User?        @relation("ActivityRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@index([date])
   @@index([recordedById])
+  @@index([reportingWeekId])
 }
 
 model Attendance {
@@ -99,6 +104,7 @@ model Expense {
   @@index([category])
   @@index([activityId])
   @@index([recordedById])
+  @@index([reportingWeekId])
 }
 
 model SundayReview {
@@ -162,6 +168,7 @@ model FinancialRecord {
   amount       Decimal          @db.Decimal(12, 2)
   description  String?
   recordDate   DateTime
+  reportingWeekId Int?
   recordedById Int?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -172,6 +179,7 @@ model FinancialRecord {
   @@index([category])
   @@index([recordDate])
   @@index([recordedById])
+  @@index([reportingWeekId])
   @@index([recordDate, type])
 }
 
@@ -185,6 +193,7 @@ enum FinancialType {
 model WeeklyReport {
   id               Int      @id @default(autoincrement())
   reportDate       DateTime
+  reportingWeekId Int?
   numerical        Json
   spiritual        Json
   income           Json
@@ -196,9 +205,51 @@ model WeeklyReport {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  reportingWeek ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   createdBy User? @relation("WeeklyReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([reportDate])
   @@index([createdById])
+  @@index([reportingWeekId])
   @@index([reportDate, createdAt])
+}
+
+
+model ReportingMonth {
+  id          Int       @id @default(autoincrement())
+  year        Int
+  month       Int
+  status      String    @default("OPEN")
+  createdById Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy User? @relation("ReportingMonthCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  weeks     ReportingWeek[]
+
+  @@unique([year, month])
+  @@index([year, month])
+}
+
+model ReportingWeek {
+  id          Int       @id @default(autoincrement())
+  monthId     Int
+  weekNumber  Int
+  startDate   DateTime
+  endDate     DateTime
+  status      String    @default("OPEN")
+  createdById Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  month ReportingMonth @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("ReportingWeekCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  activities Activity[]
+  expenses Expense[]
+  financialRecords FinancialRecord[]
+  weeklyReports WeeklyReport[]
+
+  @@unique([monthId, weekNumber])
+  @@index([startDate, endDate])
+  @@index([monthId])
 }
