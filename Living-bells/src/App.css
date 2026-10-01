@@ -480,3 +480,38 @@ input:focus,select:focus,textarea:focus{
 }
 .reporting-calendar .week-day b{color:#3d3745}
 .reporting-calendar .week-day span{color:var(--lb-muted)}
+
+
+/* Calendar navigation: keep mobile navigation compact and give secondary pages a clean More panel. */
+.mobile-more-panel{
+  position:fixed;
+  left:12px;
+  right:12px;
+  bottom:88px;
+  z-index:60;
+  padding:14px;
+  border:1px solid var(--lb-border,#ebe8f0);
+  border-radius:18px;
+  background:rgba(255,255,255,.98);
+  box-shadow:0 20px 55px rgba(35,20,60,.16);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+.mobile-more-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 2px 12px;border-bottom:1px solid var(--lb-border,#ebe8f0)}
+.mobile-more-head div{display:grid;gap:2px}.mobile-more-head b{font-size:14px}.mobile-more-head small{font-size:10px;color:var(--lb-muted,#777180)}
+.mobile-more-head>button{width:32px;height:32px;border:1px solid var(--lb-border,#ebe8f0);border-radius:9px;background:#fff;font-size:18px;line-height:1;cursor:pointer;color:#5c5662}
+.mobile-more-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding-top:12px}
+.mobile-more-grid button{display:grid;gap:4px;text-align:left;padding:12px;border:1px solid var(--lb-border,#ebe8f0);border-radius:12px;background:#fff;cursor:pointer;color:#332d39}
+.mobile-more-grid button span{font-size:12px;font-weight:800}.mobile-more-grid button small{font-size:9px;color:#89818f}
+.mobile-more-grid button:hover,.mobile-more-grid button.active{background:var(--lb-purple-soft,#f1ebff);border-color:#dfd0f6;color:var(--lb-purple,#6d28d9)}
+@media(min-width:768px){.mobile-more-panel{display:none!important}}
+@media(max-width:767px){
+  .mobile-nav{display:flex!important;justify-content:space-around!important;gap:4px!important;padding:7px 6px!important;overflow:hidden!important}
+  .mobile-nav button{flex:1 1 0!important;min-width:0!important;width:auto!important;padding:7px 3px!important}
+  .mobile-nav button i{font-size:15px!important;line-height:1!important}
+  .mobile-nav button span{font-size:8px!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
+}
+@media(max-width:380px){
+  .mobile-more-grid{grid-template-columns:1fr}
+  .mobile-more-panel{left:8px;right:8px}
+}
