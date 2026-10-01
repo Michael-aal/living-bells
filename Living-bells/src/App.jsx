@@ -6,7 +6,7 @@ import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import Auth from './Auth'
 import { api, syncOfflineQueue } from './api'
-import { queueCount } from './offlineStore'
+import { queueCountForOwner } from './offlineStore'
 
 function formatDate(value) {
   if (!value) return '—'
@@ -114,10 +114,12 @@ function App() {
     let mounted = true
     const refresh = async () => {
       const syncResult = navigator.onLine ? await syncOfflineQueue().catch(() => null) : null
-      const pending = await queueCount().catch(() => 0)
+      const ownerKey = (() => { try { const value = JSON.parse(localStorage.getItem('living_bells_user') || 'null'); return String(value?.id || value?.email || '').trim().toLowerCase() } catch { return '' } })()
+      const pending = await queueCountForOwner(ownerKey)
       if (!mounted) return
       if (syncResult?.synced > 0) setDataRefreshKey(value => value + 1)
       if (!navigator.onLine) setSync(pending ? `Offline · ${pending} pending` : 'Offline · saved on device')
+      else if (syncResult?.blocked && pending) setSync(`Sync paused · ${pending} pending`)
       else if (pending) setSync(`Sync pending: ${pending}`)
       else setSync('Backend connected')
     }
