@@ -223,6 +223,20 @@ app.post('/api/options', requireStaff, async (req, res, next) => {
     next(error)
   }
 })
+app.delete('/api/options/:id', requireStaff, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid option id' })
+    const option = await prisma.configOption.findUnique({ where: { id } })
+    if (!option) return res.status(404).json({ message: 'Option not found' })
+    await prisma.configOption.delete({ where: { id } })
+    res.json({ message: 'Option deleted', id })
+  } catch (error) {
+    if (error?.code === 'P2025') return res.status(404).json({ message: 'Option not found' })
+    next(error)
+  }
+})
+
 
 function currentChurchDate(){
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Lagos',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
@@ -415,21 +429,22 @@ function validateWeeklyPayload(body){
   const income=Array.isArray(body?.income)?body.income:[]
   const expenditure=Array.isArray(body?.expenditure)?body.expenditure:[]
   const spiritual=body?.spiritual&&typeof body.spiritual==='object'?body.spiritual:{}
-  if(numerical.length!==WEEKLY_SERVICES.length)return{error:'The numerical section must contain exactly 10 rows'}
-  if(income.length!==WEEKLY_INCOME_COUNT)return{error:'The income section must contain exactly 24 rows'}
-  if(expenditure.length!==WEEKLY_EXPENDITURE_COUNT)return{error:'The expenditure section must contain exactly 24 rows'}
+  if(numerical.length<WEEKLY_SERVICES.length)return{error:'The numerical section must contain at least 10 rows'}
+  if(income.length<WEEKLY_INCOME_COUNT)return{error:'The income section must contain at least 24 rows'}
+  if(expenditure.length<WEEKLY_EXPENDITURE_COUNT)return{error:'The expenditure section must contain at least 24 rows'}
   const integer=v=>{const n=Number(v);return Number.isInteger(n)&&n>=0?n:null}
   const amount=v=>{const n=Number(v);return Number.isFinite(n)&&n>=0&&Math.round(n*100)===n*100?n:null}
   const n=numerical.map((r,i)=>{
     const adult=integer(r?.adult),children=integer(r?.children),visitor=integer(r?.visitor)
-    if(adult===null||children===null||visitor===null)return null
-    return{sn:i+1,service:WEEKLY_SERVICES[i],adult,children,visitor,total:adult+children+visitor}
+    const service=String(r?.service||WEEKLY_SERVICES[i]||'').trim()
+    if(adult===null||children===null||visitor===null||!service)return null
+    return{sn:i+1,service,adult,children,visitor,total:adult+children+visitor}
   })
   if(n.some(row=>!row))return{error:'Attendance values must be whole numbers greater than or equal to 0'}
   const sp={}
   for(const label of WEEKLY_SPIRITUAL){const value=integer(spiritual[label]);if(value===null)return{error:'Spiritual experience values must be whole numbers greater than or equal to 0'};sp[label]=value}
-  const inc=income.map((r,i)=>{const value=amount(r?.amount);if(value===null)return null;return{sn:i+1,name:String(r?.name||'').trim(),amount:value}})
-  const exp=expenditure.map((r,i)=>{const value=amount(r?.amount);if(value===null)return null;return{sn:i+1,name:String(r?.name||'').trim(),amount:value}})
+  const inc=income.map((r,i)=>{const value=amount(r?.amount),name=String(r?.name||'').trim();if(value===null||!name)return null;return{sn:i+1,name,amount:value}})
+  const exp=expenditure.map((r,i)=>{const value=amount(r?.amount),name=String(r?.name||'').trim();if(value===null||!name)return null;return{sn:i+1,name,amount:value}})
   if(inc.some(row=>!row)||exp.some(row=>!row))return{error:'Financial amounts must be valid non-negative numbers with at most 2 decimal places'}
   const totalIncome=inc.reduce((sum,row)=>sum+row.amount,0)
   const totalExpenditure=exp.reduce((sum,row)=>sum+row.amount,0)
@@ -557,6 +572,18 @@ app.put('/api/activities/:id', requireStaff, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+app.delete('/api/activities/:id', requireStaff, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid activity id' })
+    const activity = await prisma.activity.findUnique({ where: { id }, select: { id: true, recordedById: true } })
+    if (!activity) return res.status(404).json({ message: 'Activity not found' })
+    if (activity.recordedById !== currentUserId(req) && req.user?.role !== 'ADMIN') return res.status(403).json({ message: 'You can only delete your own activities' })
+    await prisma.activity.delete({ where: { id } })
+    res.json({ message: 'Activity deleted', id })
+  } catch (error) { next(error) }
+})
+
 app.get('/api/attendance', async (req, res, next) => {
   try {
     res.json(await prisma.attendance.findMany({
@@ -614,6 +641,18 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
     })
 
     res.status(201).json(attendance)
+  } catch (error) { next(error) }
+})
+
+app.delete('/api/attendance/:id', requireStaff, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid attendance id' })
+    const attendance = await prisma.attendance.findUnique({ where: { id }, select: { id: true, recordedById: true } })
+    if (!attendance) return res.status(404).json({ message: 'Attendance record not found' })
+    if (attendance.recordedById !== currentUserId(req) && req.user?.role !== 'ADMIN') return res.status(403).json({ message: 'You can only delete your own attendance records' })
+    await prisma.attendance.delete({ where: { id } })
+    res.json({ message: 'Attendance record deleted', id })
   } catch (error) { next(error) }
 })
 
@@ -688,6 +727,18 @@ app.post('/api/finances', requireStaff, async (req, res, next) => {
       include: { recordedBy: { select: { id: true, name: true, email: true } } },
     })
     res.status(201).json(record)
+  } catch (error) { next(error) }
+})
+
+app.delete('/api/finances/:id', requireStaff, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid finance record id' })
+    const record = await prisma.financialRecord.findUnique({ where: { id }, select: { id: true, recordedById: true } })
+    if (!record) return res.status(404).json({ message: 'Finance record not found' })
+    if (record.recordedById !== currentUserId(req) && req.user?.role !== 'ADMIN') return res.status(403).json({ message: 'You can only delete your own finance records' })
+    await prisma.financialRecord.delete({ where: { id } })
+    res.json({ message: 'Finance record deleted', id })
   } catch (error) { next(error) }
 })
 
