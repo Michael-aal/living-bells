@@ -1,4 +1,4 @@
-import { enqueueRequest, getQueue, removeQueuedRequest, cacheResponse, getCachedResponse, queueCount, queueCountForOwner, saveOfflineIdentity, verifyOfflineIdentity } from './offlineStore'
+import { enqueueRequest, getQueue, removeQueuedRequest, updateQueuedRequest, cacheResponse, getCachedResponse, queueCount, queueCountForOwner, saveOfflineIdentity, verifyOfflineIdentity } from './offlineStore'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -113,7 +113,20 @@ export async function syncOfflineQueue() {
         break
       }
 
-      if (response.ok || response.status === 409) {
+      if (response.ok) {
+        await removeQueuedRequest(item.id)
+        synced += 1
+      } else if (response.status === 409) {
+        const conflict = await response.json().catch(() => ({}))
+        if (conflict?.conflict) {
+          await updateQueuedRequest(item.id, {
+            status: 'conflict',
+            conflictMessage: conflict.message || 'The server already has different data for this report.',
+            conflictAt: Date.now(),
+          })
+          continue
+        }
+        // A duplicate that the server explicitly accepted as already processed is safe to clear.
         await removeQueuedRequest(item.id)
         synced += 1
       } else if (response.status >= 400 && response.status < 500) {
