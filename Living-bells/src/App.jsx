@@ -389,6 +389,36 @@ function App() {
     }
   }
 
+  async function toggleStaffStatus(member) {
+    if (!member || user.demo) {
+      if (user.demo) setStaff(current => current.map(item => item.id === member.id ? { ...item, isActive: !item.isActive } : item))
+      return
+    }
+    const next = !member.isActive
+    if (!window.confirm(`${next ? 'Activate' : 'Deactivate'} ${member.name}'s account?`)) return
+    try {
+      const updated = await api.updateStaffStatus(member.id, next)
+      setStaff(current => current.map(item => item.id === member.id ? { ...item, ...updated } : item))
+      setSelectedStaff(current => current?.id === member.id ? { ...current, ...updated } : current)
+      setSync('Backend connected')
+    } catch (error) { setSync(error.message || 'Could not update staff status') }
+  }
+
+  async function deleteStaff(member) {
+    if (!member) return
+    if (!window.confirm(`Permanently delete ${member.name}'s account? Historical attendance, finance and activity records will be preserved, but the account itself cannot be recovered.`)) return
+    if (user.demo) {
+      setStaff(current => current.filter(item => item.id !== member.id)); setSelectedStaff(null); return
+    }
+    try {
+      await api.deleteStaff(member.id)
+      setStaff(current => current.filter(item => item.id !== member.id))
+      setSelectedStaff(null)
+      setStaffCount(current => ({ ...current, active: Math.max(0, current.active - (member.isActive ? 1 : 0)), total: Math.max(0, current.total - 1) }))
+      setSync('Backend connected')
+    } catch (error) { setSync(error.message || 'Could not delete staff account') }
+  }
+
   const isAdmin = user.role === 'ADMIN'
   const dashboardLabel = isAdmin ? 'Admin dashboard' : 'Staff dashboard'
 
@@ -440,7 +470,7 @@ function App() {
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
-        {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
+        {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
         {!loading && page === 'calendar' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'settings' && <SettingsPage user={user} onEditProfile={() => setModal('profile')} onLogout={logout} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
@@ -638,73 +668,110 @@ function SettingsPage({ user, onEditProfile, onLogout }) {
   </div>
 }
 
-function StaffPage({ staff, invitations = [], staffCount = { active: 0, pending: 0, total: 0 }, selectedStaff, setSelectedStaff, reviews, attendance, expenses, activities, onReview, onPrint }) {
+function StaffPage({ staff, invitations = [], staffCount = { active: 0, pending: 0, total: 0 }, selectedStaff, setSelectedStaff, reviews, attendance, expenses, activities, finances, weeklyReports, onReview, onInvite, onPrint, onToggleStatus, onDelete }) {
   const ratingLabel = value => ({ EXCELLENT: 'Excellent', GOOD: 'Good', FAIR: 'Fair', POOR: 'Poor', BAD: 'Bad' }[value] || value || '—')
+  const [query, setQuery] = useState('')
+  const [department, setDepartment] = useState('All')
+  const departments = ['All', 'Media', 'Technical', 'Security', 'Secretary', 'Others']
+  const filteredStaff = staff.filter(item => {
+    const q = query.trim().toLowerCase()
+    const matchesQuery = !q || `${item.name} ${item.email} ${item.department || ''} ${item.position || ''}`.toLowerCase().includes(q)
+    return matchesQuery && (department === 'All' || item.department === department)
+  })
+  const recordsFor = item => [
+    ...attendance.filter(r => r.recordedBy?.id === item.id).map(r => ({ type: 'Attendance', name: r.service, date: r.date })),
+    ...expenses.filter(r => r.recordedBy?.id === item.id).map(r => ({ type: 'Expense', name: r.title || r.description, date: r.date })),
+    ...activities.filter(r => r.recordedBy?.id === item.id).map(r => ({ type: 'Activity', name: r.name, date: formatDate(r.date) })),
+    ...finances.filter(r => r.recordedBy?.id === item.id).map(r => ({ type: r.type === 'INCOME' ? 'Money in' : 'Money out', name: r.description || r.category, date: r.date || formatDate(r.recordDate) })),
+    ...weeklyReports.filter(r => r.createdBy?.id === item.id).map(r => ({ type: 'Weekly report', name: 'Weekly church report', date: formatDate(r.reportDate) })),
+  ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10)
+
   return <div className="staff-layout">
-    <div className="staff-counts"><div><small>Active staff</small><b>{staffCount.active}</b></div><div><small>Pending invitations</small><b>{staffCount.pending}</b></div><div><small>Staff pipeline</small><b>{staffCount.total}</b></div></div>
+    <div className="staff-counts">
+      <div><small>Active staff</small><b>{staffCount.active}</b></div>
+      <div><small>Pending invitations</small><b>{staffCount.pending}</b></div>
+      <div><small>Total staff</small><b>{staffCount.total}</b></div>
+    </div>
+
     <section className="card full">
-      <div className="card-head"><div><span className="eyebrow">Administration</span><h2>Staff management</h2><p className="card-subtitle">Invite staff, track who has joined and review their church activity.</p></div><div className="record-actions"><button className="primary" onClick={onInvite}>Invite staff</button><button className="secondary print-button" onClick={onPrint}>🖨 Print</button></div></div>
-      <div className="table-wrap"><table><thead><tr><th>Staff</th><th>Email</th><th>Status</th><th>Records</th><th>Reviews</th><th></th></tr></thead><tbody>{staff.map(item => <tr key={item.id} className={selectedStaff?.id === item.id ? 'selected-row' : ''}><td><b>{item.name}</b></td><td>{item.email}</td><td><span className="pill">{item.emailVerified ? 'Active' : 'Pending'}</span></td><td><b>{item.recordCount || 0}</b></td><td>{item.reviewCount || 0}</td><td><button className="secondary small-button" onClick={() => setSelectedStaff(item)}>Review</button></td></tr>)}</tbody></table>{!staff.length && <p>No staff members found.</p>}</div>
-    </section>
-    <section className="card full"><div className="card-head"><div><span className="eyebrow">Staff codes</span><h2>Registration codes</h2><p className="card-subtitle">Track every generated staff code and whether it has been used.</p></div></div><div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Status</th><th>Expires</th></tr></thead><tbody>{invitations.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.email}</td><td>{item.department}</td><td><span className="pill">{item.status || 'Unused'}</span></td><td>{formatDate(item.expiresAt)}</td></tr>)}</tbody></table>{!invitations.length && <p>No staff codes generated yet.</p>}</div></section>
-    {selectedStaff && <section className="card full">
-      <div className="card-head"><div><span className="eyebrow">Sunday review</span><h2>{selectedStaff.name}</h2><p className="card-subtitle">{selectedStaff.email} · {selectedStaff.recordCount || 0} operational records</p></div><button className="primary" onClick={onReview}>+ Sunday review</button></div>
-      <div className="staff-record-summary">
-        <span className="eyebrow">Record activity</span>
-        <h3>Recent records</h3>
-        <div className="table-wrap"><table><thead><tr><th>Type</th><th>Record</th><th>Date</th><th>Recorded by</th></tr></thead><tbody>{[
-          ...attendance.filter(r => r.recordedBy?.id === selectedStaff.id || r.recordedBy?.name === selectedStaff.name).slice(0, 4).map(r => ({ type: 'Attendance', name: r.service, date: r.date })),
-          ...expenses.filter(r => r.recordedBy?.id === selectedStaff.id || r.recordedBy?.name === selectedStaff.name).slice(0, 4).map(r => ({ type: 'Expense', name: r.title, date: r.date })),
-          ...activities.filter(r => r.recordedBy?.id === selectedStaff.id || r.recordedBy?.name === selectedStaff.name).slice(0, 4).map(r => ({ type: 'Activity', name: r.name, date: formatDate(r.date) })),
-        ].slice(0, 8).map((r, index) => <tr key={index}><td>{r.type}</td><td><b>{r.name}</b></td><td>{r.date}</td><td>{selectedStaff.name}</td></tr>)}</tbody></table></div>
+      <div className="card-head">
+        <div><span className="eyebrow">Administration</span><h2>Staff management</h2><p className="card-subtitle">Create invitations, manage access and monitor staff reporting activity.</p></div>
+        <div className="record-actions"><button className="primary" onClick={onInvite}>Invite staff</button><button className="secondary print-button" onClick={onPrint}>Print</button></div>
       </div>
-      <div className="review-history">{reviews.map(review => <div className="review-card" key={review.id}><div><b>{formatDate(review.reviewDate)}</b><span className={`review-rating rating-${String(review.rating || '').toLowerCase()}`}>{ratingLabel(review.rating)}</span></div><p>{review.comment || 'No comment added.'}</p><small>Reviewed by {review.admin?.name || 'Admin'}</small></div>)}{!reviews.length && <p>No Sunday review has been recorded for this staff member yet.</p>}</div>
+      <div className="staff-filters">
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name, email, department..." aria-label="Search staff" />
+        <select value={department} onChange={e => setDepartment(e.target.value)} aria-label="Filter by department">{departments.map(item => <option key={item}>{item}</option>)}</select>
+      </div>
+      <div className="table-wrap"><table><thead><tr><th>Staff</th><th>Department</th><th>Position</th><th>Status</th><th>Records</th><th>Reviews</th><th></th></tr></thead><tbody>
+        {filteredStaff.map(item => <tr key={item.id} className={selectedStaff?.id === item.id ? 'selected-row' : ''}>
+          <td><b>{item.name}</b><small className="staff-email">{item.email}</small></td><td>{item.department || '—'}</td><td>{item.position || '—'}</td>
+          <td><span className={`pill ${item.isActive ? '' : 'staff-inactive'}`}>{item.isActive ? 'Active' : 'Inactive'}</span></td><td><b>{item.recordCount || 0}</b></td><td>{item.reviewCount || 0}</td>
+          <td><button className="secondary small-button" onClick={() => setSelectedStaff(item)}>View</button></td>
+        </tr>)}
+      </tbody></table>{!filteredStaff.length && <p>No staff members match the current filters.</p>}</div>
+    </section>
+
+    <section className="card full">
+      <div className="card-head"><div><span className="eyebrow">Onboarding</span><h2>Staff invitations</h2><p className="card-subtitle">Admin creates the invitation; the staff member uses the code to set their own password.</p></div></div>
+      <div className="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Position</th><th>Status</th><th>Expires</th></tr></thead><tbody>{invitations.map(item => <tr key={item.id}><td><b>{item.name}</b></td><td>{item.email}</td><td>{item.department}</td><td>{item.position || '—'}</td><td><span className="pill">{item.status || 'Unused'}</span></td><td>{formatDate(item.expiresAt)}</td></tr>)}</tbody></table>{!invitations.length && <p>No staff invitations created yet.</p>}</div>
+    </section>
+
+    {selectedStaff && <section className="card full">
+      <div className="card-head">
+        <div><span className="eyebrow">Staff profile</span><h2>{selectedStaff.name}</h2><p className="card-subtitle">{selectedStaff.email} · {selectedStaff.department || 'No department'} · {selectedStaff.position || 'No position'}</p></div>
+        <div className="record-actions">
+          <button className="secondary" onClick={() => onToggleStatus(selectedStaff)}>{selectedStaff.isActive ? 'Deactivate' : 'Activate'}</button>
+          <button className="secondary danger-button" onClick={() => onDelete(selectedStaff)}>Delete permanently</button>
+          <button className="primary" onClick={onReview}>Sunday review</button>
+        </div>
+      </div>
+      <div className="staff-profile-grid">
+        <div><small>Department</small><b>{selectedStaff.department || '—'}</b></div>
+        <div><small>Position</small><b>{selectedStaff.position || '—'}</b></div>
+        <div><small>Joined</small><b>{formatDate(selectedStaff.createdAt)}</b></div>
+        <div><small>Account</small><b>{selectedStaff.isActive ? 'Active' : 'Inactive'}</b></div>
+      </div>
+      <div className="staff-record-summary">
+        <span className="eyebrow">Reporting activity</span><h3>Recent records</h3>
+        <div className="table-wrap"><table><thead><tr><th>Type</th><th>Record</th><th>Date</th></tr></thead><tbody>{recordsFor(selectedStaff).map((r, index) => <tr key={index}><td>{r.type}</td><td><b>{r.name}</b></td><td>{r.date}</td></tr>)}</tbody></table>{!recordsFor(selectedStaff).length && <p>No reporting activity found for this staff member.</p>}</div>
+      </div>
+      <div className="review-history"><h3>Sunday reviews</h3>{reviews.map(review => <div className="review-card" key={review.id}><div><b>{formatDate(review.reviewDate)}</b><span className={`review-rating rating-${String(review.rating || '').toLowerCase()}`}>{ratingLabel(review.rating)}</span></div><p>{review.comment || 'No comment added.'}</p><small>Reviewed by {review.admin?.name || 'Admin'}</small></div>)}{!reviews.length && <p>No Sunday review has been recorded for this staff member yet.</p>}</div>
     </section>}
   </div>
 }
 
 function InviteStaffForm({ close, onSaved }) {
-  const [form, setForm] = useState({ name: '', email: '', department: 'Secretary' })
+  const [form, setForm] = useState({ name: '', email: '', department: 'Secretary', position: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
 
   async function submit() {
     if (saving) return
-    setSaving(true)
-    setError('')
-    try {
-      const result = await api.createStaffInvitation(form)
-      await onSaved(result.invitation)
-    } catch (e) {
-      setError(e.message || 'Could not generate staff code')
-    } finally {
-      setSaving(false)
-    }
+    setSaving(true); setError('')
+    try { const result = await api.createStaffInvitation(form); await onSaved(result.invitation) }
+    catch (e) { setError(e.message || 'Could not create staff invitation') }
+    finally { setSaving(false) }
   }
 
-  return <Modal title="Generate staff code" close={close}>
-    <p className="review-intro">Enter the staff member's basic details. Living Bells will generate a one-time code that you can give to the staff member manually.</p>
+  return <Modal title="Invite staff" close={close}>
+    <p className="review-intro">Create a one-time invitation. The staff member will use the code to set their own password.</p>
     {error && <div className="auth-error">{error}</div>}
     <label>Full name<input value={form.name} onChange={e => set('name', e.target.value)} required /></label>
     <label>Email<input type="email" value={form.email} onChange={e => set('email', e.target.value)} required /></label>
-    <label>Department<select value={form.department} onChange={e => set('department', e.target.value)}><option>Secretary</option><option>Treasurer</option></select></label>
-    <button className="primary wide" disabled={saving || form.name.trim().length < 2 || !form.email.includes('@')} onClick={submit}>{saving ? 'Generating…' : 'Generate code'}</button>
+    <label>Department<select value={form.department} onChange={e => set('department', e.target.value)}>{['Media', 'Technical', 'Security', 'Secretary', 'Others'].map(item => <option key={item}>{item}</option>)}</select></label>
+    <label>Position<input value={form.position} onChange={e => set('position', e.target.value)} placeholder="e.g. Media Coordinator" required /></label>
+    <button className="primary wide" disabled={saving || form.name.trim().length < 2 || !form.email.includes('@') || form.position.trim().length < 2} onClick={submit}>{saving ? 'Creating…' : 'Create invitation'}</button>
   </Modal>
 }
 
 function StaffCodeModal({ invitation, close }) {
-  return <Modal title="Staff code generated" close={close}>
-    <p className="review-intro">Give this code to <b>{invitation.name}</b>. The staff member will use it to load the name, email and department, then set a password.</p>
-    <div className="staff-code-box">
-      <span className="eyebrow">One-time code</span>
-      <strong>{invitation.code}</strong>
-      <small>{invitation.department} · Expires {formatDate(invitation.expiresAt)}</small>
-    </div>
+  return <Modal title="Invitation created" close={close}>
+    <p className="review-intro">Give this code to <b>{invitation.name}</b>. They will use it to load their assigned details and create their password.</p>
+    <div className="staff-code-box"><span className="eyebrow">One-time code</span><strong>{invitation.code}</strong><small>{invitation.department} · {invitation.position} · Expires {formatDate(invitation.expiresAt)}</small></div>
     <button className="primary wide" onClick={close}>Done</button>
   </Modal>
 }
-
 function Modal({ title, children, close }) { return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">Living Bells</span><h2>{title}</h2></div><button type="button" className="close" onClick={close}>×</button></div>{children}</div></div> }
 function ProfileForm({ user, close, save }) {
   const [name, setName] = useState(user.name || '')
