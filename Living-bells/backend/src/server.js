@@ -156,7 +156,95 @@ app.patch('/api/auth/me', authenticate, async (req, res, next) => {
 
 app.use('/api', authenticate)
 
-function requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY','PASTOR','STAFF'].includes(req.user?.role))return res.status(403).json({message:'Only Admin, Pastor or Secretary accounts can create or edit weekly reports'});next()}
+function currentChurchDate(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Lagos',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
+  const map=Object.fromEntries(parts.filter(p=>p.type!=='literal').map(p=>[p.type,p.value]))
+  return new Date(Date.UTC(Number(map.year),Number(map.month)-1,Number(map.day)))
+}
+function normalizeDay(value){
+  const d=new Date(value)
+  if(Number.isNaN(d.getTime())) return null
+  return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()))
+}
+function daysInclusive(start,end){return Math.round((end-start)/86400000)+1}
+async function findReportingWeekForDate(value){
+  const day=normalizeDay(value)
+  if(!day) return null
+  return prisma.reportingWeek.findFirst({
+    where:{startDate:{lte:day},endDate:{gte:day}},
+    include:{month:true},
+    orderBy:{id:'desc'},
+  })
+}
+function monthDays(year,month){
+  return new Date(Date.UTC(year,month,0)).getUTCDate()
+}
+async function validateReportingWeekRange({year,month,weekNumber,startDate,endDate,excludeId=null}){
+  if(!Number.isInteger(year)||year<2000||year>2200) return 'A valid reporting year is required'
+  if(!Number.isInteger(month)||month<1||month>12) return 'A valid reporting month is required'
+  if(!Number.isInteger(weekNumber)||weekNumber<1||weekNumber>5) return 'Week must be between 1 and 5'
+  const start=normalizeDay(startDate), end=normalizeDay(endDate)
+  if(!start||!end) return 'A valid start and end date are required'
+  if(daysInclusive(start,end)!==7) return 'A reporting week must contain exactly 7 days'
+  const monthStart=new Date(Date.UTC(year,month-1,1)), monthEnd=new Date(Date.UTC(year,month-1,monthDays(year,month)))
+  if(end<monthStart||start>monthEnd) return 'The reporting week must cover at least one date in its selected month'
+  const monthRecord=await prisma.reportingMonth.findUnique({where:{year_month:{year,month}},include:{weeks:{where:excludeId?{id:{not:excludeId}}:undefined,orderBy:{weekNumber:'asc'}}}})
+  const weeks=monthRecord?.weeks||[]
+  if(weeks.some(w=>start<=w.endDate&&end>=w.startDate)) return 'This date range overlaps another reporting week in this month'
+  if(weeks.some(w=>w.weekNumber===weekNumber)) return 'That reporting week already exists'
+  return null
+}
+function reportingMonthDto(month){
+  return {...month,weeks:month.weeks.map(w=>({id:w.id,weekNumber:w.weekNumber,startDate:w.startDate.toISOString().slice(0,10),endDate:w.endDate.toISOString().slice(0,10),status:w.status}))}
+}
+
+// Reporting calendar
+app.get('/api/reporting/current', async (req,res,next)=>{
+  try{
+    const currentDate=currentChurchDate()
+    const week=await findReportingWeekForDate(currentDate)
+    if(!week) return res.json({date:currentDate.toISOString().slice(0,10),month:null,week:null,day:currentDate.toLocaleDateString('en-NG',{weekday:'long',timeZone:'UTC'})})
+    res.json({
+      date:currentDate.toISOString().slice(0,10),
+      day:currentDate.toLocaleDateString('en-NG',{weekday:'long',timeZone:'UTC'}),
+      month:{id:week.month.id,year:week.month.year,month:week.month.month,status:week.month.status},
+      week:{id:week.id,weekNumber:week.weekNumber,startDate:week.startDate.toISOString().slice(0,10),endDate:week.endDate.toISOString().slice(0,10),status:week.status},
+    })
+  }catch(e){next(e)}
+})
+app.get('/api/reporting/months', async (req,res,next)=>{
+  try{
+    const year=Number(req.query.year||currentChurchDate().getUTCFullYear())
+    const months=await prisma.reportingMonth.findMany({where:{year},include:{weeks:{orderBy:{weekNumber:'asc'}}},orderBy:{month:'asc'}})
+    res.json(months.map(reportingMonthDto))
+  }catch(e){next(e)}
+})
+app.get('/api/reporting/months/:id', async (req,res,next)=>{
+  try{
+    const id=Number(req.params.id)
+    if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid reporting month id'})
+    const month=await prisma.reportingMonth.findUnique({where:{id},include:{weeks:{orderBy:{weekNumber:'asc'}}}})
+    if(!month)return res.status(404).json({message:'Reporting month not found'})
+    res.json(reportingMonthDto(month))
+  }catch(e){next(e)}
+})
+app.post('/api/reporting/weeks', requireAdmin, async (req,res,next)=>{
+  try{
+    const year=Number(req.body.year), month=Number(req.body.month), weekNumber=Number(req.body.weekNumber)
+    const error=await validateReportingWeekRange({year,month,weekNumber,startDate:req.body.startDate,endDate:req.body.endDate})
+    if(error)return res.status(400).json({message:error})
+    const start=normalizeDay(req.body.startDate), end=normalizeDay(req.body.endDate)
+    const monthRecord=await prisma.reportingMonth.upsert({
+      where:{year_month:{year,month}},
+      update:{},
+      create:{year,month,createdById:currentUserId(req)}
+    })
+    const week=await prisma.reportingWeek.create({data:{monthId:monthRecord.id,weekNumber,startDate:start,endDate:end,createdById:currentUserId(req)}})
+    const full=await prisma.reportingMonth.findUnique({where:{id:monthRecord.id},include:{weeks:{orderBy:{weekNumber:'asc'}}}})
+    res.status(201).json(reportingMonthDto(full))
+  }catch(e){if(e?.code==='P2002')return res.status(409).json({message:'That reporting week already exists'});next(e)}
+})
+\nfunction requireWeeklyReportCreate(req,res,next){if(!['ADMIN','SECRETARY','PASTOR','STAFF'].includes(req.user?.role))return res.status(403).json({message:'Only Admin, Pastor or Secretary accounts can create or edit weekly reports'});next()}
 function requireWeeklyReportView(req,res,next){next()}
 const WEEKLY_SERVICES=['Pre-Sunday Prayer','Sunday School','Worship Service','Bible Study','House Fellowship','Prayer Meeting','Vigil','Revival Service','Intercessory Prayer','Anointing Service']
 const WEEKLY_SPIRITUAL=['No. of Decision','No. of Water Baptism','No. of Healing','No. of Conversion','No. of Holy Spirit Baptism','No. of Deliverance']
