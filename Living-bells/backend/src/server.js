@@ -301,10 +301,11 @@ app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
  try{
   const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
   const d=v.data
+  const reportingWeek=await findReportingWeekForDate(d.reportDate)
   const r=await prisma.weeklyReport.upsert({
    where:{reportDate:d.reportDate},
-   update:{numerical:d.numerical,spiritual:d.spiritual,income:d.income,expenditure:d.expenditure,totalIncome:d.totalIncome,totalExpenditure:d.totalExpenditure,balance:d.balance},
-   create:{...d,createdById:currentUserId(req)},
+   update:{numerical:d.numerical,spiritual:d.spiritual,income:d.income,expenditure:d.expenditure,totalIncome:d.totalIncome,totalExpenditure:d.totalExpenditure,balance:d.balance,reportingWeekId:reportingWeek?.id||null},
+   create:{...d,reportingWeekId:reportingWeek?.id||null,createdById:currentUserId(req)},
    include:{createdBy:{select:{id:true,name:true,email:true,role:true}}},
   })
   res.status(201).json(reportDto(r))
@@ -314,7 +315,8 @@ app.put('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=
  try{
   const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'})
   const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
-  const r=await prisma.weeklyReport.update({where:{id},data:v.data,include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
+  const reportingWeek=await findReportingWeekForDate(v.data.reportDate)
+  const r=await prisma.weeklyReport.update({where:{id},data:{...v.data,reportingWeekId:reportingWeek?.id||null},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
   res.json(reportDto(r))
  }catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that date'});next(e)}
 })
@@ -375,8 +377,9 @@ app.post('/api/activities', requireStaff, async (req, res, next) => {
   try {
     const { name, type, date } = req.body
     const activityDate = new Date(date)
+    const reportingWeek = await findReportingWeekForDate(activityDate)
     if (!name?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid name and date are required' })
-    const activity = await prisma.activity.create({ data: { name: name.trim(), type: type?.trim() || null, date: activityDate, recordedById: currentUserId(req) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
+    const activity = await prisma.activity.create({ data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: reportingWeek?.id || null, recordedById: currentUserId(req) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
     res.status(201).json(activity)
   } catch (error) { next(error) }
 })
@@ -395,7 +398,7 @@ app.put('/api/activities/:id', requireStaff, async (req, res, next) => {
 
     const activity = await prisma.activity.update({
       where: { id },
-      data: { name: name.trim(), type: type?.trim() || null, date: activityDate },
+      data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: (await findReportingWeekForDate(activityDate))?.id || null },
       include: { recordedBy: { select: { id: true, name: true, email: true } } },
     })
     res.json(activity)
@@ -476,6 +479,7 @@ app.post('/api/expenses', requireStaff, async (req, res, next) => {
   try {
     const { activityId, description, title, category = 'General', amount, date } = req.body
     const expenseDate = new Date(date)
+    const reportingWeek = await findReportingWeekForDate(expenseDate)
     const numericAmount = Number(amount)
     if (!(description || title)?.trim() || !Number.isFinite(numericAmount) || numericAmount < 0 || Number.isNaN(expenseDate.getTime())) {
       return res.status(400).json({ message: 'Valid description, non-negative amount and date are required' })
@@ -493,6 +497,7 @@ app.post('/api/expenses', requireStaff, async (req, res, next) => {
         description: (description || title).trim(),
         category: String(category || 'General').trim() || 'General',
         amount: numericAmount,
+        reportingWeekId: reportingWeek?.id || null,
         recordedById: currentUserId(req),
         date: expenseDate,
       },
@@ -521,12 +526,13 @@ app.post('/api/finances', requireStaff, async (req, res, next) => {
     const normalizedCategory = String(category || '').trim()
     const value = Number(amount)
     const date = new Date(recordDate)
+    const reportingWeek = await findReportingWeekForDate(date)
     if (!['INCOME', 'EXPENSE'].includes(normalizedType)) return res.status(400).json({ message: 'Type must be INCOME or EXPENSE' })
     if (!normalizedCategory) return res.status(400).json({ message: 'Category is required' })
     if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ message: 'Amount must be greater than zero' })
     if (Number.isNaN(date.getTime())) return res.status(400).json({ message: 'A valid transaction date is required' })
     const record = await prisma.financialRecord.create({
-      data: { type: normalizedType, category: normalizedCategory, amount: value, description: String(description || '').trim() || null, recordDate: date, recordedById: Number(req.user.sub) },
+      data: { type: normalizedType, category: normalizedCategory, amount: value, description: String(description || '').trim() || null, recordDate: date, reportingWeekId: reportingWeek?.id || null, recordedById: Number(req.user.sub) },
       include: { recordedBy: { select: { id: true, name: true, email: true } } },
     })
     res.status(201).json(record)
