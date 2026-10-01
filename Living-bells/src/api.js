@@ -92,8 +92,10 @@ export async function syncOfflineQueue() {
       if (response.ok || response.status === 409) {
         await removeQueuedRequest(item.id)
         synced += 1
-      } else {
-        await removeQueuedRequest(item.id)
+      } else if (response.status >= 400 && response.status < 500) {
+        // Keep the item queued so a transient auth/validation issue does not silently lose user data.
+        // A future sync can retry after the session or server state is corrected.
+        break
       }
     } catch {
       break
