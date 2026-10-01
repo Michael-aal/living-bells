@@ -385,8 +385,8 @@ function App() {
         {loading && <section className="card"><p>Loading your church records...</p></section>}
         {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} todayMoneyIn={todayMoneyIn} todayMoneyOut={todayMoneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
-        {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate} onInitialDateHandled={() => setReportEditDate(null)} />}
-        {!loading && page === 'finance' && <FinancePage user={user} />}
+        {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} />}
+        {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
         {!loading && page === 'reporting' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
@@ -395,7 +395,7 @@ function App() {
     </main>
 
     {modal === 'profile' && <ProfileForm user={user} close={() => setModal(null)} save={saveProfile} />}
-    {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} />}
+    {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} recordingDate={reportingContext?.date} />}
     {modal?.type === 'attendance-edit' && <AttendanceForm initial={modal.record} close={() => setModal(null)} save={saveAttendanceEdit} />}
     {modal === 'finance' && <FinanceForm close={() => setModal(null)} save={async payload => {
       if (user.demo) {
@@ -496,12 +496,12 @@ function ProfileForm({ user, close, save }) {
     <button className="primary wide" disabled={saving || name.trim().length < 2 || name.trim() === (user.name || '').trim()} onClick={submit}>{saving ? 'Saving…' : 'Save username'}</button>
   </Modal>
 }
-function ActivityForm({ close, save, initial = null }) {
+function ActivityForm({ close, save, initial = null, recordingDate = null }) {
   const [form, setForm] = useState(() => ({
     id: initial?.id,
     name: initial?.name || '',
     type: initial?.type || 'Service',
-    date: String(initial?.date || new Date().toISOString()).slice(0, 10),
+    date: String(initial?.date || recordingDate || new Date().toISOString()).slice(0, 10),
   }))
   const [saving, setSaving] = useState(false)
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
@@ -520,10 +520,10 @@ function ActivityForm({ close, save, initial = null }) {
     <button type="button" className="primary wide" disabled={saving || !form.name || !form.date} onClick={submit}>{saving ? 'Saving…' : initial ? 'Save changes' : 'Submit activity'}</button>
   </Modal>
 }
-function AttendanceForm({ close, save, initial = null }) {
+function AttendanceForm({ close, save, initial = null, recordingDate = null }) {
   const activity = initial?.activity || {}
   const [service, setService] = useState(initial?.service || activity.name || 'Sunday Service')
-  const [date, setDate] = useState(String(initial?.dateRaw || activity.date || new Date().toISOString()).slice(0, 10))
+  const [date, setDate] = useState(String(initial?.dateRaw || activity.date || recordingDate || new Date().toISOString()).slice(0, 10))
   const [groups, setGroups] = useState(() => ({
     Children: { male: initial?.childrenMale ?? '', female: initial?.childrenFemale ?? '' },
     Teenagers: { male: initial?.teenagersMale ?? '', female: initial?.teenagersFemale ?? '' },
@@ -564,8 +564,8 @@ function ReviewForm({ staff, close, save }) {
     <button className="primary wide" disabled={!form.reviewDate || !isSunday} onClick={() => save(form)}>Save Sunday review</button>{!isSunday && <small className="form-error">Choose a Sunday date for the weekly review.</small>}
   </Modal>
 }
-function FinanceForm({ close, save }) {
-  const [form, setForm] = useState({ type: 'INCOME', category: '', amount: '', description: '', recordDate: new Date().toISOString().slice(0, 10) })
+function FinanceForm({ close, save, recordingDate = null }) {
+  const [form, setForm] = useState({ type: 'INCOME', category: '', amount: '', description: '', recordDate: recordingDate || new Date().toISOString().slice(0, 10) })
   const [saving, setSaving] = useState(false)
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
 
