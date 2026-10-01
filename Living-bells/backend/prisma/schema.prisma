@@ -97,6 +97,8 @@ model Expense {
   date         DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  reportingWeekId Int?
+  reportingWeek ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   activity     Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
   recordedBy   User?     @relation("ExpenseRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
@@ -173,6 +175,7 @@ model FinancialRecord {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
+  reportingWeek ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   recordedBy   User?            @relation("FinancialRecordCreator", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@index([type])
