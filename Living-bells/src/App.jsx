@@ -5,7 +5,8 @@ import ReportsPage from './ReportsPage'
 import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import Auth from './Auth'
-import { api } from './api'
+import { api, syncOfflineQueue } from './api'
+import { queueCount } from './offlineStore'
 
 function formatDate(value) {
   if (!value) return '—'
@@ -90,6 +91,7 @@ function App() {
   const [reportEditDate, setReportEditDate] = useState(null)
   const [reportRefresh, setReportRefresh] = useState(0)
   const [attendance, setAttendance] = useState([])
+  const [attendanceOptions, setAttendanceOptions] = useState([])
   const [expenses, setExpenses] = useState([])
   const [finances, setFinances] = useState([])
   const [weeklyReports, setWeeklyReports] = useState([])
@@ -105,6 +107,25 @@ function App() {
   const [staffInvitations, setStaffInvitations] = useState([])
   const [staffCount, setStaffCount] = useState({ active: 0, pending: 0, total: 0 })
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
+
+  useEffect(() => {
+    if (!user || user.demo) return
+    let mounted = true
+    const refresh = async () => {
+      if (navigator.onLine) await syncOfflineQueue().catch(() => {})
+      const pending = await queueCount().catch(() => 0)
+      if (!mounted) return
+      setSync(navigator.onLine ? (pending ? `Sync pending: ${pending}` : 'Backend connected') : (pending ? `Offline · ${pending} pending` : 'Offline · saved on device'))
+    }
+    const onOnline = () => refresh()
+    const onOffline = () => refresh()
+    const onSync = () => refresh()
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    window.addEventListener('living-bells-sync', onSync)
+    refresh()
+    return () => { mounted = false; window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); window.removeEventListener('living-bells-sync', onSync) }
+  }, [user])
   const mobileNavRef = useState(() => ({ current: null }))[0]
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
@@ -171,12 +192,13 @@ function App() {
 
       setSync('Connecting...')
       try {
-        const [data, weeklyData, currentReporting] = await Promise.all([api.dashboard(), api.weeklyReports(), api.reportingCurrent()])
+        const [data, weeklyData, currentReporting, attendanceOptionData] = await Promise.all([api.dashboard(), api.weeklyReports(), api.reportingCurrent(), api.options('ATTENDANCE')])
         const staffData = user.role === 'ADMIN' ? await api.staff() : []
         const invitationData = user.role === 'ADMIN' ? await api.staffInvitations() : []
         const countData = user.role === 'ADMIN' ? await api.staffCount() : { active: 0, pending: 0, total: 0 }
         if (cancelled) return
         setAttendance((data.attendance || []).map(normalizeAttendance))
+        setAttendanceOptions(attendanceOptionData || [])
         setExpenses((data.expenses || []).map(normalizeExpense))
         setFinances((data.finances || []).map(record => ({ ...record, amount: Number(record.amount || 0), date: formatDate(record.recordDate) })))
         setWeeklyReports(weeklyData || [])
@@ -223,6 +245,7 @@ function App() {
     localStorage.removeItem('living_bells_user')
     setUser(null)
     setAttendance([])
+    setAttendanceOptions([])
     setExpenses([])
     setFinances([])
     setWeeklyReports([])
@@ -467,7 +490,7 @@ function App() {
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
         {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={attendance} expenses={visibleExpenses} activities={visibleActivities} weeklyReports={weeklyReports} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
-        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
+        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} onCreate={async () => { const name = window.prompt('New attendance option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: 'ATTENDANCE', name: name.trim() }); setAttendanceOptions(current => [...current.filter(x => x.name !== created.name), created]); setSync(created.offline ? 'Attendance option saved offline' : 'Backend connected') } catch (error) { setSync(error.message || 'Could not create attendance option') } }} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
@@ -479,7 +502,7 @@ function App() {
     </main>
 
     {modal === 'profile' && <ProfileForm user={user} close={() => setModal(null)} save={saveProfile} />}
-    {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} recordingDate={reportingContext?.date} />}
+    {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} recordingDate={reportingContext?.date} options={attendanceOptions} />}
     {modal?.type === 'attendance-edit' && <AttendanceForm initial={modal.record} close={() => setModal(null)} save={saveAttendanceEdit} />}
     {modal === 'finance' && <FinanceForm close={() => setModal(null)} save={async payload => {
       if (user.demo) {
@@ -637,7 +660,7 @@ function ActivityTrend({ activities = [] }) {
 function Stat({ icon, name, value, note }) { return <div className="stat"><span className="stat-icon">{icon}</span><div><small>{name}</small><strong>{value}</strong><em>{note}</em></div></div> }
 function Action({ icon, title, text, onClick }) { return <button type="button" className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
-function Records({ title, eyebrow, action, onAdd, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button type="button" className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <button type="button" className="primary" onClick={onAdd}>{action}</button>}</div></div><div className="table-wrap">{children}</div></section> }
+function Records({ title, eyebrow, action, onAdd, onCreate, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button type="button" className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <><button type="button" className="secondary" onClick={onCreate}>Create</button><button type="button" className="primary" onClick={onAdd}>{action}</button></>}</div></div><div className="table-wrap">{children}</div></section> }
 function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', calendar: 'Calendar', staff: 'Staff', settings: 'Settings' })[p] || 'Dashboard' }
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.',  })[p] }
 
@@ -815,7 +838,7 @@ function ActivityForm({ close, save, initial = null, recordingDate = null }) {
     <button type="button" className="primary wide" disabled={saving || !form.name || !form.date} onClick={submit}>{saving ? 'Saving…' : initial ? 'Save changes' : 'Submit activity'}</button>
   </Modal>
 }
-function AttendanceForm({ close, save, initial = null, recordingDate = null }) {
+function AttendanceForm({ close, save, initial = null, recordingDate = null, options = [] }) {
   const activity = initial?.activity || {}
   const [service, setService] = useState(initial?.service || activity.name || 'Sunday Service')
   const [date, setDate] = useState(String(initial?.dateRaw || activity.date || recordingDate || new Date().toISOString()).slice(0, 10))
@@ -837,7 +860,7 @@ function AttendanceForm({ close, save, initial = null, recordingDate = null }) {
   }
 
   return <Modal title={initial ? 'Edit attendance' : 'Record attendance'} close={close}>
-    <label>Service<input value={service} onChange={e => setService(e.target.value)} /></label>
+    <label>Service<input list="attendance-options" value={service} onChange={e => setService(e.target.value)} /><datalist id="attendance-options">{options.map(option => <option key={option.id || option.name} value={option.name} />)}</datalist></label>
     <label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
     <div className="attendance-form"><div className="frow header"><span>Group</span><span>Male</span><span>Female</span></div>{Object.entries(groups).map(([g, v]) => <div className="frow" key={g}><b>{g}</b><input type="number" min="0" value={v.male} onChange={e => update(g, 'male', e.target.value)} placeholder="0" /><input type="number" min="0" value={v.female} onChange={e => update(g, 'female', e.target.value)} placeholder="0" /></div>)}</div>
     <div className="total">Total attendance <b>{total}</b></div>
