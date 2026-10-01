@@ -1,4 +1,4 @@
-import { enqueueRequest, getQueue, removeQueuedRequest, cacheResponse, getCachedResponse, queueCount, saveOfflineIdentity, verifyOfflineIdentity } from './offlineStore'
+import { enqueueRequest, getQueue, removeQueuedRequest, cacheResponse, getCachedResponse, queueCount, queueCountForOwner, saveOfflineIdentity, verifyOfflineIdentity } from './offlineStore'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -7,8 +7,17 @@ function authHeaders() {
   return token && token !== 'offline-session' ? { Authorization: `Bearer ${token}` } : {}
 }
 
+function currentOwnerKey() {
+  try {
+    const user = JSON.parse(localStorage.getItem('living_bells_user') || 'null')
+    return String(user?.id || user?.email || '').trim().toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
 function cacheKey(path) {
-  const user = localStorage.getItem('living_bells_user') || 'anonymous'
+  const user = currentOwnerKey() || 'anonymous'
   return `${user}::${BASE + path}`
 }
 
@@ -60,6 +69,7 @@ export async function apiRequest(path, options = {}) {
       body: options.body || null,
       headers: { 'Content-Type': 'application/json' },
       clientRequestId: crypto.randomUUID(),
+      ownerKey: currentOwnerKey(),
     })
     dispatchSyncState()
     const body = options.body ? JSON.parse(options.body) : {}
@@ -69,12 +79,18 @@ export async function apiRequest(path, options = {}) {
 
 export async function syncOfflineQueue() {
   if (!navigator.onLine) return { synced: 0, pending: await queueCount() }
-  const queue = await getQueue().catch(() => [])
+  const ownerKey = currentOwnerKey()
+  if (!ownerKey) return { synced: 0, pending: await queueCount() }
+  const queue = (await getQueue().catch(() => [])).filter(item => item.ownerKey === ownerKey)
   let synced = 0
+  let blocked = false
 
   for (const item of queue.sort((a, b) => a.createdAt - b.createdAt)) {
     const token = localStorage.getItem('living_bells_token')
-    if (!token) break
+    if (!token) {
+      blocked = true
+      break
+    }
 
     try {
       const response = await fetch(BASE + item.path, {
@@ -87,8 +103,15 @@ export async function syncOfflineQueue() {
         body: item.body || undefined,
       })
 
-      if (response.status === 401) break
-      if (response.status >= 500) break
+      if (response.status === 401) {
+        localStorage.removeItem('living_bells_token')
+        blocked = true
+        break
+      }
+      if (response.status >= 500) {
+        blocked = true
+        break
+      }
 
       if (response.ok || response.status === 409) {
         await removeQueuedRequest(item.id)
