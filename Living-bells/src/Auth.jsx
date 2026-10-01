@@ -4,7 +4,7 @@ import './auth.css'
 
 export default function Auth({ onAuthenticated }) {
   const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'STAFF', adminKey: '', inviteCode: '', department: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'STAFF', inviteCode: '', department: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [invitation, setInvitation] = useState(null)
@@ -59,7 +59,6 @@ export default function Auth({ onAuthenticated }) {
         email,
         password: form.password,
         role: form.role,
-        adminKey: form.role === 'ADMIN' ? form.adminKey : undefined,
         inviteCode: form.role === 'STAFF' ? form.inviteCode : undefined,
       })
 
@@ -110,7 +109,6 @@ export default function Auth({ onAuthenticated }) {
           <button type="button" className="secondary small-button" onClick={() => { setInvitation(null); update('password', ''); update('confirmPassword', '') }}>Change code</button>
         </div>}
 
-        {!isLogin && form.role === 'ADMIN' && <label>Admin registration key<input type="password" value={form.adminKey} onChange={e => update('adminKey', e.target.value)} autoComplete="off" required /></label>}
 
         {(isLogin || invitation || (!isLogin && form.role === 'ADMIN')) && <>
           {isLogin && <label>Email<input type="email" value={form.email} onChange={e => update('email', e.target.value)} autoComplete="email" required /></label>}
