@@ -423,8 +423,8 @@ function App() {
 }
 
 function Dashboard({ user, reportingContext, attendance, expenses, activitiesCount, spend, money, moneyIn, moneyOut, todayMoneyIn, todayMoneyOut, netMoney, open, go, isAdmin }) {
-  const now = new Date()
-  const today = now.toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const todayValue = reportingContext?.date || new Date().toISOString().slice(0, 10)
+  const today = new Date(todayValue + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
   const monthLabel = reportingContext?.month ? new Date(Date.UTC(2026, Number(reportingContext.month.month) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null
   return <>
     <section className="welcome-card">
