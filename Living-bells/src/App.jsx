@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import FinancePage from './FinancePage'
 import ActivitiesPage from './ActivitiesPage'
 import ReportsPage from './ReportsPage'
+import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import Auth from './Auth'
 import { api } from './api'
@@ -57,6 +58,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [sync, setSync] = useState('Connecting...')
   const [query, setQuery] = useState('')
+  const [reportingContext, setReportingContext] = useState(null)
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
   const moneyIn = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports])
@@ -114,6 +116,7 @@ function App() {
         setActivities(demoActivities)
         setStaff(user.role === 'ADMIN' ? demoStaff : [])
         setReviews([])
+        setReportingContext(null)
         setSync('Demo mode')
         setLoading(false)
         return
@@ -121,13 +124,14 @@ function App() {
 
       setSync('Connecting...')
       try {
-        const [data, weeklyData] = await Promise.all([api.dashboard(), api.weeklyReports()])
+        const [data, weeklyData, currentReporting] = await Promise.all([api.dashboard(), api.weeklyReports(), api.reportingCurrent()])
         const staffData = user.role === 'ADMIN' ? await api.staff() : []
         if (cancelled) return
         setAttendance((data.attendance || []).map(normalizeAttendance))
         setExpenses((data.expenses || []).map(normalizeExpense))
         setFinances((data.finances || []).map(record => ({ ...record, amount: Number(record.amount || 0), date: formatDate(record.recordDate) })))
         setWeeklyReports(weeklyData || [])
+        setReportingContext(currentReporting || null)
         setActivities(data.activities || [])
         setStaff(staffData)
         setSync('Backend connected')
@@ -364,9 +368,9 @@ function App() {
       <div className="brand"><div className="logo">L</div><div><b>Living Bells</b><small>{dashboardLabel}</small></div></div>
       <span className="label">Workspace</span>
       {[
-        ['dashboard', '⌂', 'Dashboard'], ['attendance', '◉', 'Attendance'],
-        ['activities', '▣', 'Activities'], ['finance', '₦', 'Finance'], ['reports', '⌁', 'Reports'], ...(isAdmin ? [['staff', '♙', 'Staff']] : [])
-      ].map(([id, icon, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}><i>{icon}</i>{name}</button>)}
+        ['dashboard', 'Dashboard'], ['attendance', 'Attendance'],
+        ['activities', 'Activities'], ['finance', 'Finance'], ['reports', 'Reports'], ['reporting', 'Reporting'], ...(isAdmin ? [['staff', 'Staff']] : [])
+      ].map(([id, icon, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
     </aside>
 
@@ -379,11 +383,12 @@ function App() {
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
-        {!loading && page === 'dashboard' && <Dashboard attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} todayMoneyIn={todayMoneyIn} todayMoneyOut={todayMoneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
+        {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={visibleAttendance} expenses={visibleExpenses} activitiesCount={activities.length} spend={totalSpend} money={money} moneyIn={moneyIn} moneyOut={moneyOut} todayMoneyIn={todayMoneyIn} todayMoneyOut={todayMoneyOut} netMoney={netMoney} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate} onInitialDateHandled={() => setReportEditDate(null)} />}
         {!loading && page === 'finance' && <FinancePage user={user} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
+        {!loading && page === 'reporting' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
         
       </section>
@@ -417,8 +422,23 @@ function App() {
   </div>
 }
 
-function Dashboard({ attendance, expenses, activitiesCount, spend, money, moneyIn, moneyOut, todayMoneyIn, todayMoneyOut, netMoney, open, go, isAdmin }) {
+function Dashboard({ user, reportingContext, attendance, expenses, activitiesCount, spend, money, moneyIn, moneyOut, todayMoneyIn, todayMoneyOut, netMoney, open, go, isAdmin }) {
+  const now = new Date()
+  const today = now.toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const monthLabel = reportingContext?.month ? new Date(Date.UTC(2026, Number(reportingContext.month.month) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null
   return <>
+    <section className="welcome-card">
+      <span className="eyebrow">Living Bells</span>
+      <h2>Good day, {user?.name || 'there'}</h2>
+      <p className="welcome-date">{today}</p>
+      <h3>What would you like to record?</h3>
+      <div className="welcome-actions">
+        <button type="button" onClick={() => go('attendance')}>Attendance</button>
+        <button type="button" onClick={() => go('finance')}>Finance</button>
+        <button type="button" onClick={() => go('activities')}>Activities</button>
+      </div>
+      {reportingContext?.week ? <p className="reporting-context"><b>{monthLabel} · Week {reportingContext.week.weekNumber}</b><span>{reportingContext.day} · {reportingContext.date}</span></p> : <p className="reporting-context"><b>Reporting week not configured</b><span>An administrator needs to assign today's date to a seven-day reporting week.</span></p>}
+    </section>
     <div className="stats"><Stat icon="◉" name="Attendance" value={attendance[0]?.total || 0} note="Latest service" /><Stat icon="₦" name="Total money in" value={money(moneyIn)} note="All saved weekly reports" /><Stat icon="₦" name="Total money out" value={money(moneyOut)} note="All saved weekly reports" /><Stat icon="⌁" name="Total balance" value={money(netMoney)} note="Total in minus total out" /></div>
     <section className="card dashboard-today"><div><span className="eyebrow">Today</span><h2>Today's finance snapshot</h2><p className="card-subtitle">Only records saved for today's date.</p></div><div className="today-money"><div><small>Money in</small><b>{money(todayMoneyIn)}</b></div><div><small>Money out</small><b>{money(todayMoneyOut)}</b></div><div><small>Balance</small><b>{money(todayMoneyIn - todayMoneyOut)}</b></div></div></section>
     <div className="quick">{!isAdmin && <><Action icon="₦" title="Record money in or out" text="Record income received or expenses paid." onClick={() => go('finance')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} /></>}{isAdmin && <Action icon="▤" title="Print reports" text="Print attendance, expense and activity tables." onClick={() => go('reports')} />}</div>
@@ -430,7 +450,7 @@ function Stat({ icon, name, value, note }) { return <div className="stat"><span 
 function Action({ icon, title, text, onClick }) { return <button type="button" className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
 function Records({ title, eyebrow, action, onAdd, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button type="button" className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <button type="button" className="primary" onClick={onAdd}>{action}</button>}</div></div><div className="table-wrap">{children}</div></section> }
-function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', staff: 'Staff' })[p] || 'Dashboard' }
+function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', reporting: 'Reporting Calendar', staff: 'Staff' })[p] || 'Dashboard' }
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.',  })[p] }
 
 
