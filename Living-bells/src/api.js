@@ -68,4 +68,6 @@ export const api = {
   reportingMonths: year => apiRequest('/api/reporting/months?year=' + encodeURIComponent(year)),
   reportingMonth: id => apiRequest('/api/reporting/months/' + id),
   createReportingWeek: payload => apiRequest('/api/reporting/weeks', { method: 'POST', body: JSON.stringify(payload) }),
+  updateReportingWeek: (id, payload) => apiRequest('/api/reporting/weeks/' + id, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteReportingWeek: id => apiRequest('/api/reporting/weeks/' + id, { method: 'DELETE' }),
 }
