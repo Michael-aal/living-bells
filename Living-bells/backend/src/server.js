@@ -191,6 +191,8 @@ async function validateReportingWeekRange({year,month,weekNumber,startDate,endDa
   const monthRecord=await prisma.reportingMonth.findUnique({where:{year_month:{year,month}},include:{weeks:{where:excludeId?{id:{not:excludeId}}:undefined,orderBy:{weekNumber:'asc'}}}})
   const weeks=monthRecord?.weeks||[]
   if(weeks.some(w=>start<=w.endDate&&end>=w.startDate)) return 'This date range overlaps another reporting week in this month'
+  const globalOverlap=await prisma.reportingWeek.findFirst({where:{...(excludeId?{id:{not:excludeId}}:{}),startDate:{lte:end},endDate:{gte:start}}})
+  if(globalOverlap)return 'This date range overlaps another reporting week'
   if(weeks.some(w=>w.weekNumber===weekNumber)) return 'That reporting week already exists'
   return null
 }
