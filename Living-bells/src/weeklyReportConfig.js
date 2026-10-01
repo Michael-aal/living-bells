@@ -39,20 +39,32 @@ export function emptyReport(reportDate=currentSunday()) {
 }
 export function normalizeReport(report) {
   const empty=emptyReport(String(report?.reportDate || currentSunday()).slice(0,10))
+  const savedNumerical=Array.isArray(report?.numerical)?report.numerical:[]
   const numerical=empty.numerical.map((row,index)=>{
-    const saved=Array.isArray(report?.numerical)?report.numerical[index]:null
+    const saved=savedNumerical[index]
     const adult=Math.max(0,Math.trunc(Number(saved?.adult)||0))
     const children=Math.max(0,Math.trunc(Number(saved?.children)||0))
     const visitor=Math.max(0,Math.trunc(Number(saved?.visitor)||0))
     return {...row,...saved,adult,children,visitor,total:adult+children+visitor}
   })
+  for(const saved of savedNumerical.slice(empty.numerical.length)) {
+    const adult=Math.max(0,Math.trunc(Number(saved?.adult)||0))
+    const children=Math.max(0,Math.trunc(Number(saved?.children)||0))
+    const visitor=Math.max(0,Math.trunc(Number(saved?.visitor)||0))
+    numerical.push({...saved,sn:numerical.length+1,service:String(saved?.service||'Custom Activity'),adult,children,visitor,total:adult+children+visitor})
+  }
   const spiritual={...empty.spiritual}
   for(const label of SPIRITUAL_ROWS) spiritual[label]=Math.max(0,Math.trunc(Number(report?.spiritual?.[label])||0))
-  const normalizeMoney=(rows,savedRows)=>rows.map((row,index)=>{
-    const saved=Array.isArray(savedRows)?savedRows[index]:null
-    const amount=Math.max(0,Math.round((Number(saved?.amount)||0)*100)/100)
-    return {...row,...saved,name:saved?.name ?? row.name,amount}
-  })
+  const normalizeMoney=(rows,savedRows)=>{
+    const savedList=Array.isArray(savedRows)?savedRows:[]
+    const normalized=rows.map((row,index)=>{
+      const saved=savedList[index]
+      const amount=Math.max(0,Math.round((Number(saved?.amount)||0)*100)/100)
+      return {...row,...saved,name:saved?.name ?? row.name,amount}
+    })
+    const extras=savedList.slice(rows.length).map((saved,index)=>({sn:rows.length+index+1,name:String(saved?.name||''),amount:Math.max(0,Math.round((Number(saved?.amount)||0)*100)/100)}))
+    return [...normalized,...extras]
+  }
   return {...empty,...report,reportDate:String(report?.reportDate||empty.reportDate).slice(0,10),
     numerical,spiritual,income:normalizeMoney(empty.income,report?.income),
     expenditure:normalizeMoney(empty.expenditure,report?.expenditure)}
