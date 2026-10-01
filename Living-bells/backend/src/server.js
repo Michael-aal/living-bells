@@ -236,7 +236,37 @@ async function validateReportingWeekRange({year,month,weekNumber,startDate,endDa
   return null
 }
 function reportingMonthDto(month){
-  return {...month,weeks:month.weeks.map(w=>({id:w.id,weekNumber:w.weekNumber,startDate:w.startDate.toISOString().slice(0,10),endDate:w.endDate.toISOString().slice(0,10),status:w.status}))}
+  const monthStart=new Date(Date.UTC(month.year,month.month-1,1))
+  const monthEnd=new Date(Date.UTC(month.year,month.month-1,monthDays(month.year,month.month)))
+  const covered=new Set()
+  for(const week of month.weeks){
+    const start=week.startDate<monthStart?monthStart:week.startDate
+    const end=week.endDate>monthEnd?monthEnd:week.endDate
+    for(let d=new Date(start);d<=end;d.setUTCDate(d.getUTCDate()+1)) covered.add(d.toISOString().slice(0,10))
+  }
+  const missingDates=[]
+  for(let d=new Date(monthStart);d<=monthEnd;d.setUTCDate(d.getUTCDate()+1)){
+    const key=d.toISOString().slice(0,10)
+    if(!covered.has(key)) missingDates.push(key)
+  }
+  const totalDays=monthEnd.getUTCDate()
+  return {
+    ...month,
+    weeks:month.weeks.map(w=>({
+      id:w.id,
+      weekNumber:w.weekNumber,
+      startDate:w.startDate.toISOString().slice(0,10),
+      endDate:w.endDate.toISOString().slice(0,10),
+      status:w.status
+    })),
+    coverage:{
+      totalDays,
+      coveredDays:covered.size,
+      missingDays:missingDates.length,
+      complete:missingDates.length===0,
+      missingDates
+    }
+  }
 }
 
 // Reporting calendar
@@ -269,6 +299,58 @@ app.get('/api/reporting/months/:id', async (req,res,next)=>{
     res.json(reportingMonthDto(month))
   }catch(e){next(e)}
 })
+app.put('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
+  try{
+    const id=Number(req.params.id)
+    if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid reporting week id'})
+    const existing=await prisma.reportingWeek.findUnique({where:{id}})
+    if(!existing)return res.status(404).json({message:'Reporting week not found'})
+    const year=Number(req.body.year), month=Number(req.body.month), weekNumber=Number(req.body.weekNumber)
+    const error=await validateReportingWeekRange({
+      year,month,weekNumber,
+      startDate:req.body.startDate,
+      endDate:req.body.endDate,
+      excludeId:id
+    })
+    if(error)return res.status(400).json({message:error})
+    const start=normalizeDay(req.body.startDate), end=normalizeDay(req.body.endDate)
+    const monthRecord=await prisma.reportingMonth.upsert({
+      where:{year_month:{year,month}},
+      update:{},
+      create:{year,month,createdById:currentUserId(req)}
+    })
+    const week=await prisma.reportingWeek.update({
+      where:{id},
+      data:{monthId:monthRecord.id,weekNumber,startDate:start,endDate:end}
+    })
+    if(existing.monthId!==monthRecord.id){
+      const oldMonth=await prisma.reportingMonth.findUnique({where:{id:existing.monthId},include:{weeks:{orderBy:{weekNumber:'asc'}}}})
+      if(oldMonth?.weeks.length===0) await prisma.reportingMonth.delete({where:{id:oldMonth.id}})
+    }
+    const full=await prisma.reportingMonth.findUnique({where:{id:monthRecord.id},include:{weeks:{orderBy:{weekNumber:'asc'}}}})
+    res.json(reportingMonthDto(full))
+  }catch(e){if(e?.code==='P2002')return res.status(409).json({message:'That reporting week already exists'});next(e)}
+})
+
+app.delete('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
+  try{
+    const id=Number(req.params.id)
+    if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid reporting week id'})
+    const week=await prisma.reportingWeek.findUnique({
+      where:{id},
+      include:{_count:{select:{activities:true,expenses:true,financialRecords:true,weeklyReports:true}}}
+    })
+    if(!week)return res.status(404).json({message:'Reporting week not found'})
+    const linked=Object.values(week._count).reduce((sum,value)=>sum+value,0)
+    if(linked>0)return res.status(409).json({message:'This week contains recorded data and cannot be deleted. Edit the date range instead.'})
+    const monthId=week.monthId
+    await prisma.reportingWeek.delete({where:{id}})
+    const remaining=await prisma.reportingWeek.count({where:{monthId}})
+    if(remaining===0)await prisma.reportingMonth.delete({where:{id:monthId}})
+    res.json({message:'Calendar week deleted'})
+  }catch(e){next(e)}
+})
+
 app.post('/api/reporting/weeks', requireAdmin, async (req,res,next)=>{
   try{
     const year=Number(req.body.year), month=Number(req.body.month), weekNumber=Number(req.body.weekNumber)
