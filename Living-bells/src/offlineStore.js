@@ -1,14 +1,17 @@
 const DB_NAME = 'living-bells-offline'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 function openDb() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
+
     request.onupgradeneeded = () => {
       const db = request.result
       if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id' })
       if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' })
+      if (!db.objectStoreNames.contains('auth')) db.createObjectStore('auth', { keyPath: 'email' })
     }
+
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
   })
