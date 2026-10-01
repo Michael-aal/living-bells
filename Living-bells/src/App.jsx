@@ -62,6 +62,7 @@ function App() {
   const [staffInvitations, setStaffInvitations] = useState([])
   const [staffCount, setStaffCount] = useState({ active: 0, pending: 0, total: 0 })
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
+  const mobileNavRef = useState(() => ({ current: null }))[0]
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
   const moneyIn = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports])
@@ -430,11 +431,11 @@ function App() {
     {modal?.type === 'staff-code' && <StaffCodeModal invitation={modal.invitation} close={() => setModal(null)} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
     {modal?.type === 'activity-edit' && <ActivityForm initial={modal.record} close={() => setModal(null)} save={updateActivity} />}
-    <nav className="mobile-nav" aria-label="Mobile navigation">
+    <nav ref={node => { mobileNavRef.current = node }} className="mobile-nav" aria-label="Mobile navigation">
       {[
         ['dashboard','⌂'], ['attendance','◉'], ['activities','▣'], ['finance','₦']
       ].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setMobileMoreOpen(false) }}><i aria-hidden="true">{icon}</i><span>{title(id)}</span></button>)}
-      <button type="button" className={mobileMoreOpen || ['reports','calendar','staff'].includes(page) ? 'active' : ''} onClick={() => setMobileMoreOpen(value => !value)} aria-expanded={mobileMoreOpen}>
+      <button type="button" className={mobileMoreOpen || ['reports','calendar','staff','settings'].includes(page) ? 'active' : ''} onClick={() => { setMobileMoreOpen(value => !value); setTimeout(() => mobileNavRef.current?.querySelector('.active')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 0) }} aria-expanded={mobileMoreOpen}>
         <i aria-hidden="true">•••</i><span>More</span>
       </button>
     </nav>
