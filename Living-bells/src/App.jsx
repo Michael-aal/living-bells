@@ -378,7 +378,7 @@ function App() {
       <span className="label">Workspace</span>
       {[
         ['dashboard', 'Dashboard'], ['attendance', 'Attendance'],
-        ['activities', 'Activities'], ['finance', 'Finance'], ['reports', 'Reports'], ['calendar', 'Calendar'], ...(isAdmin ? [['staff', 'Staff']] : [])
+        ['activities', 'Activities'], ['finance', 'Finance'], ['reports', 'Reports'], ['calendar', 'Calendar'], ...(isAdmin ? [['staff', 'Staff']] : []), ['settings', 'Settings']
       ].map(([id, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
     </aside>
@@ -398,6 +398,7 @@ function App() {
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} />}
         {!loading && page === 'calendar' && <ReportingCalendar user={user} current={reportingContext} />}
+        {!loading && page === 'settings' && <SettingsPage user={user} onEditProfile={() => setModal('profile')} onLogout={logout} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
         
       </section>
@@ -441,8 +442,8 @@ function App() {
       <div className="mobile-more-head"><div><b>More</b><small>Reports and settings</small></div><button type="button" onClick={() => setMobileMoreOpen(false)} aria-label="Close menu">×</button></div>
       <div className="mobile-more-grid">
         {[
-          ['reports','Reports'], ['calendar','Calendar'], ...(isAdmin ? [['staff','Staff']] : [])
-        ].map(([id, label]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setMobileMoreOpen(false) }}><span>{label}</span><small>{id === 'calendar' ? 'Set seven-day periods' : id === 'reports' ? 'View summaries' : 'Manage team'}</small></button>)}
+          ['reports','Reports'], ['calendar','Calendar'], ...(isAdmin ? [['staff','Staff']] : []), ['settings','Settings']
+        ].map(([id, label]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setMobileMoreOpen(false) }}><span>{label}</span><small>{id === 'calendar' ? 'Set seven-day periods' : id === 'reports' ? 'View summaries' : id === 'settings' ? 'Account and sign out' : 'Manage team'}</small></button>)}
       </div>
     </div>}
   </div>
@@ -501,9 +502,35 @@ function Stat({ icon, name, value, note }) { return <div className="stat"><span 
 function Action({ icon, title, text, onClick }) { return <button type="button" className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
 function Records({ title, eyebrow, action, onAdd, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{isAdmin && <button type="button" className="secondary print-button" onClick={onPrint}>🖨 Print table</button>}{!isAdmin && <button type="button" className="primary" onClick={onAdd}>{action}</button>}</div></div><div className="table-wrap">{children}</div></section> }
-function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', calendar: 'Calendar', staff: 'Staff' })[p] || 'Dashboard' }
+function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', calendar: 'Calendar', staff: 'Staff', settings: 'Settings' })[p] || 'Dashboard' }
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.',  })[p] }
 
+
+function SettingsPage({ user, onEditProfile, onLogout }) {
+  return <div className="settings-layout">
+    <section className="card full">
+      <div className="card-head">
+        <div>
+          <span className="eyebrow">Account</span>
+          <h2>Settings</h2>
+          <p className="card-subtitle">Manage your account and session.</p>
+        </div>
+      </div>
+      <div className="settings-account">
+        <div className="settings-avatar">{user.name?.slice(0, 2).toUpperCase() || 'ST'}</div>
+        <div>
+          <b>{user.name || 'User'}</b>
+          <span>{user.email}</span>
+          <small>{user.role === 'ADMIN' ? 'Administrator' : 'Staff'}</small>
+        </div>
+      </div>
+      <div className="settings-actions">
+        <button type="button" className="secondary" onClick={onEditProfile}>Edit profile</button>
+        <button type="button" className="primary" onClick={onLogout}>Log out</button>
+      </div>
+    </section>
+  </div>
+}
 
 function StaffPage({ staff, invitations = [], staffCount = { active: 0, pending: 0, total: 0 }, selectedStaff, setSelectedStaff, reviews, attendance, expenses, activities, onReview, onPrint }) {
   const ratingLabel = value => ({ EXCELLENT: 'Excellent', GOOD: 'Good', FAIR: 'Fair', POOR: 'Poor', BAD: 'Bad' }[value] || value || '—')
