@@ -1,0 +1,3 @@
+ALTER TABLE "User" ADD COLUMN "position" TEXT;
+ALTER TABLE "User" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "StaffInvitation" ADD COLUMN "position" TEXT;
