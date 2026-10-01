@@ -450,7 +450,7 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
     } else {
       const activityDate = new Date(date)
       if (!service?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid service and date are required' })
-      activity = await prisma.activity.create({ data: { name: service.trim(), type: 'service', date: activityDate, recordedById: currentUserId(req) } })
+      activity = await prisma.activity.create({ data: { name: service.trim(), type: 'service', date: activityDate, reportingWeekId: (await findReportingWeekForDate(activityDate))?.id || null, recordedById: currentUserId(req) } })
     }
 
     const value = (group, gender) => Math.max(0, Number(groups?.[group]?.[gender] || 0))
