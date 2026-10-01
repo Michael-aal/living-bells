@@ -61,6 +61,7 @@ export const api = {
   staffReviews: staffId => apiRequest(`/api/admin/staff/${staffId}/reviews`),
   createStaffReview: (staffId, payload) => apiRequest(`/api/admin/staff/${staffId}/reviews`, { method: 'POST', body: JSON.stringify(payload) }),
   staffInvitations: () => apiRequest('/api/admin/staff/invitations'),
+  staffInvitationPreview: code => apiRequest('/api/auth/staff-invitation?code=' + encodeURIComponent(code)),
   createStaffInvitation: payload => apiRequest('/api/admin/staff/invitations', { method: 'POST', body: JSON.stringify(payload) }),
   staffCount: () => apiRequest('/api/admin/staff/count'),
   reportingCurrent: () => apiRequest('/api/reporting/current'),
