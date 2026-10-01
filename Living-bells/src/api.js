@@ -60,4 +60,8 @@ export const api = {
   staff: () => apiRequest('/api/admin/staff'),
   staffReviews: staffId => apiRequest(`/api/admin/staff/${staffId}/reviews`),
   createStaffReview: (staffId, payload) => apiRequest(`/api/admin/staff/${staffId}/reviews`, { method: 'POST', body: JSON.stringify(payload) }),
+  reportingCurrent: () => apiRequest('/api/reporting/current'),
+  reportingMonths: year => apiRequest('/api/reporting/months?year=' + encodeURIComponent(year)),
+  reportingMonth: id => apiRequest('/api/reporting/months/' + id),
+  createReportingWeek: payload => apiRequest('/api/reporting/weeks', { method: 'POST', body: JSON.stringify(payload) }),
 }
