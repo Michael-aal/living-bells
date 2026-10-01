@@ -1,0 +1,9 @@
+{
+  "name": "Living Bells",
+  "short_name": "Living Bells",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6d28d9",
+  "description": "Living Bells church management system"
+}
