@@ -937,7 +937,7 @@ function ReportingWeekPicker({ date, onDateChange }) {
           aria-selected={selected}
           className={`reporting-week-tab${selected ? ' selected' : ''}${current ? ' current' : ''}`}
           onClick={() => {
-            setOpenWeekId(openWeekId === week.id ? null : week.id)
+            setOpenWeekId(week.id)
             if (selected) return
             const firstDay = String(week.startDate).slice(0, 10)
             onDateChange(firstDay)
