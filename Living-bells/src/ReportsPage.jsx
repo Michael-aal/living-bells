@@ -37,7 +37,7 @@ function roundAverage(value) {
   return Number.isInteger(value) ? value : Number(value.toFixed(2))
 }
 
-function startOfWeek(value) {
+function weekOfMonth(value) {\n  const date = parseDate(value)\n  if (!date) return 0\n  const first = new Date(date.getFullYear(), date.getMonth(), 1)\n  return Math.floor((date.getDate() + first.getDay() - 1) / 7) + 1\n}\n\nfunction startOfWeek(value) {
   const date = parseDate(value) || new Date()
   const start = new Date(date)
   start.setDate(date.getDate() - date.getDay())
@@ -101,6 +101,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [mode, setMode] = useState('week')
   const [anchor, setAnchor] = useState(todayKey())
   const [review, setReview] = useState(null)
+  const [searchText, setSearchText] = useState('')
+  const [searchYear, setSearchYear] = useState('')
+  const [searchMonth, setSearchMonth] = useState('')
+  const [searchWeek, setSearchWeek] = useState('')
+  const [searchDay, setSearchDay] = useState('')
 
   const canEditOperational = ['ADMIN', 'SECRETARY', 'PASTOR', 'STAFF'].includes(user?.role)
 
@@ -128,6 +133,102 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     load()
     return () => { cancelled = true }
   }, [refreshKey])
+
+  const searchYears = useMemo(() => {
+    const years = new Set()
+    reports.forEach(item => {
+      const date = parseDate(item.reportDate)
+      if (date) years.add(date.getFullYear())
+    })
+    attendance.forEach(item => {
+      const date = parseDate(item.activity?.date || item.date || item.recordDate)
+      if (date) years.add(date.getFullYear())
+    })
+    activities.forEach(item => {
+      const date = parseDate(item.date)
+      if (date) years.add(date.getFullYear())
+    })
+    return Array.from(years).sort((a, b) => b - a)
+  }, [reports, attendance, activities])
+
+  const searchWeeks = useMemo(() => {
+    if (!searchYear || !searchMonth) return [1, 2, 3, 4, 5, 6]
+    const days = new Date(Number(searchYear), Number(searchMonth), 0).getDate()
+    const firstDay = new Date(Number(searchYear), Number(searchMonth) - 1, 1).getDay()
+    const count = Math.ceil((days + firstDay) / 7)
+    return Array.from({ length: count }, (_, index) => index + 1)
+  }, [searchYear, searchMonth])
+
+  const searchDays = useMemo(() => {
+    if (!searchYear || !searchMonth) return Array.from({ length: 31 }, (_, index) => index + 1)
+    const days = new Date(Number(searchYear), Number(searchMonth), 0).getDate()
+    return Array.from({ length: days }, (_, index) => index + 1)
+  }, [searchYear, searchMonth])
+
+  const searchResults = useMemo(() => {
+    const query = searchText.trim().toLowerCase()
+    const matches = (dateValue, haystack) => {
+      const date = parseDate(dateValue)
+      if (!date) return false
+      if (searchYear && date.getFullYear() !== Number(searchYear)) return false
+      if (searchMonth && date.getMonth() + 1 !== Number(searchMonth)) return false
+      if (searchDay && date.getDate() !== Number(searchDay)) return false
+      if (searchWeek && weekOfMonth(dateValue) !== Number(searchWeek)) return false
+      return !query || haystack.toLowerCase().includes(query)
+    }
+
+    const results = []
+
+    reports.forEach(report => {
+      const date = report.reportDate
+      const incomeNames = rowsFromJson(report.income).map(row => row.name || row.category).filter(Boolean)
+      const expenditureNames = rowsFromJson(report.expenditure).map(row => row.name || row.category).filter(Boolean)
+      const activityNames = rowsFromJson(report.numerical).map(row => row.service || row.name).filter(Boolean)
+      const financeText = [...incomeNames, ...expenditureNames, Number(report.totalIncome || 0).toLocaleString(), Number(report.totalExpenditure || 0).toLocaleString()].join(' ')
+      const activityText = [...activityNames, JSON.stringify(report.spiritual || {})].join(' ')
+
+      if (matches(date, `finance ${financeText}`)) {
+        results.push({
+          type: 'Finance',
+          date,
+          title: 'Finance record',
+          detail: `${incomeNames.length} income categories · ${expenditureNames.length} expenditure categories · ${money(report.totalIncome || 0)} in · ${money(report.totalExpenditure || 0)} out`,
+        })
+      }
+      if (matches(date, `activities ${activityText}`)) {
+        results.push({
+          type: 'Activities',
+          date,
+          title: 'Weekly activities',
+          detail: activityNames.length ? activityNames.join(' · ') : 'No activity rows saved',
+        })
+      }
+    })
+
+    attendance.forEach(item => {
+      const date = item.activity?.date || item.date || item.recordDate
+      const service = item.activity?.name || item.service || 'Attendance record'
+      const text = JSON.stringify(item)
+      if (matches(date, `attendance ${service} ${text}`)) {
+        results.push({
+          type: 'Attendance',
+          date,
+          title: service,
+          detail: `${formatNumber(attendanceTotalFor(item))} total attendance`,
+        })
+      }
+    })
+
+    return results.sort((a, b) => keyOf(b.date).localeCompare(keyOf(a.date)))
+  }, [reports, attendance, searchText, searchYear, searchMonth, searchWeek, searchDay])
+
+  const clearSearch = () => {
+    setSearchText('')
+    setSearchYear('')
+    setSearchMonth('')
+    setSearchWeek('')
+    setSearchDay('')
+  }
 
   const range = useMemo(() => {
     const selected = parseDate(anchor) || new Date()
@@ -299,6 +400,83 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         <p className="card-subtitle">Attendance, activities and finance are calculated separately from the records that were actually saved.</p>
       </div>
       <button className="secondary" onClick={() => window.print()}>Print report</button>
+    </section>
+
+    <section className="card full record-search-card">
+      <div className="card-head">
+        <div>
+          <span className="eyebrow">Record search</span>
+          <h2>Search saved records</h2>
+          <p className="card-subtitle">Search across Attendance, Finance and Activities by year, month, week, day, or a keyword. The saved date remains the source of truth.</p>
+        </div>
+        {(searchText || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Clear search</button>}
+      </div>
+
+      <div className="record-search-input">
+        <input
+          type="search"
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          placeholder="Search category, service, record, amount…"
+          aria-label="Search saved records"
+        />
+      </div>
+
+      <div className="record-search-filters">
+        <label>
+          Year
+          <select value={searchYear} onChange={e => { setSearchYear(e.target.value); setSearchWeek(''); setSearchDay('') }}>
+            <option value="">Any year</option>
+            {searchYears.map(year => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </label>
+        <label>
+          Month
+          <select value={searchMonth} onChange={e => { setSearchMonth(e.target.value); setSearchWeek(''); setSearchDay('') }}>
+            <option value="">Any month</option>
+            {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{new Date(2000, index, 1).toLocaleDateString('en-NG', { month: 'long' })}</option>)}
+          </select>
+        </label>
+        <label>
+          Week
+          <select value={searchWeek} onChange={e => setSearchWeek(e.target.value)}>
+            <option value="">Any week</option>
+            {searchWeeks.map(week => <option key={week} value={week}>Week {week}</option>)}
+          </select>
+        </label>
+        <label>
+          Day
+          <select value={searchDay} onChange={e => setSearchDay(e.target.value)}>
+            <option value="">Any day</option>
+            {searchDays.map(day => <option key={day} value={day}>{day}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="search-results-head">
+        <strong>{formatNumber(searchResults.length)} result{searchResults.length === 1 ? '' : 's'}</strong>
+        <span>{searchYear || 'Any year'} · {searchMonth ? new Date(2000, Number(searchMonth) - 1, 1).toLocaleDateString('en-NG', { month: 'long' }) : 'Any month'} · {searchWeek ? `Week ${searchWeek}` : 'Any week'} · {searchDay ? `Day ${searchDay}` : 'Any day'}</span>
+      </div>
+
+      {searchResults.length > 0 ? (
+        <div className="record-search-results">
+          {searchResults.map((result, index) => (
+            <article className="record-search-result" key={`${result.type}-${keyOf(result.date)}-${index}`}>
+              <div>
+                <span className="record-search-type">{result.type}</span>
+                <h3>{result.title}</h3>
+                <p>{result.detail}</p>
+              </div>
+              <time dateTime={keyOf(result.date)}>{displayDate(result.date)}</time>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="record-search-empty">
+          <strong>No saved record matches this search.</strong>
+          <span>Try changing the year, month, week, day, or keyword.</span>
+        </div>
+      )}
     </section>
 
     <section className="card full report-controls">
