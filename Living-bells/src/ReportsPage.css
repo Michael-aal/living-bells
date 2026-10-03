@@ -3,7 +3,7 @@
 .reports-hero h2{margin:5px 0 8px}
 .record-search-card{display:grid;gap:18px;position:relative;overflow:hidden}
 .record-search-card::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#6d28d9,#8b5cf6,#c4b5fd)}
-.record-search-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:end}
+.record-search-filters{display:grid;grid-template-columns:1fr;gap:12px;align-items:stretch}
 .record-search-filters label{display:grid;gap:7px;font-size:12px;font-weight:700;color:#4b5563;min-width:0}
 .record-search-filters label span{display:block}
 .record-search-filters select{width:100%;min-height:44px;border:1px solid rgba(31,35,48,.12);border-radius:11px;background:#fff;padding:0 38px 0 13px;font-weight:650;color:#202331;box-shadow:0 1px 2px rgba(16,24,40,.03);transition:border-color .18s ease,box-shadow .18s ease}
@@ -13,7 +13,7 @@
 .search-results-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:13px 2px 0;border-top:1px solid rgba(20,24,35,.08)}
 .search-results-head strong{font-size:13px;color:#27233a}
 .search-results-head span{font-size:12px;color:#777184;text-align:right}
-.record-search-results{display:grid;gap:9px}
+.record-search-results{display:grid;gap:9px;max-height:360px;overflow-y:auto;overflow-x:hidden;padding:2px 5px 2px 1px;scrollbar-width:thin}
 .record-search-result{display:grid;grid-template-columns:minmax(0,1fr) auto;position:relative;width:100%;justify-content:space-between;align-items:center;gap:18px;padding:15px 16px;border:1px solid rgba(20,24,35,.09);border-radius:13px;background:#fff;text-align:left;color:inherit;font:inherit;cursor:pointer;box-shadow:0 1px 2px rgba(16,24,40,.025);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,background .16s ease}
 .record-search-result:hover{border-color:rgba(109,40,217,.28);background:#fcfaff;box-shadow:0 7px 20px rgba(49,31,92,.07);transform:translateY(-1px)}
 .record-search-result:focus-visible{outline:3px solid rgba(139,92,246,.22);outline-offset:2px}
@@ -85,6 +85,3 @@
   table{font-size:10px}
 }
 
-@media (max-width:1100px){
-  .record-search-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
