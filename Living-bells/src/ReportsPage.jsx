@@ -58,6 +58,18 @@ function inRange(value, start, end) {
   return date && date >= start && date <= end
 }
 
+function reportingYearStart(year) {
+  return new Date(Number(year), 6, 1, 0, 0, 0, 0)
+}
+
+function reportingYearEnd(year) {
+  return new Date(Number(year) + 1, 5, 30, 23, 59, 59, 999)
+}
+
+function reportingYearLabel(year) {
+  return `${Number(year)}/${String(Number(year) + 1).slice(-2)}`
+}
+
 function periodLabel(mode, anchor) {
   if (mode === 'week') {
     return `Week of ${startOfWeek(anchor).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}`
@@ -66,7 +78,7 @@ function periodLabel(mode, anchor) {
     const date = parseDate(anchor)
     return date.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
   }
-  return String(parseDate(anchor)?.getFullYear() || new Date().getFullYear())
+  return `Reporting year ${reportingYearLabel(parseDate(anchor)?.getFullYear() || new Date().getFullYear())}`
 }
 
 function rowsFromJson(value) {
@@ -124,9 +136,10 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       start: new Date(selected.getFullYear(), selected.getMonth(), 1, 0, 0, 0, 0),
       end: new Date(selected.getFullYear(), selected.getMonth() + 1, 0, 23, 59, 59, 999),
     }
+    const reportingYear = selected.getFullYear()
     return {
-      start: new Date(selected.getFullYear(), 0, 1, 0, 0, 0, 0),
-      end: new Date(selected.getFullYear(), 11, 31, 23, 59, 59, 999),
+      start: reportingYearStart(reportingYear),
+      end: reportingYearEnd(reportingYear),
     }
   }, [mode, anchor])
 
@@ -264,9 +277,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const periodRows = useMemo(() => {
     if (mode === 'year') {
       const year = range.start.getFullYear()
-      return Array.from({ length: 12 }, (_, month) => {
-        const start = new Date(year, month, 1)
-        const end = new Date(year, month + 1, 0, 23, 59, 59, 999)
+      return Array.from({ length: 12 }, (_, monthIndex) => {
+        const month = (6 + monthIndex) % 12
+        const calendarYear = month >= 6 ? year : year + 1
+        const start = new Date(calendarYear, month, 1)
+        const end = new Date(calendarYear, month + 1, 0, 23, 59, 59, 999)
         const rows = reports.filter(report => inRange(report.reportDate, start, end))
         return buildPeriodRow(start, rows, attendance, activities)
       })
@@ -298,15 +313,16 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
       <label>
-        {mode === 'week' ? 'Choose a date in the week' : mode === 'month' ? 'Choose a month' : 'Choose a year'}
+        {mode === 'week' ? 'Choose a date in the week' : mode === 'month' ? 'Choose a month' : 'Reporting year (July–June)'}
         <input type={mode === 'year' ? 'number' : mode === 'month' ? 'month' : 'date'} value={mode === 'year' ? String(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) : mode === 'month' ? keyOf(anchor).slice(0, 7) : anchor} onChange={e => {
           const value = e.target.value
-          setAnchor(mode === 'year' ? `${value}-01-01` : mode === 'month' ? `${value}-01` : value)
+          setAnchor(mode === 'year' ? `${value}-07-01` : mode === 'month' ? `${value}-01` : value)
         }} />
       </label>
       <div className="period-summary">
         <span className="eyebrow">Selected period</span>
         <strong>{periodLabel(mode, anchor)}</strong>
+        {mode === 'year' && <small>July ${parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June ${(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
         <small>{selectedReports.length} official weekly report{selectedReports.length === 1 ? '' : 's'} · {selectedAttendance.length} attendance record{selectedAttendance.length === 1 ? '' : 's'}</small>
       </div>
     </section>
