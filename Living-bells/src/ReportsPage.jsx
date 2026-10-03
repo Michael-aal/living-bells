@@ -108,7 +108,6 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [mode, setMode] = useState('week')
   const [anchor, setAnchor] = useState(todayKey())
   const [review, setReview] = useState(null)
-  const [searchText, setSearchText] = useState('')
   const [searchType, setSearchType] = useState('')
   const [searchYear, setSearchYear] = useState('')
   const [searchMonth, setSearchMonth] = useState('')
@@ -174,16 +173,15 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   }, [searchYear, searchMonth])
 
   const searchResults = useMemo(() => {
-    const query = searchText.trim().toLowerCase()
-    const matches = (dateValue, haystack) => {
+    const matches = (dateValue, type) => {
       const date = parseDate(dateValue)
       if (!date) return false
-      if (searchType && !haystack.toLowerCase().includes(searchType.toLowerCase())) return false
+      if (searchType && type !== searchType) return false
       if (searchYear && date.getFullYear() !== Number(searchYear)) return false
       if (searchMonth && date.getMonth() + 1 !== Number(searchMonth)) return false
       if (searchDay && date.getDate() !== Number(searchDay)) return false
       if (searchWeek && weekOfMonth(dateValue) !== Number(searchWeek)) return false
-      return !query || haystack.toLowerCase().includes(query)
+      return true
     }
 
     const results = []
@@ -193,10 +191,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       const incomeNames = rowsFromJson(report.income).map(row => row.name || row.category).filter(Boolean)
       const expenditureNames = rowsFromJson(report.expenditure).map(row => row.name || row.category).filter(Boolean)
       const activityNames = rowsFromJson(report.numerical).map(row => row.service || row.name).filter(Boolean)
-      const financeText = [...incomeNames, ...expenditureNames, Number(report.totalIncome || 0).toLocaleString(), Number(report.totalExpenditure || 0).toLocaleString()].join(' ')
-      const activityText = [...activityNames, JSON.stringify(report.spiritual || {})].join(' ')
-
-      if (matches(date, `finance ${financeText}`)) {
+      if (matches(date, 'Finance')) {
         results.push({
           type: 'Finance',
           date,
@@ -205,7 +200,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           detail: `${incomeNames.length} income categories · ${expenditureNames.length} expenditure categories · ${money(report.totalIncome || 0)} in · ${money(report.totalExpenditure || 0)} out`,
         })
       }
-      if (matches(date, `activities ${activityText}`)) {
+      if (matches(date, 'Activities')) {
         results.push({
           type: 'Activities',
           date,
@@ -219,8 +214,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     attendance.forEach(item => {
       const date = item.activity?.date || item.date || item.recordDate
       const service = item.activity?.name || item.service || 'Attendance record'
-      const text = JSON.stringify(item)
-      if (matches(date, `attendance ${service} ${text}`)) {
+      if (matches(date, 'Attendance')) {
         results.push({
           type: 'Attendance',
           date,
@@ -232,10 +226,9 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     })
 
     return results.sort((a, b) => keyOf(b.date).localeCompare(keyOf(a.date)))
-  }, [reports, attendance, searchText, searchType, searchYear, searchMonth, searchWeek, searchDay])
+  }, [reports, attendance, searchType, searchYear, searchMonth, searchWeek, searchDay])
 
   const clearSearch = () => {
-    setSearchText('')
     setSearchType('')
     setSearchYear('')
     setSearchMonth('')
@@ -422,23 +415,13 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           <h2>Search saved records</h2>
           <p className="card-subtitle">Search across Attendance, Finance and Activities by year, month, week, day, or a keyword. The saved date remains the source of truth.</p>
         </div>
-        {(searchText || searchType || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Clear search</button>}
-      </div>
-
-      <div className="record-search-input">
-        <input
-          type="search"
-          value={searchText}
-          onChange={e => setSearchText(e.target.value)}
-          placeholder="Search category, service, record, amount…"
-          aria-label="Search saved records"
-        />
+        {(searchType || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Reset filters</button>}
       </div>
 
       <form className="record-search-filters" onSubmit={e => e.preventDefault()}>
-        <label>
-          Record type
-          <select value={searchType} onChange={e => setSearchType(e.target.value)}>
+        <label className="record-search-primary-filter">
+          <span>Record type</span>
+          <select value={searchType} onChange={e => setSearchType(e.target.value)} aria-label="Choose record type">
             <option value="">All records</option>
             <option value="Activities">Activities</option>
             <option value="Finance">Finance</option>
@@ -473,12 +456,12 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
             {searchDays.map(day => <option key={day} value={day}>{day}</option>)}
           </select>
         </label>
-        <button className="primary search-submit" type="submit">Search</button>
+        <button className="primary search-submit" type="submit">Find records</button>
       </form>
 
       <div className="search-results-head">
         <strong>{formatNumber(searchResults.length)} result{searchResults.length === 1 ? '' : 's'}</strong>
-        <span>{searchYear || 'Any year'} · {searchMonth ? new Date(2000, Number(searchMonth) - 1, 1).toLocaleDateString('en-NG', { month: 'long' }) : 'Any month'} · {searchWeek ? `Week ${searchWeek}` : 'Any week'} · {searchDay ? `Day ${searchDay}` : 'Any day'}</span>
+        <span>{searchType || 'All records'} · {searchYear || 'Any year'} · {searchMonth ? new Date(2000, Number(searchMonth) - 1, 1).toLocaleDateString('en-NG', { month: 'long' }) : 'Any month'} · {searchWeek ? `Week ${searchWeek}` : 'Any week'} · {searchDay ? `Day ${searchDay}` : 'Any day'}</span>
       </div>
 
       {searchResults.length > 0 ? (
