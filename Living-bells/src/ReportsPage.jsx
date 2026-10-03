@@ -159,37 +159,8 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   )
 
   const attendanceSummary = useMemo(() => {
-    const keys = [
-      ['Children male', 'childrenMale'],
-      ['Children female', 'childrenFemale'],
-      ['Teenagers male', 'teenagersMale'],
-      ['Teenagers female', 'teenagersFemale'],
-      ['Youth male', 'youthMale'],
-      ['Youth female', 'youthFemale'],
-      ['Adults male', 'adultsMale'],
-      ['Adults female', 'adultsFemale'],
-    ]
-    const values = keys.map(([label, key]) => {
-      const total = selectedAttendance.reduce((sum, item) => sum + Number(item[key] || 0), 0)
-      return { label, total, average: roundAverage(average(total, selectedAttendance.length)) }
-    })
-    const groups = [
-      ['Children', ['childrenMale', 'childrenFemale']],
-      ['Teenagers', ['teenagersMale', 'teenagersFemale']],
-      ['Youth', ['youthMale', 'youthFemale']],
-      ['Adults', ['adultsMale', 'adultsFemale']],
-    ].map(([label, groupKeys]) => {
-      const total = selectedAttendance.reduce((sum, item) => sum + groupKeys.reduce((n, key) => n + Number(item[key] || 0), 0), 0)
-      return { label, total, average: roundAverage(average(total, selectedAttendance.length)) }
-    })
-    const maleTotal = selectedAttendance.reduce((sum, item) => sum + Number(item.childrenMale || 0) + Number(item.teenagersMale || 0) + Number(item.youthMale || 0) + Number(item.adultsMale || 0), 0)
-    const femaleTotal = selectedAttendance.reduce((sum, item) => sum + Number(item.childrenFemale || 0) + Number(item.teenagersFemale || 0) + Number(item.youthFemale || 0) + Number(item.adultsFemale || 0), 0)
-    const total = maleTotal + femaleTotal
+    const total = selectedAttendance.reduce((sum, item) => sum + attendanceTotalFor(item), 0)
     return {
-      rows: values,
-      groups,
-      maleTotal,
-      femaleTotal,
       total,
       average: roundAverage(average(total, selectedAttendance.length)),
       recordCount: selectedAttendance.length,
@@ -287,9 +258,6 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       income,
       expenditure,
       balance: income - expenditure,
-      incomeAverage: roundAverage(average(income, selectedReports.length)),
-      expenditureAverage: roundAverage(average(expenditure, selectedReports.length)),
-      balanceAverage: roundAverage(average(income - expenditure, selectedReports.length)),
       categories,
       records: selectedReports.length,
     }
@@ -350,14 +318,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
     {loading ? <section className="card full"><p>Loading reports…</p></section> : <>
-      <ReportSection title="Attendance" eyebrow="Special services" description="Attendance is kept separate from activities. Every gender and age category is shown with its period total and average." action={canEditOperational ? () => onEditAttendance?.() : null}>
-        <SummaryTable headers={['Category', 'Total', 'Average']} rows={attendanceSummary.rows.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} totalRow={['Overall attendance', formatNumber(attendanceSummary.total), formatNumber(attendanceSummary.average, Number.isInteger(attendanceSummary.average) ? 0 : 2)]} />
-        <div className="report-subtable-grid">
-          <MiniTable title="Gender breakdown" headers={['Gender', 'Total', 'Average']} rows={[
-            ['Male', formatNumber(attendanceSummary.maleTotal), formatNumber(roundAverage(average(attendanceSummary.maleTotal, attendanceSummary.recordCount)))],
-            ['Female', formatNumber(attendanceSummary.femaleTotal), formatNumber(roundAverage(average(attendanceSummary.femaleTotal, attendanceSummary.recordCount)))],
-          ]} />
-          <MiniTable title="Age-group breakdown" headers={['Group', 'Total', 'Average']} rows={attendanceSummary.groups.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} />
+      <ReportSection title="Attendance" eyebrow="Attendance summary" description="Attendance is shown as the saved total for the selected period, without age or gender breakdowns." action={canEditOperational ? () => onEditAttendance?.() : null}>
+        <div className="finance-total-grid">
+          <Metric label="Total attendance" value={formatNumber(attendanceSummary.total)} />
+          <Metric label="Average attendance" value={formatNumber(attendanceSummary.average, Number.isInteger(attendanceSummary.average) ? 0 : 2)} />
+          <Metric label="Saved records" value={formatNumber(attendanceSummary.recordCount)} />
         </div>
       </ReportSection>
 
@@ -375,16 +340,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
             ['Decisions', formatNumber(activitySummary.decisions)],
             ['Water baptism', formatNumber(activitySummary.waterBaptism)],
           ]} />
-          <PeriodBreakdown title={mode === 'year' ? 'Monthly activity/attendance totals' : 'Records inside this period'} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), formatNumber(row.activities), formatNumber(row.attendance)])} headers={['Period', 'Activity', 'Attendance']} />
+          <MiniTable title={mode === 'year' ? 'Monthly activity/attendance totals' : 'Records inside this period'} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), formatNumber(row.activities), formatNumber(row.attendance)])} headers={['Period', 'Activity', 'Attendance']} />
         </div>
       </ReportSection>
 
-      <ReportSection title="Finance" eyebrow="Money in and money out" description="Finance uses the saved weekly finance reports. Money in, money out and balance are totaled for the period; category totals stay visible." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
-        <div className="finance-total-grid">
-          <Metric label="Total money in" value={money(financeSummary.income)} />
-          <Metric label="Total money out" value={money(financeSummary.expenditure)} />
-          <Metric label="Net balance" value={money(financeSummary.balance)} />
-        </div>
+      <ReportSection title="Finance" eyebrow="Finance category" description="Saved finance categories for the selected period. Money in and money out remain visible only at category level." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
         <div className="report-subtable-grid">
           <MiniTable title="Finance categories" headers={['Category', 'Money in', 'Money out']} rows={financeSummary.categories.map(row => [row.category, money(row.income), money(row.expenditure)])} empty="No finance categories were saved in this period." />
         </div>
@@ -400,8 +360,8 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Period</th><th>Reports</th><th>Attendance</th><th>Activities</th><th>Money in</th><th>Money out</th><th>Balance</th></tr></thead>
-            <tbody>{periodRows.map((row, index) => <tr key={`${keyOf(row.date)}-${index}`}><td><b>{formatPeriodDate(row.date, mode)}</b></td><td>{formatNumber(row.reports)}</td><td>{formatNumber(row.attendance)}</td><td>{formatNumber(row.activities)}</td><td>{money(row.income)}</td><td>{money(row.expenditure)}</td><td>{money(row.balance)}</td></tr>)}</tbody>
+            <thead><tr><th>Period</th><th>Reports</th><th>Attendance</th><th>Activities</th></tr></thead>
+            <tbody>{periodRows.map((row, index) => <tr key={`${keyOf(row.date)}-${index}`}><td><b>{formatPeriodDate(row.date, mode)}</b></td><td>{formatNumber(row.reports)}</td><td>{formatNumber(row.attendance)}</td><td>{formatNumber(row.activities)}</td></tr>)}</tbody>
           </table>
         </div>
       </section>
@@ -420,16 +380,11 @@ function buildPeriodRow(date, reports, attendance, activities) {
     return reportKeys.has(itemDate) || (start && itemDate === key)
   })
   const activityRows = activities.filter(item => keyOf(item.date) === key)
-  const income = reports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0)
-  const expenditure = reports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0)
   return {
     date: start,
     reports: reports.length,
     attendance: attendanceRows.reduce((sum, item) => sum + attendanceTotalFor(item), 0),
     activities: reports.reduce((sum, report) => sum + rowsFromJson(report.numerical).reduce((n, row) => n + numberFromRow(row, ['adult', 'adults']) + numberFromRow(row, ['children', 'child']) + numberFromRow(row, ['visitor', 'visitors']), 0), 0) || activityRows.length,
-    income,
-    expenditure,
-    balance: income - expenditure,
   }
 }
 
@@ -478,9 +433,6 @@ function MiniTable({ title, headers, rows, empty = 'No records were saved in thi
   </section>
 }
 
-function PeriodBreakdown({ title, headers, rows }) {
-  return <MiniTable title={title} headers={headers} rows={rows} />
-}
 
 function Metric({ label, value }) {
   return <div className="finance-metric"><small>{label}</small><strong>{value}</strong></div>
@@ -506,9 +458,8 @@ function DailyReview({ review, close }) {
       </div>}
       {type === 'activity' && <div className="review-detail-list"><Detail label="Activity" value={item.name} /><Detail label="Type" value={item.type || 'Activity'} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div>}
       {type === 'finance' && <div className="review-finance">
-        <div className="review-total-grid"><Detail label="Money in" value={money(item.totalIncome)} /><Detail label="Money out" value={money(item.totalExpenditure)} /><Detail label="Balance" value={money(item.balance)} /></div>
-        <h3>Money in details</h3>{rowsFromJson(item.income).map((row, index) => <p key={index}><span>{row.name || 'Other income'}</span><b>{money(row.amount)}</b></p>)}
-        <h3>Money out details</h3>{rowsFromJson(item.expenditure).map((row, index) => <p key={index}><span>{row.name || 'Other expenditure'}</span><b>{money(row.amount)}</b></p>)}
+        <h3>Finance categories</h3>{rowsFromJson(item.income).map((row, index) => <p key={index}><span>{row.name || 'Other income'}</span><b>{money(row.amount)}</b></p>)}
+        <h3>Finance categories — money out</h3>{rowsFromJson(item.expenditure).map((row, index) => <p key={index}><span>{row.name || 'Other expenditure'}</span><b>{money(row.amount)}</b></p>)}
       </div>}
       <div className="record-actions"><button className="secondary" onClick={() => window.print()}>Print / PDF</button><button className="primary" onClick={close}>Done</button></div>
     </div>
