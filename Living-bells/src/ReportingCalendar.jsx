@@ -314,11 +314,6 @@ function MonthCard({ month, isAdmin, highlightedWeekId, onEdit, onDelete }) {
       <span style={{ width: percentage + '%' }} />
     </div>
 
-    {!coverage.complete && coverage.missingDates?.length > 0 && <div className="coverage-warning">
-      <b>{coverage.missingDays} date{coverage.missingDays === 1 ? '' : 's'} still uncovered</b>
-      <span>{coverage.missingDates.slice(0, 6).map(date => dateLabel(date)).join(' · ')}{coverage.missingDates.length > 6 ? ' · …' : ''}</span>
-    </div>}
-
     <div className="calendar-week-list">
       {month.weeks.map(week => <WeekCard key={week.id} month={month} week={week} isAdmin={isAdmin} highlighted={week.id === highlightedWeekId} onEdit={onEdit} onDelete={onDelete} />)}
     </div>
