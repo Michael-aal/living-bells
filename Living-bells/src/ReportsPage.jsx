@@ -37,7 +37,14 @@ function roundAverage(value) {
   return Number.isInteger(value) ? value : Number(value.toFixed(2))
 }
 
-function weekOfMonth(value) {\n  const date = parseDate(value)\n  if (!date) return 0\n  const first = new Date(date.getFullYear(), date.getMonth(), 1)\n  return Math.floor((date.getDate() + first.getDay() - 1) / 7) + 1\n}\n\nfunction startOfWeek(value) {
+function weekOfMonth(value) {
+  const date = parseDate(value)
+  if (!date) return 0
+  const first = new Date(date.getFullYear(), date.getMonth(), 1)
+  return Math.floor((date.getDate() + first.getDay() - 1) / 7) + 1
+}
+
+function startOfWeek(value) {
   const date = parseDate(value) || new Date()
   const start = new Date(date)
   start.setDate(date.getDate() - date.getDay())
