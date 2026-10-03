@@ -269,12 +269,12 @@ async function validateReportingWeekRange({year,month,weekNumber,startDate,endDa
   if(!start||!end) return 'A valid start and end date are required'
   if(daysInclusive(start,end)!==7) return 'A reporting week must contain exactly 7 days'
 
-  // The reporting month is determined by the first day of the 7-day week.
-  // A week may therefore cross into the following calendar month.
-  const expectedYear=start.getUTCFullYear()
-  const expectedMonth=start.getUTCMonth()+1
+  // A week belongs to the calendar month where its 7-day period ends.
+  // If the range crosses into a new month, that new month owns the week.
+  const expectedYear=end.getUTCFullYear()
+  const expectedMonth=end.getUTCMonth()+1
   if(expectedYear!==year||expectedMonth!==month){
-    return 'The reporting month must match the month where the reporting week starts'
+    return 'The reporting month must match the month where the reporting week ends'
   }
 
   const monthRecord=await prisma.reportingMonth.findUnique({
