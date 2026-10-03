@@ -90,6 +90,7 @@ function App() {
   })
   const [page, setPage] = useState('dashboard')
   const [reportEditDate, setReportEditDate] = useState(null)
+  const [financeEditDate, setFinanceEditDate] = useState(null)
   const [reportRefresh, setReportRefresh] = useState(0)
   const [dataRefreshKey, setDataRefreshKey] = useState(0)
   const [attendance, setAttendance] = useState([])
@@ -464,8 +465,28 @@ function App() {
   }
 
   function openFinanceEditor(date) {
-    setReportEditDate(date)
+    setFinanceEditDate(date)
     setPage('finance')
+  }
+
+  function openRecordFromSearch(result) {
+    const date = String(result?.date || '').slice(0, 10)
+    if (!date) return
+    if (result.type === 'Activities') {
+      setReportEditDate(date)
+      setPage('activities')
+      return
+    }
+    if (result.type === 'Finance') {
+      setFinanceEditDate(date)
+      setPage('finance')
+      return
+    }
+    if (result.type === 'Attendance') {
+      const record = attendance.find(item => String(item.id) === String(result.recordId))
+      if (record) setModal({ type: 'attendance-edit', record })
+      else setSync('That attendance record is no longer available')
+    }
   }
 
   function openActivityEditor(record) {
@@ -505,11 +526,11 @@ function App() {
         {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={attendance} expenses={visibleExpenses} activities={visibleActivities} weeklyReports={weeklyReports} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} onCreate={async () => { const name = window.prompt('New attendance option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: 'ATTENDANCE', name: name.trim() }); setAttendanceOptions(current => [...current.filter(x => x.name !== created.name), created]); setSync(created.offline ? 'Attendance option saved offline' : 'Backend connected') } catch (error) { setSync(error.message || 'Could not create attendance option') } }} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}<th>Action</th></tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}<td><button type="button" className="danger-button" onClick={()=>deleteAttendanceRecord(r.id)}>Delete</button></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
-        {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
+        {!loading && page === 'finance' && <FinancePage user={user} initialDate={financeEditDate || reportingContext?.date} onInitialDateHandled={() => setFinanceEditDate(null)} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
         {!loading && page === 'calendar' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'settings' && <SettingsPage user={user} onEditProfile={() => setModal('profile')} onLogout={logout} />}
-        {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} />}
+        {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} onOpenRecord={openRecordFromSearch} />}
         
       </section>
     </main>
