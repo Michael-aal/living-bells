@@ -36,6 +36,12 @@ function emptyForm(year, month) {
   }
 }
 
+function nextWeekNumber(months, year, month) {
+  const target = (months || []).find(item => Number(item.year) === Number(year) && Number(item.month) === Number(month))
+  const highest = (target?.weeks || []).reduce((max, week) => Math.max(max, Number(week.weekNumber) || 0), 0)
+  return Math.min(5, highest + 1)
+}
+
 export default function ReportingCalendar({ user, current }) {
   const currentYear = Number(current?.month?.year || new Date().getFullYear())
   const currentMonth = Number(current?.month?.month || new Date().getMonth() + 1)
@@ -70,11 +76,16 @@ export default function ReportingCalendar({ user, current }) {
     setForm(currentForm => {
       const next = { ...currentForm, [key]: value }
 
+      if (key === 'month' && !editingId) {
+        next.weekNumber = nextWeekNumber(months, next.year, Number(value))
+      }
+
       if (key === 'startDate' && value && !editingId) {
         next.endDate = addDays(value, 6)
         const end = new Date(next.endDate + 'T12:00:00Z')
         next.year = end.getUTCFullYear()
         next.month = end.getUTCMonth() + 1
+        next.weekNumber = nextWeekNumber(months, next.year, next.month)
         setYear(end.getUTCFullYear())
       }
 
@@ -83,6 +94,9 @@ export default function ReportingCalendar({ user, current }) {
         if (!Number.isNaN(end.getTime())) {
           next.year = end.getUTCFullYear()
           next.month = end.getUTCMonth() + 1
+          if (!editingId) {
+            next.weekNumber = nextWeekNumber(months, next.year, next.month)
+          }
           setYear(end.getUTCFullYear())
         }
       }
@@ -135,13 +149,13 @@ export default function ReportingCalendar({ user, current }) {
       }
 
       setEditingId(null)
+      const refreshed = await load()
       setForm(currentForm => ({
         ...currentForm,
-        weekNumber: Math.min(5, Number(currentForm.weekNumber) + 1),
+        weekNumber: nextWeekNumber(refreshed, payload.year, payload.month),
         startDate: '',
         endDate: '',
       }))
-      await load()
     } catch (e) {
       if (!editingId && e.message === 'That reporting week already exists') {
         const refreshed = await load()
