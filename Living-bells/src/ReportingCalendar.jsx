@@ -47,6 +47,7 @@ export default function ReportingCalendar({ user, current }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [highlightedWeekId, setHighlightedWeekId] = useState(null)
   const isAdmin = user?.role === 'ADMIN'
 
   async function load() {
@@ -55,6 +56,7 @@ export default function ReportingCalendar({ user, current }) {
       setError('')
       const data = await api.reportingMonths(year)
       setMonths(data || [])
+      return data || []
     } catch (e) {
       setError(e.message || 'Could not load calendar')
     } finally {
@@ -114,6 +116,7 @@ export default function ReportingCalendar({ user, current }) {
       setSaving(true)
       setError('')
       setNotice('')
+      setHighlightedWeekId(null)
 
       const payload = {
         year: Number(form.year),
@@ -140,6 +143,20 @@ export default function ReportingCalendar({ user, current }) {
       }))
       await load()
     } catch (e) {
+      if (!editingId && e.message === 'That reporting week already exists') {
+        const refreshed = await load()
+        const existing = (refreshed || [])
+          .flatMap(month => (month.weeks || []).map(week => ({ ...week, month })))
+          .find(week => Number(week.month.year) === Number(form.year)
+            && Number(week.month.month) === Number(form.month)
+            && Number(week.weekNumber) === Number(form.weekNumber))
+
+        if (existing) {
+          setHighlightedWeekId(existing.id)
+          setNotice('That reporting week is already saved. The existing week is highlighted below.')
+          return
+        }
+      }
       setError(e.message || 'Could not save calendar week')
     } finally {
       setSaving(false)
@@ -255,7 +272,7 @@ export default function ReportingCalendar({ user, current }) {
 
       {loading ? <p>Loading calendar…</p> : !months.length ? <div className="calendar-empty"><b>No weeks configured yet.</b><span>Start with the setup above. Save Week 1, then continue until the month is fully covered.</span></div> :
         <div className="calendar-month-list">
-          {months.map(month => <MonthCard key={month.id} month={month} isAdmin={isAdmin} onEdit={startEditing} onDelete={deleteWeek} />)}
+          {months.map(month => <MonthCard key={month.id} month={month} isAdmin={isAdmin} highlightedWeekId={highlightedWeekId} onEdit={startEditing} onDelete={deleteWeek} />)}
         </div>}
     </section>
 
@@ -263,7 +280,7 @@ export default function ReportingCalendar({ user, current }) {
   </div>
 }
 
-function MonthCard({ month, isAdmin, onEdit, onDelete }) {
+function MonthCard({ month, isAdmin, highlightedWeekId, onEdit, onDelete }) {
   const coverage = month.coverage || { totalDays: 0, coveredDays: 0, missingDays: 0, complete: false, missingDates: [] }
   const percentage = coverage.totalDays ? Math.round((coverage.coveredDays / coverage.totalDays) * 100) : 0
 
@@ -289,15 +306,15 @@ function MonthCard({ month, isAdmin, onEdit, onDelete }) {
     </div>}
 
     <div className="calendar-week-list">
-      {month.weeks.map(week => <WeekCard key={week.id} month={month} week={week} isAdmin={isAdmin} onEdit={onEdit} onDelete={onDelete} />)}
+      {month.weeks.map(week => <WeekCard key={week.id} month={month} week={week} isAdmin={isAdmin} highlighted={week.id === highlightedWeekId} onEdit={onEdit} onDelete={onDelete} />)}
     </div>
 
     {!month.weeks.length && <p className="calendar-empty-inline">No weeks saved for this month.</p>}
   </article>
 }
 
-function WeekCard({ month, week, isAdmin, onEdit, onDelete }) {
-  return <details className="calendar-week">
+function WeekCard({ month, week, isAdmin, highlighted, onEdit, onDelete }) {
+  return <details className={highlighted ? 'calendar-week highlighted' : 'calendar-week'} open={highlighted}>
     <summary>
       <span className="week-title"><b>Week {week.weekNumber}</b><small>{dateLabel(week.startDate)} → {dateLabel(week.endDate)}</small></span>
       <span className="week-summary-actions">
