@@ -413,7 +413,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         <div>
           <span className="eyebrow">Record search</span>
           <h2>Search saved records</h2>
-          <p className="card-subtitle">Search across Attendance, Finance and Activities by year, month, week, day, or a keyword. The saved date remains the source of truth.</p>
+          <p className="card-subtitle">Choose a record type, then narrow it down by year, month, week, or day. The saved date remains the source of truth.</p>
         </div>
         {(searchType || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Reset filters</button>}
       </div>
@@ -480,7 +480,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       ) : (
         <div className="record-search-empty">
           <strong>No saved record matches this search.</strong>
-          <span>Try changing the year, month, week, day, or keyword.</span>
+          <span>Try changing the record type, year, month, week, or day.</span>
         </div>
       )}
     </section>
@@ -490,7 +490,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
       <label>
-        {mode === 'week' ? 'Choose a date in the week' : mode === 'month' ? 'Choose a month' : 'Reporting year (July–June)'}
+        {mode === 'week' ? 'Choose a date for this week' : mode === 'month' ? 'Choose a month' : 'Choose a reporting year (July–June)'}
         <input type={mode === 'year' ? 'number' : mode === 'month' ? 'month' : 'date'} value={mode === 'year' ? String(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) : mode === 'month' ? keyOf(anchor).slice(0, 7) : anchor} onChange={e => {
           const value = e.target.value
           setAnchor(mode === 'year' ? `${value}-07-01` : mode === 'month' ? `${value}-01` : value)
