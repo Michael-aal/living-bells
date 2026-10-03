@@ -67,7 +67,24 @@ export default function ReportingCalendar({ user, current }) {
   function setField(key, value) {
     setForm(currentForm => {
       const next = { ...currentForm, [key]: value }
-      if (key === 'startDate' && value && !editingId) next.endDate = addDays(value, 6)
+
+      if (key === 'startDate' && value && !editingId) {
+        next.endDate = addDays(value, 6)
+        const end = new Date(next.endDate + 'T12:00:00Z')
+        next.year = end.getUTCFullYear()
+        next.month = end.getUTCMonth() + 1
+        setYear(end.getUTCFullYear())
+      }
+
+      if (key === 'endDate' && value) {
+        const end = new Date(value + 'T12:00:00Z')
+        if (!Number.isNaN(end.getTime())) {
+          next.year = end.getUTCFullYear()
+          next.month = end.getUTCMonth() + 1
+          setYear(end.getUTCFullYear())
+        }
+      }
+
       return next
     })
   }
@@ -215,7 +232,7 @@ export default function ReportingCalendar({ user, current }) {
         <span>Example</span>
         <b>October · Week 1</b>
         <em>Oct 4 → Oct 10</em>
-        <small>A week may cross into another calendar month. Its reporting month stays the month you selected.</small>
+        <small>If a seven-day week crosses into a new month, the new month owns that week. For example, Oct 31 → Nov 6 is assigned to November.</small>
       </div>
     </section> : <section className="card full calendar-readonly">
       <span className="eyebrow">Calendar</span>
