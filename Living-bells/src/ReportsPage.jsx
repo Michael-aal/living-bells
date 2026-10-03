@@ -319,96 +319,108 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       : [{ date: range.start, reports: 0, attendance: 0, activities: 0, income: 0, expenditure: 0, balance: 0 }]
   }, [mode, range, reports, selectedReports, attendance, activities])
 
+  const selectedMonthKey = keyOf(anchor).slice(0, 7)
+  const historyReports = reports.filter(report => keyOf(report.reportDate).slice(0, 7) === selectedMonthKey)
+  const historyWeeks = useMemo(() => {
+    const groups = new Map()
+    historyReports.forEach(report => {
+      const date = parseDate(report.reportDate)
+      if (!date) return
+      const weekStart = startOfWeek(date)
+      const weekKey = keyOf(weekStart)
+      if (!groups.has(weekKey)) groups.set(weekKey, { start: weekStart, reports: [] })
+      groups.get(weekKey).reports.push(report)
+    })
+    return Array.from(groups.values()).sort((a, b) => b.start - a.start).map(group => ({
+      ...group,
+      reports: group.reports.sort((a, b) => keyOf(b.reportDate).localeCompare(keyOf(a.reportDate))),
+    }))
+  }, [historyReports])
+
   return <div className="reports-page">
     <section className="card full reports-hero">
       <div>
-        <span className="eyebrow">Reports</span>
-        <h2>Weekly, monthly and yearly summaries</h2>
-        <p className="card-subtitle">Attendance, activities and finance are calculated separately from the records that were actually saved.</p>
+        <span className="eyebrow">History</span>
+        <h2>Saved records by month and day</h2>
+        <p className="card-subtitle">Every saved report stays attached to its actual date. Choose a month, then open a week group to see the individual days recorded inside it.</p>
       </div>
-      <button className="secondary" onClick={() => window.print()}>Print report</button>
+      <button className="secondary" onClick={() => window.print()}>Print history</button>
     </section>
 
-    <section className="card full report-controls">
-      <div className="report-period-tabs" role="tablist" aria-label="Report period">
-        {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
-      </div>
+    <section className="card full history-controls">
       <label>
-        {mode === 'week' ? 'Choose a date in the week' : mode === 'month' ? 'Choose a month' : 'Reporting year (July–June)'}
-        <input type={mode === 'year' ? 'number' : mode === 'month' ? 'month' : 'date'} value={mode === 'year' ? String(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) : mode === 'month' ? keyOf(anchor).slice(0, 7) : anchor} onChange={e => {
-          const value = e.target.value
-          setAnchor(mode === 'year' ? `${value}-07-01` : mode === 'month' ? `${value}-01` : value)
-        }} />
+        <span>Month</span>
+        <input type="month" value={selectedMonthKey} onChange={event => setAnchor(event.target.value ? event.target.value + '-01' : todayKey())} />
       </label>
-      <div className="period-summary">
-        <span className="eyebrow">Selected period</span>
-        <strong>{periodLabel(mode, anchor)}</strong>
-        {mode === 'year' && <small>July ${parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June ${(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
-        <small>{selectedReports.length} official weekly report{selectedReports.length === 1 ? '' : 's'} · {selectedAttendance.length} attendance record{selectedAttendance.length === 1 ? '' : 's'}</small>
+      <div className="history-count">
+        <span className="eyebrow">Selected month</span>
+        <strong>{parseDate(anchor)?.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' }) || '—'}</strong>
+        <small>{historyReports.length} saved day{historyReports.length === 1 ? '' : 's'} · {historyWeeks.length} week group{historyWeeks.length === 1 ? '' : 's'}</small>
       </div>
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
-    {loading ? <section className="card full"><p>Loading reports…</p></section> : <>
-      <ReportSection title="Attendance" eyebrow="Special services" description="Attendance is kept separate from activities. Every gender and age category is shown with its period total and average." action={canEditOperational ? () => onEditAttendance?.() : null}>
-        <SummaryTable headers={['Category', 'Total', 'Average']} rows={attendanceSummary.rows.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} totalRow={['Overall attendance', formatNumber(attendanceSummary.total), formatNumber(attendanceSummary.average, Number.isInteger(attendanceSummary.average) ? 0 : 2)]} />
-        <div className="report-subtable-grid">
-          <MiniTable title="Gender breakdown" headers={['Gender', 'Total', 'Average']} rows={[
-            ['Male', formatNumber(attendanceSummary.maleTotal), formatNumber(roundAverage(average(attendanceSummary.maleTotal, attendanceSummary.recordCount)))],
-            ['Female', formatNumber(attendanceSummary.femaleTotal), formatNumber(roundAverage(average(attendanceSummary.femaleTotal, attendanceSummary.recordCount)))],
-          ]} />
-          <MiniTable title="Age-group breakdown" headers={['Group', 'Total', 'Average']} rows={attendanceSummary.groups.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} />
-        </div>
-      </ReportSection>
+    {loading ? <section className="card full"><p>Loading history…</p></section> : <>
+      <section className="history-list">
+        {!historyReports.length && <section className="card full history-empty">
+          <span className="eyebrow">No saved records</span>
+          <h2>This month is clean</h2>
+          <p>No attendance, activity or finance report has been saved for this month yet.</p>
+        </section>}
 
-      <ReportSection title="Activities" eyebrow="Weekly activity report" description="Activities are calculated independently from attendance using the Adults, Children and Visitors columns in each saved weekly report." action={canEditOperational ? () => onEditActivity?.() : null}>
-        <SummaryTable headers={['Category', 'Average adult attendance', 'Average children attendance', 'Total']} rows={activitySummary.rows.map(row => [
-          row.label,
-          formatNumber(row.averageAdult, Number.isInteger(row.averageAdult) ? 0 : 2),
-          formatNumber(row.averageChildren, Number.isInteger(row.averageChildren) ? 0 : 2),
-          formatNumber(row.total),
-        ])} totalRow={['Overall activity attendance', formatNumber(activitySummary.averageAdult, Number.isInteger(activitySummary.averageAdult) ? 0 : 2), formatNumber(activitySummary.averageChildren, Number.isInteger(activitySummary.averageChildren) ? 0 : 2), formatNumber(activitySummary.total)]} />
-        <div className="report-subtable-grid">
-          <MiniTable title="Activity records" headers={['Measure', 'Value']} rows={[
-            ['Weekly reports', formatNumber(activitySummary.reports)],
-            ['Service/activity rows', formatNumber(activitySummary.serviceRows)],
-            ['Decisions', formatNumber(activitySummary.decisions)],
-            ['Water baptism', formatNumber(activitySummary.waterBaptism)],
-          ]} />
-          <PeriodBreakdown title={mode === 'year' ? 'Monthly activity/attendance totals' : 'Records inside this period'} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), formatNumber(row.activities), formatNumber(row.attendance)])} headers={['Period', 'Activity', 'Attendance']} />
-        </div>
-      </ReportSection>
+        {historyWeeks.map(week => <section className="card full history-week" key={keyOf(week.start)}>
+          <div className="card-head history-week-head">
+            <div>
+              <span className="eyebrow">Week group</span>
+              <h2>{week.start.toLocaleDateString('en-NG', { day: '2-digit', month: 'short' })} – {new Date(week.start.getFullYear(), week.start.getMonth(), week.start.getDate() + 6).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}</h2>
+            </div>
+            <span className="history-badge">{week.reports.length} day{week.reports.length === 1 ? '' : 's'} saved</span>
+          </div>
 
-      <ReportSection title="Finance" eyebrow="Money in and money out" description="Finance uses the saved weekly finance reports. Money in, money out and balance are totaled for the period; category totals stay visible." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
-        <div className="finance-total-grid">
-          <Metric label="Total money in" value={money(financeSummary.income)} />
-          <Metric label="Total money out" value={money(financeSummary.expenditure)} />
-          <Metric label="Net balance" value={money(financeSummary.balance)} />
-        </div>
-        <SummaryTable headers={['Finance measure', 'Total', 'Average per saved weekly report']} rows={[
-          ['Money in', money(financeSummary.income), money(financeSummary.incomeAverage)],
-          ['Money out', money(financeSummary.expenditure), money(financeSummary.expenditureAverage)],
-          ['Balance', money(financeSummary.balance), money(financeSummary.balanceAverage)],
-        ]} />
-        <div className="report-subtable-grid">
-          <MiniTable title="Finance categories" headers={['Category', 'Money in', 'Money out']} rows={financeSummary.categories.map(row => [row.category, money(row.income), money(row.expenditure)])} empty="No finance categories were saved in this period." />
-          <PeriodBreakdown title={mode === 'year' ? 'Monthly finance totals' : 'Saved weekly reports'} headers={['Period', 'Money in', 'Money out', 'Balance']} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), money(row.income), money(row.expenditure), money(row.balance)])} />
-        </div>
-      </ReportSection>
+          <div className="history-days">
+            {week.reports.map(report => {
+              const serviceRows = rowsFromJson(report.numerical).length
+              const decisions = Number(report.spiritual?.['No. of Decision'] || 0)
+              return <article className="history-day" key={report.id}>
+                <div className="history-day-top">
+                  <div>
+                    <span className="eyebrow">{new Date(report.reportDate + 'T12:00:00').toLocaleDateString('en-NG', { weekday: 'long' })}</span>
+                    <h3>{displayDate(report.reportDate)}</h3>
+                  </div>
+                  <button type="button" className="secondary small-button" onClick={() => setReview({ type: 'finance', item: report })}>Review</button>
+                </div>
+                <div className="history-day-metrics">
+                  <Metric label="Money in" value={money(report.totalIncome)} />
+                  <Metric label="Money out" value={money(report.totalExpenditure)} />
+                  <Metric label="Balance" value={money(report.balance)} />
+                </div>
+                <div className="history-day-meta">
+                  <span>{serviceRows} activity row{serviceRows === 1 ? '' : 's'}</span>
+                  <span>{formatNumber(decisions)} decision{decisions === 1 ? '' : 's'}</span>
+                  <span>Saved {displayDate(report.createdAt)}</span>
+                </div>
+              </article>
+            })}
+          </div>
+        </section>)}
+      </section>
 
-      <section className="card full">
+      <section className="card full history-summary">
         <div className="card-head">
           <div>
-            <span className="eyebrow">Period records</span>
-            <h2>{periodLabel(mode, anchor)} breakdown</h2>
-            <p className="card-subtitle">A compact table of the records contributing to this report period.</p>
+            <span className="eyebrow">Month summary</span>
+            <h2>What was saved in {parseDate(anchor)?.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })}</h2>
+          </div>
+          <div className="report-row-actions">
+            {onEditFinance && <button className="secondary small-button" onClick={onEditFinance}>Open Finance</button>}
+            {onEditActivity && <button className="secondary small-button" onClick={onEditActivity}>Open Activities</button>}
+            {onEditAttendance && <button className="secondary small-button" onClick={onEditAttendance}>Open Attendance</button>}
           </div>
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Period</th><th>Reports</th><th>Attendance</th><th>Activities</th><th>Money in</th><th>Money out</th><th>Balance</th></tr></thead>
-            <tbody>{periodRows.map((row, index) => <tr key={`${keyOf(row.date)}-${index}`}><td><b>{formatPeriodDate(row.date, mode)}</b></td><td>{formatNumber(row.reports)}</td><td>{formatNumber(row.attendance)}</td><td>{formatNumber(row.activities)}</td><td>{money(row.income)}</td><td>{money(row.expenditure)}</td><td>{money(row.balance)}</td></tr>)}</tbody>
-          </table>
+        <div className="finance-total-grid">
+          <Metric label="Saved days" value={formatNumber(historyReports.length)} />
+          <Metric label="Money in" value={money(historyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0))} />
+          <Metric label="Money out" value={money(historyReports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0))} />
         </div>
       </section>
     </>}
