@@ -54,3 +54,31 @@
   .table-wrap{overflow:visible!important}
   table{font-size:10px}
 }
+
+.history-controls{display:grid;grid-template-columns:minmax(220px,.55fr) 1fr;gap:18px;align-items:end}
+.history-controls label{display:grid;gap:7px;font-size:13px;font-weight:700}
+.history-controls input{width:100%}
+.history-count{display:grid;gap:3px}
+.history-count strong{font-size:18px}
+.history-count small{opacity:.65}
+.history-list{display:grid;gap:18px}
+.history-week{display:grid;gap:16px}
+.history-week-head{align-items:center}
+.history-week-head h2{margin:5px 0 0}
+.history-badge{padding:7px 10px;border-radius:999px;background:rgba(99,78,180,.08);font-size:12px;font-weight:800;white-space:nowrap}
+.history-days{display:grid;gap:10px}
+.history-day{border:1px solid rgba(20,24,35,.1);border-radius:14px;padding:15px;background:rgba(20,24,35,.018);display:grid;gap:12px}
+.history-day-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.history-day-top h3{margin:4px 0 0;font-size:17px}
+.history-day-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.history-day-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;opacity:.68}
+.history-empty{text-align:center;padding:42px 20px}
+.history-empty h2{margin:6px 0}
+.history-empty p{margin:0;opacity:.65}
+.history-summary{display:grid;gap:16px}
+@media(max-width:680px){
+  .history-controls{grid-template-columns:1fr}
+  .history-day-top{align-items:flex-start}
+  .history-day-metrics{grid-template-columns:1fr}
+  .history-badge{font-size:11px}
+}
