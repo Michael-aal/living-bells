@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
-import { money } from './weeklyReportConfig'
+import { money, NUMERICAL_ROWS, INCOME_ROWS, EXPENDITURE_ROWS } from './weeklyReportConfig'
 import './ReportsPage.css'
 
 const pad = value => String(value).padStart(2, '0')
@@ -194,7 +194,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
 
     const denominator = selectedReports.length || 0
     const rows = Array.from(categoryMap.values())
-      .sort((a, b) => a.label.localeCompare(b.label))
+      .sort((a, b) => {
+        const ai = NUMERICAL_ROWS.indexOf(a.label)
+        const bi = NUMERICAL_ROWS.indexOf(b.label)
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      })
       .map(row => ({
         label: row.label,
         averageAdult: roundAverage(average(row.adults, denominator)),
@@ -344,9 +348,16 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         </div>
       </ReportSection>
 
-      <ReportSection title="Finance" eyebrow="Finance category" description="Saved finance categories for the selected period. Money in and money out remain visible only at category level." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
+      <ReportSection title="Finance" eyebrow="Finance categories" description="Categories use the same names and the same order as the Finance page." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
         <div className="report-subtable-grid">
-          <MiniTable title="Finance categories" headers={['Category', 'Money in', 'Money out']} rows={financeSummary.categories.map(row => [row.category, money(row.income), money(row.expenditure)])} empty="No finance categories were saved in this period." />
+          <MiniTable title="INCOME" headers={['S/N', 'INCOME', 'AMOUNT']} rows={INCOME_ROWS.filter(Boolean).map((name, index) => {
+            const row = financeSummary.categories.find(item => item.category === name)
+            return [index + 1, name, money(row?.income || 0)]
+          })} empty="No finance income categories were saved in this period." />
+          <MiniTable title="EXPENDITURE" headers={['S/N', 'EXPENDITURE', 'AMOUNT']} rows={EXPENDITURE_ROWS.filter(Boolean).map((name, index) => {
+            const row = financeSummary.categories.find(item => item.category === name)
+            return [index + 1, name, money(row?.expenditure || 0)]
+          })} empty="No finance expenditure categories were saved in this period." />
         </div>
       </ReportSection>
 
