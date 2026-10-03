@@ -197,7 +197,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   }, [selectedAttendance])
 
   const activitySummary = useMemo(() => {
-    const total = { adults: 0, children: 0, visitors: 0 }
+    const categoryMap = new Map()
     let serviceRows = 0
     let decisions = 0
     let waterBaptism = 0
@@ -206,25 +206,46 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       const numerical = rowsFromJson(report.numerical)
       serviceRows += numerical.length
       numerical.forEach(row => {
-        total.adults += numberFromRow(row, ['adult', 'adults'])
-        total.children += numberFromRow(row, ['children', 'child'])
-        total.visitors += numberFromRow(row, ['visitor', 'visitors'])
+        const category = String(row?.service || row?.name || 'Other activity').trim() || 'Other activity'
+        const adult = numberFromRow(row, ['adult', 'adults'])
+        const children = numberFromRow(row, ['children', 'child'])
+        const visitor = numberFromRow(row, ['visitor', 'visitors'])
+        const current = categoryMap.get(category) || { label: category, adults: 0, children: 0, visitors: 0 }
+        current.adults += adult
+        current.children += children
+        current.visitors += visitor
+        categoryMap.set(category, current)
       })
       const spiritual = report.spiritual || {}
       decisions += Number(spiritual['No. of Decision'] || spiritual.decisions || 0)
       waterBaptism += Number(spiritual['No. of Water Baptism'] || spiritual.waterBaptism || 0)
     })
 
-    const overall = total.adults + total.children + total.visitors
     const denominator = selectedReports.length || 0
+    const rows = Array.from(categoryMap.values())
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map(row => ({
+        label: row.label,
+        averageAdult: roundAverage(average(row.adults, denominator)),
+        averageChildren: roundAverage(average(row.children, denominator)),
+        total: row.adults + row.children + row.visitors,
+      }))
+
+    const adultTotal = rows.reduce((sum, row) => sum + row.averageAdult, 0)
+    const childrenTotal = rows.reduce((sum, row) => sum + row.averageChildren, 0)
+    const overallTotal = Array.from(categoryMap.values()).reduce((sum, row) => sum + row.adults + row.children + row.visitors, 0)
+
     return {
-      rows: [
-        { label: 'Adults', total: total.adults, average: roundAverage(average(total.adults, denominator)) },
-        { label: 'Children', total: total.children, average: roundAverage(average(total.children, denominator)) },
-        { label: 'Visitors', total: total.visitors, average: roundAverage(average(total.visitors, denominator)) },
-      ],
-      total: overall,
-      average: roundAverage(average(overall, denominator)),
+      rows,
+      total: overallTotal,
+      averageAdult: roundAverage(average(
+        Array.from(categoryMap.values()).reduce((sum, row) => sum + row.adults, 0),
+        denominator,
+      )),
+      averageChildren: roundAverage(average(
+        Array.from(categoryMap.values()).reduce((sum, row) => sum + row.children, 0),
+        denominator,
+      )),
       reports: selectedReports.length,
       serviceRows,
       decisions,
@@ -341,7 +362,12 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       </ReportSection>
 
       <ReportSection title="Activities" eyebrow="Weekly activity report" description="Activities are calculated independently from attendance using the Adults, Children and Visitors columns in each saved weekly report." action={canEditOperational ? () => onEditActivity?.() : null}>
-        <SummaryTable headers={['Category', 'Total', 'Average']} rows={activitySummary.rows.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} totalRow={['Overall activity attendance', formatNumber(activitySummary.total), formatNumber(activitySummary.average, Number.isInteger(activitySummary.average) ? 0 : 2)]} />
+        <SummaryTable headers={['Category', 'Average adult attendance', 'Average children attendance', 'Total']} rows={activitySummary.rows.map(row => [
+          row.label,
+          formatNumber(row.averageAdult, Number.isInteger(row.averageAdult) ? 0 : 2),
+          formatNumber(row.averageChildren, Number.isInteger(row.averageChildren) ? 0 : 2),
+          formatNumber(row.total),
+        ])} totalRow={['Overall activity attendance', formatNumber(activitySummary.averageAdult, Number.isInteger(activitySummary.averageAdult) ? 0 : 2), formatNumber(activitySummary.averageChildren, Number.isInteger(activitySummary.averageChildren) ? 0 : 2), formatNumber(activitySummary.total)]} />
         <div className="report-subtable-grid">
           <MiniTable title="Activity records" headers={['Measure', 'Value']} rows={[
             ['Weekly reports', formatNumber(activitySummary.reports)],
