@@ -7,7 +7,8 @@
     "dev": "prisma migrate deploy && prisma generate && node --watch src/server.js",
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "reset:data": "CONFIRM_RESET=YES node scripts/reset-operational-data.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
