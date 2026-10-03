@@ -466,10 +466,9 @@ function validateWeeklyPayload(body){
       const name=String(r?.name||'').trim()
       const rawAmount=r?.amount
       const value=amount(rawAmount)
-      const hasValue=rawAmount!==''&&rawAmount!==null&&rawAmount!==undefined
-      if(!name&&!hasValue) continue
-      if(!name&&value!==null&&value>0)return null
-      if(value===null||!name)return null
+      const hasAmount=rawAmount!==''&&rawAmount!==null&&rawAmount!==undefined
+      if(!name&&(!hasAmount||value===0)) continue
+      if(!name||value===null)return null
       normalized.push({sn:normalized.length+1,name,amount:value})
     }
     return normalized
