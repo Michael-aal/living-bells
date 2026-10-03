@@ -102,7 +102,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [anchor, setAnchor] = useState(todayKey())
   const [review, setReview] = useState(null)
 
-  const canEditOperational = user?.role === 'STAFF'
+  const canEditOperational = ['ADMIN', 'SECRETARY', 'PASTOR', 'STAFF'].includes(user?.role)
 
   useEffect(() => {
     let cancelled = false
@@ -385,14 +385,8 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           <Metric label="Total money out" value={money(financeSummary.expenditure)} />
           <Metric label="Net balance" value={money(financeSummary.balance)} />
         </div>
-        <SummaryTable headers={['Finance measure', 'Total', 'Average per saved weekly report']} rows={[
-          ['Money in', money(financeSummary.income), money(financeSummary.incomeAverage)],
-          ['Money out', money(financeSummary.expenditure), money(financeSummary.expenditureAverage)],
-          ['Balance', money(financeSummary.balance), money(financeSummary.balanceAverage)],
-        ]} />
         <div className="report-subtable-grid">
           <MiniTable title="Finance categories" headers={['Category', 'Money in', 'Money out']} rows={financeSummary.categories.map(row => [row.category, money(row.income), money(row.expenditure)])} empty="No finance categories were saved in this period." />
-          <PeriodBreakdown title={mode === 'year' ? 'Monthly finance totals' : 'Saved weekly reports'} headers={['Period', 'Money in', 'Money out', 'Balance']} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), money(row.income), money(row.expenditure), money(row.balance)])} />
         </div>
       </ReportSection>
 
