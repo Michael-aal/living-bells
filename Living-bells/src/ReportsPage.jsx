@@ -58,6 +58,18 @@ function inRange(value, start, end) {
   return date && date >= start && date <= end
 }
 
+function reportingYearStart(year) {
+  return new Date(Number(year), 6, 1, 0, 0, 0, 0)
+}
+
+function reportingYearEnd(year) {
+  return new Date(Number(year) + 1, 5, 30, 23, 59, 59, 999)
+}
+
+function reportingYearLabel(year) {
+  return `${Number(year)}/${String(Number(year) + 1).slice(-2)}`
+}
+
 function periodLabel(mode, anchor) {
   if (mode === 'week') {
     return `Week of ${startOfWeek(anchor).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}`
@@ -66,7 +78,7 @@ function periodLabel(mode, anchor) {
     const date = parseDate(anchor)
     return date.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
   }
-  return String(parseDate(anchor)?.getFullYear() || new Date().getFullYear())
+  return `Reporting year ${reportingYearLabel(parseDate(anchor)?.getFullYear() || new Date().getFullYear())}`
 }
 
 function rowsFromJson(value) {
@@ -124,9 +136,10 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       start: new Date(selected.getFullYear(), selected.getMonth(), 1, 0, 0, 0, 0),
       end: new Date(selected.getFullYear(), selected.getMonth() + 1, 0, 23, 59, 59, 999),
     }
+    const reportingYear = selected.getFullYear()
     return {
-      start: new Date(selected.getFullYear(), 0, 1, 0, 0, 0, 0),
-      end: new Date(selected.getFullYear(), 11, 31, 23, 59, 59, 999),
+      start: reportingYearStart(reportingYear),
+      end: reportingYearEnd(reportingYear),
     }
   }, [mode, anchor])
 
@@ -184,7 +197,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   }, [selectedAttendance])
 
   const activitySummary = useMemo(() => {
-    const total = { adults: 0, children: 0, visitors: 0 }
+    const categoryMap = new Map()
     let serviceRows = 0
     let decisions = 0
     let waterBaptism = 0
@@ -193,25 +206,46 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       const numerical = rowsFromJson(report.numerical)
       serviceRows += numerical.length
       numerical.forEach(row => {
-        total.adults += numberFromRow(row, ['adult', 'adults'])
-        total.children += numberFromRow(row, ['children', 'child'])
-        total.visitors += numberFromRow(row, ['visitor', 'visitors'])
+        const category = String(row?.service || row?.name || 'Other activity').trim() || 'Other activity'
+        const adult = numberFromRow(row, ['adult', 'adults'])
+        const children = numberFromRow(row, ['children', 'child'])
+        const visitor = numberFromRow(row, ['visitor', 'visitors'])
+        const current = categoryMap.get(category) || { label: category, adults: 0, children: 0, visitors: 0 }
+        current.adults += adult
+        current.children += children
+        current.visitors += visitor
+        categoryMap.set(category, current)
       })
       const spiritual = report.spiritual || {}
       decisions += Number(spiritual['No. of Decision'] || spiritual.decisions || 0)
       waterBaptism += Number(spiritual['No. of Water Baptism'] || spiritual.waterBaptism || 0)
     })
 
-    const overall = total.adults + total.children + total.visitors
     const denominator = selectedReports.length || 0
+    const rows = Array.from(categoryMap.values())
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map(row => ({
+        label: row.label,
+        averageAdult: roundAverage(average(row.adults, denominator)),
+        averageChildren: roundAverage(average(row.children, denominator)),
+        total: row.adults + row.children + row.visitors,
+      }))
+
+    const adultTotal = rows.reduce((sum, row) => sum + row.averageAdult, 0)
+    const childrenTotal = rows.reduce((sum, row) => sum + row.averageChildren, 0)
+    const overallTotal = Array.from(categoryMap.values()).reduce((sum, row) => sum + row.adults + row.children + row.visitors, 0)
+
     return {
-      rows: [
-        { label: 'Adults', total: total.adults, average: roundAverage(average(total.adults, denominator)) },
-        { label: 'Children', total: total.children, average: roundAverage(average(total.children, denominator)) },
-        { label: 'Visitors', total: total.visitors, average: roundAverage(average(total.visitors, denominator)) },
-      ],
-      total: overall,
-      average: roundAverage(average(overall, denominator)),
+      rows,
+      total: overallTotal,
+      averageAdult: roundAverage(average(
+        Array.from(categoryMap.values()).reduce((sum, row) => sum + row.adults, 0),
+        denominator,
+      )),
+      averageChildren: roundAverage(average(
+        Array.from(categoryMap.values()).reduce((sum, row) => sum + row.children, 0),
+        denominator,
+      )),
       reports: selectedReports.length,
       serviceRows,
       decisions,
@@ -264,9 +298,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const periodRows = useMemo(() => {
     if (mode === 'year') {
       const year = range.start.getFullYear()
-      return Array.from({ length: 12 }, (_, month) => {
-        const start = new Date(year, month, 1)
-        const end = new Date(year, month + 1, 0, 23, 59, 59, 999)
+      return Array.from({ length: 12 }, (_, monthIndex) => {
+        const month = (6 + monthIndex) % 12
+        const calendarYear = month >= 6 ? year : year + 1
+        const start = new Date(calendarYear, month, 1)
+        const end = new Date(calendarYear, month + 1, 0, 23, 59, 59, 999)
         const rows = reports.filter(report => inRange(report.reportDate, start, end))
         return buildPeriodRow(start, rows, attendance, activities)
       })
@@ -298,15 +334,16 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
       <label>
-        {mode === 'week' ? 'Choose a date in the week' : mode === 'month' ? 'Choose a month' : 'Choose a year'}
+        {mode === 'week' ? 'Choose a date in the week' : mode === 'month' ? 'Choose a month' : 'Reporting year (July–June)'}
         <input type={mode === 'year' ? 'number' : mode === 'month' ? 'month' : 'date'} value={mode === 'year' ? String(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) : mode === 'month' ? keyOf(anchor).slice(0, 7) : anchor} onChange={e => {
           const value = e.target.value
-          setAnchor(mode === 'year' ? `${value}-01-01` : mode === 'month' ? `${value}-01` : value)
+          setAnchor(mode === 'year' ? `${value}-07-01` : mode === 'month' ? `${value}-01` : value)
         }} />
       </label>
       <div className="period-summary">
         <span className="eyebrow">Selected period</span>
         <strong>{periodLabel(mode, anchor)}</strong>
+        {mode === 'year' && <small>July ${parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June ${(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
         <small>{selectedReports.length} official weekly report{selectedReports.length === 1 ? '' : 's'} · {selectedAttendance.length} attendance record{selectedAttendance.length === 1 ? '' : 's'}</small>
       </div>
     </section>
@@ -325,7 +362,12 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       </ReportSection>
 
       <ReportSection title="Activities" eyebrow="Weekly activity report" description="Activities are calculated independently from attendance using the Adults, Children and Visitors columns in each saved weekly report." action={canEditOperational ? () => onEditActivity?.() : null}>
-        <SummaryTable headers={['Category', 'Total', 'Average']} rows={activitySummary.rows.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} totalRow={['Overall activity attendance', formatNumber(activitySummary.total), formatNumber(activitySummary.average, Number.isInteger(activitySummary.average) ? 0 : 2)]} />
+        <SummaryTable headers={['Category', 'Average adult attendance', 'Average children attendance', 'Total']} rows={activitySummary.rows.map(row => [
+          row.label,
+          formatNumber(row.averageAdult, Number.isInteger(row.averageAdult) ? 0 : 2),
+          formatNumber(row.averageChildren, Number.isInteger(row.averageChildren) ? 0 : 2),
+          formatNumber(row.total),
+        ])} totalRow={['Overall activity attendance', formatNumber(activitySummary.averageAdult, Number.isInteger(activitySummary.averageAdult) ? 0 : 2), formatNumber(activitySummary.averageChildren, Number.isInteger(activitySummary.averageChildren) ? 0 : 2), formatNumber(activitySummary.total)]} />
         <div className="report-subtable-grid">
           <MiniTable title="Activity records" headers={['Measure', 'Value']} rows={[
             ['Weekly reports', formatNumber(activitySummary.reports)],

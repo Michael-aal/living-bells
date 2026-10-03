@@ -5,6 +5,7 @@ import ReportsPage from './ReportsPage'
 import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import Auth from './Auth'
+import ReportingWeekPicker from './ReportingWeekPicker'
 import { api, syncOfflineQueue } from './api'
 import { getQueueForOwner } from './offlineStore'
 
@@ -570,7 +571,12 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
     [attendance, range],
   )
   const latestAttendance = useMemo(
-    () => [...periodAttendance].sort((a, b) => new Date(b.activity?.date || 0) - new Date(a.activity?.date || 0))[0],
+    () => [...periodAttendance]
+      .filter(item => {
+        const date = new Date(item.activity?.date || '')
+        return !Number.isNaN(date.getTime()) && date.getUTCDay() === 0
+      })
+      .sort((a, b) => new Date(b.activity?.date || 0) - new Date(a.activity?.date || 0))[0],
     [periodAttendance],
   )
   const periodReports = useMemo(
@@ -603,6 +609,7 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
         <button type="button" onClick={() => go('finance')}>Finance</button>
         <button type="button" onClick={() => go('activities')}>Activities</button>
       </div>
+      <div className="welcome-divider" aria-hidden="true" />
       {reportingContext?.week ? <p className="reporting-context"><b>{monthLabel} · Week {reportingContext.week.weekNumber}</b><span>{reportingContext.day} · {reportingContext.date}</span></p> : <div className="reporting-context"><b>Calendar week not configured</b><span>An administrator needs to assign today's date to a saved seven-day calendar week.</span>{isAdmin && <button type="button" className="secondary reporting-setup-button" onClick={() => go('calendar')}>Define this week in Calendar settings</button>}</div>}
     </section>
 
@@ -623,21 +630,11 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
     </section>
 
     <div className="stats">
-      <Stat icon="◷" name="Latest service" value={latestService} note={latestServiceDate || 'No attendance recorded'} />
-      <Stat icon="◉" name="People" value={latestAttendance?.total || 0} note="People in latest service" />
+      <Stat icon="◉" name="Latest Sunday Service" value={latestAttendance?.total || 0} note={latestAttendance?.activity?.date ? new Date(latestAttendance.activity.date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'No Sunday attendance recorded'} />
       <Stat icon="₦" name="Total money in" value={money(periodMoneyIn)} note={durationLabel} />
       <Stat icon="₦" name="Total money out" value={money(periodMoneyOut)} note={durationLabel} />
       <Stat icon="⌁" name="Total balance" value={money(periodBalance)} note="Money in minus money out" />
     </div>
-
-    <section className="card dashboard-today">
-      <div><span className="eyebrow">{durationLabel}</span><h2>{durationLabel} finance snapshot</h2><p className="card-subtitle">Only records saved within the selected duration.</p></div>
-      <div className="today-money">
-        <div><small>Money in</small><b>{money(periodMoneyIn)}</b></div>
-        <div><small>Money out</small><b>{money(periodMoneyOut)}</b></div>
-        <div><small>Balance</small><b>{money(periodBalance)}</b></div>
-      </div>
-    </section>
 
     <div className="quick">{!isAdmin && <><Action icon="₦" title="Record money in or out" text="Record income received or expenses paid." onClick={() => go('finance')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} /></>}{isAdmin && <Action icon="▤" title="Print reports" text="Print attendance, expense and activity tables." onClick={() => go('reports')} />}</div>
     <div className="dash-grid"><ActivityTrend activities={activities} /><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
@@ -874,6 +871,7 @@ function AttendanceForm({ close, save, initial = null, recordingDate = null, opt
   return <Modal title={initial ? 'Edit attendance' : 'Record attendance'} close={close}>
     <label>Service<input list="attendance-options" value={service} onChange={e => setService(e.target.value)} /><datalist id="attendance-options">{options.map(option => <option key={option.id || option.name} value={option.name} />)}</datalist></label>
     <label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+    <ReportingWeekPicker date={date} onDateChange={setDate} />
     <div className="attendance-form"><div className="frow header"><span>Group</span><span>Male</span><span>Female</span></div>{Object.entries(groups).map(([g, v]) => <div className="frow" key={g}><b>{g}</b><input type="number" min="0" value={v.male} onChange={e => update(g, 'male', e.target.value)} placeholder="0" /><input type="number" min="0" value={v.female} onChange={e => update(g, 'female', e.target.value)} placeholder="0" /></div>)}</div>
     <div className="total">Total attendance <b>{total}</b></div>
     <button type="button" className="primary wide" onClick={submit} disabled={saving || !service || !date}>{saving ? 'Saving…' : initial ? 'Save changes' : 'Save attendance'}</button>

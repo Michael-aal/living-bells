@@ -84,7 +84,7 @@
 
 .dashboard-today{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-top:18px}.today-money{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:12px}.today-money>div{display:grid;gap:5px;padding:12px 16px;border:1px solid var(--border,#e5e7eb);border-radius:10px}.today-money small{opacity:.68}.today-money b{font-size:18px}@media(max-width:800px){.dashboard-today{align-items:stretch;flex-direction:column}.today-money{grid-template-columns:1fr}}
 
-.welcome-card{background:var(--surface,#fff);border:1px solid var(--border,#e6e8ec);border-radius:18px;padding:28px;margin-bottom:18px}.welcome-card h2{margin:6px 0 4px;font-size:30px;letter-spacing:-.02em}.welcome-date{margin:0;color:var(--muted,#667085);font-size:15px}.welcome-card h3{margin:24px 0 12px;font-size:18px}.welcome-actions{display:flex;gap:10px;flex-wrap:wrap}.welcome-actions button{border:1px solid var(--border,#dfe3e8);background:#fff;border-radius:10px;padding:11px 16px;font:inherit;font-weight:600;cursor:pointer}.welcome-actions button:hover{border-color:#aab2bd}.reporting-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 0;padding-top:15px;border-top:1px solid var(--border,#e6e8ec);font-size:13px}.reporting-context>span{color:var(--muted,#667085)}.reporting-context:has(.reporting-setup-button){display:grid;justify-content:initial;gap:7px}.reporting-setup-button{width:max-content;margin-top:3px}@media(max-width:600px){.welcome-card{padding:22px}.welcome-card h2{font-size:25px}.reporting-context{display:grid;gap:4px}.reporting-setup-button{width:100%}}
+.welcome-card{background:var(--surface,#fff);border:1px solid var(--border,#e6e8ec);border-radius:18px;padding:28px;margin-bottom:18px}.welcome-card h2{margin:6px 0 4px;font-size:30px;letter-spacing:-.02em}.welcome-date{margin:0;color:var(--muted,#667085);font-size:15px}.welcome-card h3{margin:24px 0 12px;font-size:18px}.welcome-actions{display:flex;gap:10px;flex-wrap:wrap}.welcome-actions button{border:1px solid var(--border,#dfe3e8);background:#fff;border-radius:10px;padding:11px 16px;font:inherit;font-weight:600;cursor:pointer}.welcome-actions button:hover{border-color:#aab2bd}.welcome-divider{height:1px;background:var(--border,#e6e8ec);margin:18px 0 0}.reporting-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 0;padding-top:0;font-size:13px}.reporting-context>span{color:var(--muted,#667085)}.reporting-context:has(.reporting-setup-button){display:grid;justify-content:initial;gap:7px}.reporting-setup-button{width:max-content;margin-top:3px}@media(max-width:600px){.welcome-card{padding:22px}.welcome-card h2{font-size:25px}.reporting-context{display:grid;gap:4px}.reporting-setup-button{width:100%}}
 
 .trend-controls{display:flex;gap:12px;margin-bottom:18px}.trend-controls label{display:grid;gap:6px;font-size:12px;font-weight:600}.trend-controls select{min-height:38px;border:1px solid var(--border,#dfe3e8);border-radius:9px;padding:0 10px;background:#fff;font:inherit}.monthly-bars{height:220px;display:grid;grid-template-columns:repeat(12,1fr);gap:8px;align-items:end}.monthly-bar-col{height:100%;display:grid;grid-template-rows:18px 1fr 22px;gap:5px;text-align:center;font-size:11px}.monthly-bar-track{height:100%;display:flex;align-items:flex-end;justify-content:center}.monthly-bar{width:min(24px,70%);min-height:4px;background:var(--accent,#6d5dfc);border-radius:5px 5px 2px 2px}.trend-summary{margin:14px 0 0;color:var(--muted,#667085);font-size:13px}.staff-counts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.staff-counts>div{padding:16px;border:1px solid var(--border,#e6e8ec);border-radius:12px;background:#fff}.staff-counts small,.staff-counts b{display:block}.staff-counts small{color:var(--muted,#667085);font-size:12px}.staff-counts b{font-size:26px;margin-top:4px}@media(max-width:700px){.monthly-bars{gap:3px}.monthly-bar{width:70%}.trend-controls{display:grid}.staff-counts{grid-template-columns:1fr}}
 
@@ -585,3 +585,105 @@ input:focus,select:focus,textarea:focus{
 
 .action-menu{position:relative}.action-menu>summary{list-style:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.action-menu>summary::-webkit-details-marker{display:none}.action-menu-panel{position:absolute;right:0;top:calc(100% + 7px);min-width:170px;background:#fff;border:1px solid var(--border);border-radius:11px;box-shadow:0 16px 35px #24143d18;padding:6px;z-index:25}.action-menu-panel button{display:block;width:100%;border:0;background:transparent;border-radius:8px;padding:9px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--text)}.action-menu-panel button:hover{background:var(--ps)}@media(max-width:767px){.record-actions{width:100%}.action-menu-panel{right:0;min-width:180px}}
 .danger-button{border:1px solid #e4c6c6;background:#fff;border-radius:8px;padding:7px 10px;font:inherit;font-size:11px;font-weight:700;cursor:pointer;color:#9b2c2c}.danger-button:hover{background:#fff5f5}
+.reporting-week-picker{margin:14px 0 16px;padding:14px;border:1px solid var(--border);border-radius:13px;background:#fbfafd;overflow:hidden}.reporting-week-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}.reporting-week-heading strong{display:block;font-size:11px;margin-top:4px}.reporting-week-heading small{font-size:9px;color:var(--muted)}.reporting-week-strip{display:flex;gap:7px;overflow-x:auto;padding:2px 1px 5px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.reporting-week-strip::-webkit-scrollbar{display:none}.reporting-week-tab{position:relative;flex:0 0 86px;min-height:54px;border:1px solid var(--border);background:#fff;border-radius:11px;color:#77727f;padding:9px 8px;text-align:left;display:flex;flex-direction:column;gap:3px;transition:.18s ease}.reporting-week-tab span{font-size:10px;font-weight:800}.reporting-week-tab small{font-size:8px;color:#a19ba7}.reporting-week-tab em{font-size:7px;font-style:normal;color:var(--p);font-weight:800}.reporting-week-tab:hover{border-color:#cfc2f7}.reporting-week-tab.selected{background:var(--ps);border-color:#b9a2f3;color:var(--pd);box-shadow:0 5px 14px #4c1d9510}.reporting-week-tab.current{border-width:2px;border-color:var(--p);transform:translateY(-1px);box-shadow:0 7px 18px #4c1d9518}.reporting-week-tab.current.selected{background:var(--ps)}.reporting-day-strip{display:flex;gap:6px;overflow-x:auto;padding:10px 1px 1px;margin-top:8px;border-top:1px solid var(--border);scrollbar-width:none;-webkit-overflow-scrolling:touch}.reporting-day-strip::-webkit-scrollbar{display:none}.reporting-day-strip button{flex:0 0 54px;border:1px solid var(--border);background:#fff;border-radius:9px;padding:7px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;color:#77727f}.reporting-day-strip button span{font-size:7px;font-weight:700}.reporting-day-strip button strong{font-size:13px}.reporting-day-strip button small{font-size:7px;color:#a19ba7}.reporting-day-strip button.selected{background:var(--p);border-color:var(--p);color:#fff}.reporting-day-strip button.selected small{color:#fff}.reporting-week-loading,.reporting-week-empty{display:block;font-size:9px;color:var(--muted);padding:4px 0}
+
+
+/* Mobile overflow + touch-scrolling guardrails
+   Keep horizontal gestures inside the component that owns them. */
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+@supports not (overflow: clip) {
+  html,
+  body,
+  #root {
+    overflow-x: hidden;
+  }
+}
+
+main,
+.content,
+.card,
+.stat,
+.action-card,
+.finance-table,
+.reporting-calendar {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  .content {
+    width: 100%;
+    overflow-x: clip;
+  }
+
+  .card,
+  .stat,
+  .action-card,
+  .finance-table {
+    overflow: hidden;
+  }
+
+  /* Tables get their own horizontal scroll lane. */
+  .table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .table-wrap > table {
+    max-width: none;
+  }
+
+  /* Wide weekly/finance tables must scroll inside their container,
+     never expand the page itself. */
+  .finance-table .table-wrap {
+    margin-inline: -1px;
+    width: calc(100% + 2px);
+  }
+
+  .weekly-table {
+    width: max-content;
+    min-width: 680px;
+  }
+
+  .finance-table .weekly-table {
+    min-width: 500px;
+  }
+
+  /* Horizontal selectors are intentionally horizontal-only. */
+  .reporting-week-strip,
+  .reporting-day-strip {
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Prevent flex/grid children from becoming accidental page-width elements. */
+  .heading,
+  .actions,
+  .report-grid,
+  .form-grid,
+  .finance-columns,
+  .balance-box,
+  .staff-layout {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    max-width: 100%;
+  }
+}

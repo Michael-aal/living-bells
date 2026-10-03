@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import WeeklyPrintSheet from './WeeklyPrintSheet'
 import { CURRENCY, money, normalizeReport, reportPayload, totals, dateLabel, emptyReport } from './weeklyReportConfig'
+import ReportingWeekPicker from './ReportingWeekPicker'
 
 const canEdit = role => ['ADMIN','SECRETARY','PASTOR','STAFF'].includes(role)
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b)
@@ -35,7 +36,11 @@ export default function FinancePage({ user, initialDate = null }) {
     {loading&&<div className="card full" role="status">Loading weekly report…</div>}
     <section className="card full weekly-editor">
       <div className="card-head"><div><span className="eyebrow">Weekly report • Finance</span><h2>Finance</h2><p className="card-subtitle">Section C of the church Weekly Report Form. {editable?'You can edit this report.':'Read-only access.'}</p></div><div className="record-actions">{dirty&&<span className="save-state unsaved">Unsaved changes</span>}{!dirty&&<span className="save-state saved">Saved</span>}{editable&&<button className="primary" disabled={saving||!dirty} onClick={save}>{saving?'Saving…':'Save report'}</button>}<details className="action-menu"><summary className="secondary">More</summary><div className="action-menu-panel"><button type="button" onClick={() => createFinanceOption('INCOME')}>Create income</button><button type="button" onClick={() => createFinanceOption('EXPENSE')}>Create expense</button><button type="button" onClick={printPdf}>Save PDF</button></div></details></div></div>
-      {notice&&<div className="toast" role="status">{notice}</div>}{error&&<div className="toast toast-error" role="alert">{error}</div>}{error&&<div className="form-error weekly-error" role="alert">{error}</div>}
+      {notice&&<div className="toast" role="status">{notice}</div>}{error&&<div className="toast toast-error" role="alert">{error}</div>}
+    </section>
+    <ReportingWeekPicker date={selectedDate} onDateChange={selectDate} />
+    <section className="card full weekly-editor">
+      {error&&<div className="form-error weekly-error" role="alert">{error}</div>}
       <label className="report-date">Weekly report date<input aria-label="Weekly report date" type="date" value={report.reportDate} onChange={e=>selectDate(e.target.value)} /></label>
       <div className="finance-columns"><FinanceTable title="INCOME" section="income" rows={report.income} editable={editable} update={update} total={summary.totalCredit}/><FinanceTable title="EXPENDITURE" section="expenditure" rows={report.expenditure} editable={editable} update={update} total={summary.totalExpenditure}/></div>
       <div className="balance-box"><div><span>Total Credit</span><b>{money(summary.totalCredit)}</b></div><div><span>Total Expenditure</span><b>{money(summary.totalExpenditure)}</b></div><div className={summary.balance>=0?'surplus':'deficit'}><span>Total Balance: {summary.balance>=0?'Surplus':'Deficit'}</span><b>{money(Math.abs(summary.balance))}</b></div></div>
