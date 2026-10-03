@@ -43,9 +43,12 @@ export default function ActivitiesPage({ user, initialDate = null, onInitialDate
     {loading&&<div className="card full" role="status">Loading weekly report…</div>}
     <section className="card full weekly-editor">
       <div className="card-head"><div><span className="eyebrow">Weekly report • Activities</span><h2>Activities</h2><p className="card-subtitle">Sections A and B of the church Weekly Report Form. {editable?'You can edit this report.':'Read-only access.'}</p></div><div className="record-actions">{dirty&&<span className="save-state unsaved">Unsaved changes</span>}{!dirty&&<span className="save-state saved">Saved</span>}{editable&&<button className="primary" disabled={saving||!dirty} onClick={save}>{saving?'Saving…':'Save report'}</button>}<details className="action-menu"><summary className="secondary">More</summary><div className="action-menu-panel"><button type="button" onClick={createActivityOption}>Create activity</button><button type="button" onClick={printPdf}>Save PDF</button></div></details></div></div>
-      {notice&&<div className="toast" role="status">{notice}</div>}{error&&<div className="toast toast-error" role="alert">{error}</div>}{error&&<div className="form-error weekly-error" role="alert">{error}</div>}
+      {notice&&<div className="toast" role="status">{notice}</div>}{error&&<div className="toast toast-error" role="alert">{error}</div>}
+    </section>
+    <ReportingWeekPicker date={selectedDate} onDateChange={selectDate} />
+    <section className="card full weekly-editor">
+      {error&&<div className="form-error weekly-error" role="alert">{error}</div>}
       <label className="report-date">Weekly report date<input aria-label="Weekly report date" type="date" value={report.reportDate} onChange={e=>selectDate(e.target.value)}/></label>
-      <ReportingWeekPicker date={selectedDate} onDateChange={selectDate} />
       <section className="weekly-section"><div className="weekly-section-title">A. NUMERICAL SECTION (ACTUAL)</div><div className="table-wrap"><table className="weekly-table activities-table"><thead><tr><th>S/N</th><th>Service Type</th><th>Adult</th><th>Children</th><th>Visitor</th><th>Total</th></tr></thead><tbody>
         {report.numerical.map((row,index)=><tr key={row.sn}><td>{index+1}</td><td><b>{row.service || NUMERICAL_ROWS[index] || 'Custom Activity'}</b></td>{['adult','children','visitor'].map(key=><td key={key}><label className="sr-only" htmlFor={'activity-'+index+'-'+key}>{(row.service || NUMERICAL_ROWS[index] || 'Activity')+' '+key}</label><input id={'activity-'+index+'-'+key} type="number" min="0" step="1" inputMode="numeric" value={row[key]} disabled={!editable} onChange={e=>setNumerical(index,key,e.target.value)}/></td>)}<td><b>{row.total}</b></td></tr>)}
       </tbody></table></div></section>
