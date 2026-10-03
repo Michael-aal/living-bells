@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
-import { money } from './weeklyReportConfig'
+import { money, NUMERICAL_ROWS, INCOME_ROWS, EXPENDITURE_ROWS } from './weeklyReportConfig'
 import './ReportsPage.css'
 
 const pad = value => String(value).padStart(2, '0')
@@ -35,6 +35,13 @@ function average(total, count) {
 
 function roundAverage(value) {
   return Number.isInteger(value) ? value : Number(value.toFixed(2))
+}
+
+function weekOfMonth(value) {
+  const date = parseDate(value)
+  if (!date) return 0
+  const first = new Date(date.getFullYear(), date.getMonth(), 1)
+  return Math.floor((date.getDate() + first.getDay() - 1) / 7) + 1
 }
 
 function startOfWeek(value) {
@@ -92,7 +99,7 @@ function numberFromRow(row, keys) {
   return 0
 }
 
-export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinance, onEditActivity, onEditAttendance }) {
+export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinance, onEditActivity, onEditAttendance, onOpenRecord }) {
   const [reports, setReports] = useState([])
   const [activities, setActivities] = useState([])
   const [attendance, setAttendance] = useState([])
@@ -101,8 +108,13 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [mode, setMode] = useState('week')
   const [anchor, setAnchor] = useState(todayKey())
   const [review, setReview] = useState(null)
+  const [searchType, setSearchType] = useState('')
+  const [searchYear, setSearchYear] = useState('')
+  const [searchMonth, setSearchMonth] = useState('')
+  const [searchWeek, setSearchWeek] = useState('')
+  const [searchDay, setSearchDay] = useState('')
 
-  const canEditOperational = user?.role === 'STAFF'
+  const canEditOperational = ['ADMIN', 'SECRETARY', 'PASTOR', 'STAFF'].includes(user?.role)
 
   useEffect(() => {
     let cancelled = false
@@ -128,6 +140,101 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     load()
     return () => { cancelled = true }
   }, [refreshKey])
+
+  const searchYears = useMemo(() => {
+    const years = new Set()
+    reports.forEach(item => {
+      const date = parseDate(item.reportDate)
+      if (date) years.add(date.getFullYear())
+    })
+    attendance.forEach(item => {
+      const date = parseDate(item.activity?.date || item.date || item.recordDate)
+      if (date) years.add(date.getFullYear())
+    })
+    activities.forEach(item => {
+      const date = parseDate(item.date)
+      if (date) years.add(date.getFullYear())
+    })
+    return Array.from(years).sort((a, b) => b - a)
+  }, [reports, attendance, activities])
+
+  const searchWeeks = useMemo(() => {
+    if (!searchYear || !searchMonth) return [1, 2, 3, 4, 5, 6]
+    const days = new Date(Number(searchYear), Number(searchMonth), 0).getDate()
+    const firstDay = new Date(Number(searchYear), Number(searchMonth) - 1, 1).getDay()
+    const count = Math.ceil((days + firstDay) / 7)
+    return Array.from({ length: count }, (_, index) => index + 1)
+  }, [searchYear, searchMonth])
+
+  const searchDays = useMemo(() => {
+    if (!searchYear || !searchMonth) return Array.from({ length: 31 }, (_, index) => index + 1)
+    const days = new Date(Number(searchYear), Number(searchMonth), 0).getDate()
+    return Array.from({ length: days }, (_, index) => index + 1)
+  }, [searchYear, searchMonth])
+
+  const searchResults = useMemo(() => {
+    const matches = (dateValue, type) => {
+      const date = parseDate(dateValue)
+      if (!date) return false
+      if (searchType && type !== searchType) return false
+      if (searchYear && date.getFullYear() !== Number(searchYear)) return false
+      if (searchMonth && date.getMonth() + 1 !== Number(searchMonth)) return false
+      if (searchDay && date.getDate() !== Number(searchDay)) return false
+      if (searchWeek && weekOfMonth(dateValue) !== Number(searchWeek)) return false
+      return true
+    }
+
+    const results = []
+
+    reports.forEach(report => {
+      const date = report.reportDate
+      const incomeNames = rowsFromJson(report.income).map(row => row.name || row.category).filter(Boolean)
+      const expenditureNames = rowsFromJson(report.expenditure).map(row => row.name || row.category).filter(Boolean)
+      const activityNames = rowsFromJson(report.numerical).map(row => row.service || row.name).filter(Boolean)
+      if (matches(date, 'Finance')) {
+        results.push({
+          type: 'Finance',
+          date,
+          recordId: report.id,
+          title: 'Finance record',
+          detail: `${incomeNames.length} income categories · ${expenditureNames.length} expenditure categories · ${money(report.totalIncome || 0)} in · ${money(report.totalExpenditure || 0)} out`,
+        })
+      }
+      if (matches(date, 'Activities')) {
+        results.push({
+          type: 'Activities',
+          date,
+          recordId: report.id,
+          title: 'Weekly activities',
+          detail: activityNames.length ? activityNames.join(' · ') : 'No activity rows saved',
+        })
+      }
+    })
+
+    attendance.forEach(item => {
+      const date = item.activity?.date || item.date || item.recordDate
+      const service = item.activity?.name || item.service || 'Attendance record'
+      if (matches(date, 'Attendance')) {
+        results.push({
+          type: 'Attendance',
+          date,
+          recordId: item.id,
+          title: service,
+          detail: `${formatNumber(attendanceTotalFor(item))} total attendance`,
+        })
+      }
+    })
+
+    return results.sort((a, b) => keyOf(b.date).localeCompare(keyOf(a.date)))
+  }, [reports, attendance, searchType, searchYear, searchMonth, searchWeek, searchDay])
+
+  const clearSearch = () => {
+    setSearchType('')
+    setSearchYear('')
+    setSearchMonth('')
+    setSearchWeek('')
+    setSearchDay('')
+  }
 
   const range = useMemo(() => {
     const selected = parseDate(anchor) || new Date()
@@ -159,37 +266,8 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   )
 
   const attendanceSummary = useMemo(() => {
-    const keys = [
-      ['Children male', 'childrenMale'],
-      ['Children female', 'childrenFemale'],
-      ['Teenagers male', 'teenagersMale'],
-      ['Teenagers female', 'teenagersFemale'],
-      ['Youth male', 'youthMale'],
-      ['Youth female', 'youthFemale'],
-      ['Adults male', 'adultsMale'],
-      ['Adults female', 'adultsFemale'],
-    ]
-    const values = keys.map(([label, key]) => {
-      const total = selectedAttendance.reduce((sum, item) => sum + Number(item[key] || 0), 0)
-      return { label, total, average: roundAverage(average(total, selectedAttendance.length)) }
-    })
-    const groups = [
-      ['Children', ['childrenMale', 'childrenFemale']],
-      ['Teenagers', ['teenagersMale', 'teenagersFemale']],
-      ['Youth', ['youthMale', 'youthFemale']],
-      ['Adults', ['adultsMale', 'adultsFemale']],
-    ].map(([label, groupKeys]) => {
-      const total = selectedAttendance.reduce((sum, item) => sum + groupKeys.reduce((n, key) => n + Number(item[key] || 0), 0), 0)
-      return { label, total, average: roundAverage(average(total, selectedAttendance.length)) }
-    })
-    const maleTotal = selectedAttendance.reduce((sum, item) => sum + Number(item.childrenMale || 0) + Number(item.teenagersMale || 0) + Number(item.youthMale || 0) + Number(item.adultsMale || 0), 0)
-    const femaleTotal = selectedAttendance.reduce((sum, item) => sum + Number(item.childrenFemale || 0) + Number(item.teenagersFemale || 0) + Number(item.youthFemale || 0) + Number(item.adultsFemale || 0), 0)
-    const total = maleTotal + femaleTotal
+    const total = selectedAttendance.reduce((sum, item) => sum + attendanceTotalFor(item), 0)
     return {
-      rows: values,
-      groups,
-      maleTotal,
-      femaleTotal,
       total,
       average: roundAverage(average(total, selectedAttendance.length)),
       recordCount: selectedAttendance.length,
@@ -223,7 +301,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
 
     const denominator = selectedReports.length || 0
     const rows = Array.from(categoryMap.values())
-      .sort((a, b) => a.label.localeCompare(b.label))
+      .sort((a, b) => {
+        const ai = NUMERICAL_ROWS.indexOf(a.label)
+        const bi = NUMERICAL_ROWS.indexOf(b.label)
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      })
       .map(row => ({
         label: row.label,
         averageAdult: roundAverage(average(row.adults, denominator)),
@@ -287,9 +369,6 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       income,
       expenditure,
       balance: income - expenditure,
-      incomeAverage: roundAverage(average(income, selectedReports.length)),
-      expenditureAverage: roundAverage(average(expenditure, selectedReports.length)),
-      balanceAverage: roundAverage(average(income - expenditure, selectedReports.length)),
       categories,
       records: selectedReports.length,
     }
@@ -316,7 +395,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     }
     return selectedReports.length
       ? selectedReports.slice().sort((a, b) => keyOf(a.reportDate).localeCompare(keyOf(b.reportDate))).map(report => buildPeriodRow(parseDate(report.reportDate), [report], attendance, activities))
-      : [{ date: range.start, reports: 0, attendance: 0, activities: 0, income: 0, expenditure: 0, balance: 0 }]
+      : [{ date: range.start, reports: 0, attendance: 0, activities: 0 }]
   }, [mode, range, reports, selectedReports, attendance, activities])
 
   return <div className="reports-page">
@@ -329,12 +408,89 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       <button className="secondary" onClick={() => window.print()}>Print report</button>
     </section>
 
+    <section className="card full record-search-card">
+      <div className="card-head">
+        <div>
+          <span className="eyebrow">Record search</span>
+          <h2>Search saved records</h2>
+          <p className="card-subtitle">Choose a record type, then narrow it down by year, month, week, or day. The saved date remains the source of truth.</p>
+        </div>
+        {(searchType || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Reset filters</button>}
+      </div>
+
+      <form className="record-search-filters" onSubmit={e => e.preventDefault()}>
+        <label className="record-search-primary-filter">
+          <span>Record type</span>
+          <select value={searchType} onChange={e => setSearchType(e.target.value)} aria-label="Choose record type">
+            <option value="">All records</option>
+            <option value="Activities">Activities</option>
+            <option value="Finance">Finance</option>
+            <option value="Attendance">Attendance</option>
+          </select>
+        </label>
+        <label>
+          Year
+          <select value={searchYear} onChange={e => { setSearchYear(e.target.value); setSearchWeek(''); setSearchDay('') }}>
+            <option value="">Any year</option>
+            {searchYears.map(year => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </label>
+        <label>
+          Month
+          <select value={searchMonth} onChange={e => { setSearchMonth(e.target.value); setSearchWeek(''); setSearchDay('') }}>
+            <option value="">Any month</option>
+            {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{new Date(2000, index, 1).toLocaleDateString('en-NG', { month: 'long' })}</option>)}
+          </select>
+        </label>
+        <label>
+          Week
+          <select value={searchWeek} onChange={e => setSearchWeek(e.target.value)}>
+            <option value="">Any week</option>
+            {searchWeeks.map(week => <option key={week} value={week}>Week {week}</option>)}
+          </select>
+        </label>
+        <label>
+          Day
+          <select value={searchDay} onChange={e => setSearchDay(e.target.value)}>
+            <option value="">Any day</option>
+            {searchDays.map(day => <option key={day} value={day}>{day}</option>)}
+          </select>
+        </label>
+        <button className="primary search-submit" type="submit">Find records</button>
+      </form>
+
+      <div className="search-results-head">
+        <strong>{formatNumber(searchResults.length)} result{searchResults.length === 1 ? '' : 's'}</strong>
+        <span>{searchType || 'All records'} · {searchYear || 'Any year'} · {searchMonth ? new Date(2000, Number(searchMonth) - 1, 1).toLocaleDateString('en-NG', { month: 'long' }) : 'Any month'} · {searchWeek ? `Week ${searchWeek}` : 'Any week'} · {searchDay ? `Day ${searchDay}` : 'Any day'}</span>
+      </div>
+
+      {searchResults.length > 0 ? (
+        <div className="record-search-results">
+          {searchResults.map((result, index) => (
+            <button type="button" className="record-search-result" key={`${result.type}-${keyOf(result.date)}-${index}`} onClick={() => onOpenRecord?.(result)}>
+              <div>
+                <span className="record-search-type">{result.type}</span>
+                <h3>{result.title}</h3>
+                <p>{result.detail}</p>
+              </div>
+              <time dateTime={keyOf(result.date)}>{displayDate(result.date)}</time>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="record-search-empty">
+          <strong>No saved record matches this search.</strong>
+          <span>Try changing the record type, year, month, week, or day.</span>
+        </div>
+      )}
+    </section>
+
     <section className="card full report-controls">
       <div className="report-period-tabs" role="tablist" aria-label="Report period">
         {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
       <label>
-        {mode === 'week' ? 'Choose a date in the week' : mode === 'month' ? 'Choose a month' : 'Reporting year (July–June)'}
+        {mode === 'week' ? 'Choose a date for this week' : mode === 'month' ? 'Choose a month' : 'Choose a reporting year (July–June)'}
         <input type={mode === 'year' ? 'number' : mode === 'month' ? 'month' : 'date'} value={mode === 'year' ? String(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) : mode === 'month' ? keyOf(anchor).slice(0, 7) : anchor} onChange={e => {
           const value = e.target.value
           setAnchor(mode === 'year' ? `${value}-07-01` : mode === 'month' ? `${value}-01` : value)
@@ -343,21 +499,18 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       <div className="period-summary">
         <span className="eyebrow">Selected period</span>
         <strong>{periodLabel(mode, anchor)}</strong>
-        {mode === 'year' && <small>July ${parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June ${(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
+        {mode === 'year' && <small>July {parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June {(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
         <small>{selectedReports.length} official weekly report{selectedReports.length === 1 ? '' : 's'} · {selectedAttendance.length} attendance record{selectedAttendance.length === 1 ? '' : 's'}</small>
       </div>
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
     {loading ? <section className="card full"><p>Loading reports…</p></section> : <>
-      <ReportSection title="Attendance" eyebrow="Special services" description="Attendance is kept separate from activities. Every gender and age category is shown with its period total and average." action={canEditOperational ? () => onEditAttendance?.() : null}>
-        <SummaryTable headers={['Category', 'Total', 'Average']} rows={attendanceSummary.rows.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} totalRow={['Overall attendance', formatNumber(attendanceSummary.total), formatNumber(attendanceSummary.average, Number.isInteger(attendanceSummary.average) ? 0 : 2)]} />
-        <div className="report-subtable-grid">
-          <MiniTable title="Gender breakdown" headers={['Gender', 'Total', 'Average']} rows={[
-            ['Male', formatNumber(attendanceSummary.maleTotal), formatNumber(roundAverage(average(attendanceSummary.maleTotal, attendanceSummary.recordCount)))],
-            ['Female', formatNumber(attendanceSummary.femaleTotal), formatNumber(roundAverage(average(attendanceSummary.femaleTotal, attendanceSummary.recordCount)))],
-          ]} />
-          <MiniTable title="Age-group breakdown" headers={['Group', 'Total', 'Average']} rows={attendanceSummary.groups.map(row => [row.label, formatNumber(row.total), formatNumber(row.average, Number.isInteger(row.average) ? 0 : 2)])} />
+      <ReportSection title="Attendance" eyebrow="Attendance summary" description="Attendance is shown as the saved total for the selected period, without age or gender breakdowns." action={canEditOperational ? () => onEditAttendance?.() : null}>
+        <div className="finance-total-grid">
+          <Metric label="Total attendance" value={formatNumber(attendanceSummary.total)} />
+          <Metric label="Average attendance" value={formatNumber(attendanceSummary.average, Number.isInteger(attendanceSummary.average) ? 0 : 2)} />
+          <Metric label="Saved records" value={formatNumber(attendanceSummary.recordCount)} />
         </div>
       </ReportSection>
 
@@ -375,24 +528,20 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
             ['Decisions', formatNumber(activitySummary.decisions)],
             ['Water baptism', formatNumber(activitySummary.waterBaptism)],
           ]} />
-          <PeriodBreakdown title={mode === 'year' ? 'Monthly activity/attendance totals' : 'Records inside this period'} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), formatNumber(row.activities), formatNumber(row.attendance)])} headers={['Period', 'Activity', 'Attendance']} />
+          <MiniTable title={mode === 'year' ? 'Monthly activity/attendance totals' : 'Records inside this period'} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), formatNumber(row.activities), formatNumber(row.attendance)])} headers={['Period', 'Activity', 'Attendance']} />
         </div>
       </ReportSection>
 
-      <ReportSection title="Finance" eyebrow="Money in and money out" description="Finance uses the saved weekly finance reports. Money in, money out and balance are totaled for the period; category totals stay visible." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
-        <div className="finance-total-grid">
-          <Metric label="Total money in" value={money(financeSummary.income)} />
-          <Metric label="Total money out" value={money(financeSummary.expenditure)} />
-          <Metric label="Net balance" value={money(financeSummary.balance)} />
-        </div>
-        <SummaryTable headers={['Finance measure', 'Total', 'Average per saved weekly report']} rows={[
-          ['Money in', money(financeSummary.income), money(financeSummary.incomeAverage)],
-          ['Money out', money(financeSummary.expenditure), money(financeSummary.expenditureAverage)],
-          ['Balance', money(financeSummary.balance), money(financeSummary.balanceAverage)],
-        ]} />
+      <ReportSection title="Finance" eyebrow="Finance categories" description="Categories use the same names and the same order as the Finance page." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
         <div className="report-subtable-grid">
-          <MiniTable title="Finance categories" headers={['Category', 'Money in', 'Money out']} rows={financeSummary.categories.map(row => [row.category, money(row.income), money(row.expenditure)])} empty="No finance categories were saved in this period." />
-          <PeriodBreakdown title={mode === 'year' ? 'Monthly finance totals' : 'Saved weekly reports'} headers={['Period', 'Money in', 'Money out', 'Balance']} rows={periodRows.map(row => [formatPeriodDate(row.date, mode), money(row.income), money(row.expenditure), money(row.balance)])} />
+          <MiniTable title="INCOME" headers={['S/N', 'INCOME', 'AMOUNT']} rows={INCOME_ROWS.filter(Boolean).map((name, index) => {
+            const row = financeSummary.categories.find(item => item.category === name)
+            return [index + 1, name, money(row?.income || 0)]
+          })} empty="No finance income categories were saved in this period." />
+          <MiniTable title="EXPENDITURE" headers={['S/N', 'EXPENDITURE', 'AMOUNT']} rows={EXPENDITURE_ROWS.filter(Boolean).map((name, index) => {
+            const row = financeSummary.categories.find(item => item.category === name)
+            return [index + 1, name, money(row?.expenditure || 0)]
+          })} empty="No finance expenditure categories were saved in this period." />
         </div>
       </ReportSection>
 
@@ -406,8 +555,8 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Period</th><th>Reports</th><th>Attendance</th><th>Activities</th><th>Money in</th><th>Money out</th><th>Balance</th></tr></thead>
-            <tbody>{periodRows.map((row, index) => <tr key={`${keyOf(row.date)}-${index}`}><td><b>{formatPeriodDate(row.date, mode)}</b></td><td>{formatNumber(row.reports)}</td><td>{formatNumber(row.attendance)}</td><td>{formatNumber(row.activities)}</td><td>{money(row.income)}</td><td>{money(row.expenditure)}</td><td>{money(row.balance)}</td></tr>)}</tbody>
+            <thead><tr><th>Period</th><th>Reports</th><th>Attendance</th><th>Activities</th></tr></thead>
+            <tbody>{periodRows.map((row, index) => <tr key={`${keyOf(row.date)}-${index}`}><td><b>{formatPeriodDate(row.date, mode)}</b></td><td>{formatNumber(row.reports)}</td><td>{formatNumber(row.attendance)}</td><td>{formatNumber(row.activities)}</td></tr>)}</tbody>
           </table>
         </div>
       </section>
@@ -426,16 +575,11 @@ function buildPeriodRow(date, reports, attendance, activities) {
     return reportKeys.has(itemDate) || (start && itemDate === key)
   })
   const activityRows = activities.filter(item => keyOf(item.date) === key)
-  const income = reports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0)
-  const expenditure = reports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0)
   return {
     date: start,
     reports: reports.length,
     attendance: attendanceRows.reduce((sum, item) => sum + attendanceTotalFor(item), 0),
     activities: reports.reduce((sum, report) => sum + rowsFromJson(report.numerical).reduce((n, row) => n + numberFromRow(row, ['adult', 'adults']) + numberFromRow(row, ['children', 'child']) + numberFromRow(row, ['visitor', 'visitors']), 0), 0) || activityRows.length,
-    income,
-    expenditure,
-    balance: income - expenditure,
   }
 }
 
@@ -484,9 +628,6 @@ function MiniTable({ title, headers, rows, empty = 'No records were saved in thi
   </section>
 }
 
-function PeriodBreakdown({ title, headers, rows }) {
-  return <MiniTable title={title} headers={headers} rows={rows} />
-}
 
 function Metric({ label, value }) {
   return <div className="finance-metric"><small>{label}</small><strong>{value}</strong></div>
@@ -502,19 +643,13 @@ function DailyReview({ review, close }) {
         <button className="close" onClick={close}>×</button>
       </div>
       {type === 'attendance' && <div className="review-detail-list">
-        {[
-          ['Service', item.activity?.name || 'Service'],
-          ['Children male', item.childrenMale], ['Children female', item.childrenFemale],
-          ['Teenagers male', item.teenagersMale], ['Teenagers female', item.teenagersFemale],
-          ['Youth male', item.youthMale], ['Youth female', item.youthFemale],
-          ['Adults male', item.adultsMale], ['Adults female', item.adultsFemale],
-        ].map(([label, value]) => <Detail key={label} label={label} value={typeof value === 'number' ? formatNumber(value) : value} />)}
+        <Detail label="Service" value={item.activity?.name || 'Service'} />
+        <Detail label="Total attendance" value={formatNumber(attendanceTotalFor(item))} />
       </div>}
       {type === 'activity' && <div className="review-detail-list"><Detail label="Activity" value={item.name} /><Detail label="Type" value={item.type || 'Activity'} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div>}
       {type === 'finance' && <div className="review-finance">
-        <div className="review-total-grid"><Detail label="Money in" value={money(item.totalIncome)} /><Detail label="Money out" value={money(item.totalExpenditure)} /><Detail label="Balance" value={money(item.balance)} /></div>
-        <h3>Money in details</h3>{rowsFromJson(item.income).map((row, index) => <p key={index}><span>{row.name || 'Other income'}</span><b>{money(row.amount)}</b></p>)}
-        <h3>Money out details</h3>{rowsFromJson(item.expenditure).map((row, index) => <p key={index}><span>{row.name || 'Other expenditure'}</span><b>{money(row.amount)}</b></p>)}
+        <h3>Finance categories</h3>{rowsFromJson(item.income).map((row, index) => <p key={index}><span>{row.name || 'Other income'}</span><b>{money(row.amount)}</b></p>)}
+        <h3>Finance categories — money out</h3>{rowsFromJson(item.expenditure).map((row, index) => <p key={index}><span>{row.name || 'Other expenditure'}</span><b>{money(row.amount)}</b></p>)}
       </div>}
       <div className="record-actions"><button className="secondary" onClick={() => window.print()}>Print / PDF</button><button className="primary" onClick={close}>Done</button></div>
     </div>
