@@ -458,9 +458,25 @@ function validateWeeklyPayload(body){
   if(n.some(row=>!row))return{error:'Attendance values must be whole numbers greater than or equal to 0'}
   const sp={}
   for(const label of WEEKLY_SPIRITUAL){const value=integer(spiritual[label]);if(value===null)return{error:'Spiritual experience values must be whole numbers greater than or equal to 0'};sp[label]=value}
-  const inc=income.map((r,i)=>{const value=amount(r?.amount),name=String(r?.name||'').trim();if(value===null||!name)return null;return{sn:i+1,name,amount:value}})
-  const exp=expenditure.map((r,i)=>{const value=amount(r?.amount),name=String(r?.name||'').trim();if(value===null||!name)return null;return{sn:i+1,name,amount:value}})
-  if(inc.some(row=>!row)||exp.some(row=>!row))return{error:'Financial amounts must be valid non-negative numbers with at most 2 decimal places'}
+  // Empty custom rows are valid and are ignored. A custom row with an amount
+  // must have a name, while every named row must still contain a valid amount.
+  const normalizeFinancialRows=(rows)=>{
+    const normalized=[]
+    for(const r of rows){
+      const name=String(r?.name||'').trim()
+      const rawAmount=r?.amount
+      const value=amount(rawAmount)
+      const hasValue=rawAmount!==''&&rawAmount!==null&&rawAmount!==undefined
+      if(!name&&!hasValue) continue
+      if(!name&&value!==null&&value>0)return null
+      if(value===null||!name)return null
+      normalized.push({sn:normalized.length+1,name,amount:value})
+    }
+    return normalized
+  }
+  const inc=normalizeFinancialRows(income)
+  const exp=normalizeFinancialRows(expenditure)
+  if(!inc||!exp)return{error:'Financial amounts must be valid non-negative numbers with at most 2 decimal places and every non-zero custom row must have a name'}
   const totalIncome=inc.reduce((sum,row)=>sum+row.amount,0)
   const totalExpenditure=exp.reduce((sum,row)=>sum+row.amount,0)
   return{data:{reportDate,numerical:n,spiritual:sp,income:inc,expenditure:exp,totalIncome,totalExpenditure,balance:totalIncome-totalExpenditure}}
