@@ -484,8 +484,10 @@ function App() {
     }
     if (result.type === 'Attendance') {
       const record = attendance.find(item => String(item.id) === String(result.recordId))
-      if (record) setModal({ type: 'attendance-edit', record })
-      else setSync('That attendance record is no longer available')
+      if (record) {
+        setPage('attendance')
+        setModal({ type: 'attendance-edit', record })
+      } else setSync('That attendance record is no longer available')
     }
   }
 
