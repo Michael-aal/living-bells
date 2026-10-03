@@ -284,7 +284,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     }
     return selectedReports.length
       ? selectedReports.slice().sort((a, b) => keyOf(a.reportDate).localeCompare(keyOf(b.reportDate))).map(report => buildPeriodRow(parseDate(report.reportDate), [report], attendance, activities))
-      : [{ date: range.start, reports: 0, attendance: 0, activities: 0, income: 0, expenditure: 0, balance: 0 }]
+      : [{ date: range.start, reports: 0, attendance: 0, activities: 0 }]
   }, [mode, range, reports, selectedReports, attendance, activities])
 
   return <div className="reports-page">
@@ -311,7 +311,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       <div className="period-summary">
         <span className="eyebrow">Selected period</span>
         <strong>{periodLabel(mode, anchor)}</strong>
-        {mode === 'year' && <small>July ${parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June ${(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
+        {mode === 'year' && <small>July {parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June {(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
         <small>{selectedReports.length} official weekly report{selectedReports.length === 1 ? '' : 's'} · {selectedAttendance.length} attendance record{selectedAttendance.length === 1 ? '' : 's'}</small>
       </div>
     </section>
