@@ -504,8 +504,8 @@ function App() {
         {loading && <section className="card"><p>Loading your church records...</p></section>}
         {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={attendance} expenses={visibleExpenses} activities={visibleActivities} weeklyReports={weeklyReports} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} onCreate={async () => { const name = window.prompt('New attendance option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: 'ATTENDANCE', name: name.trim() }); setAttendanceOptions(current => [...current.filter(x => x.name !== created.name), created]); setSync(created.offline ? 'Attendance option saved offline' : 'Backend connected') } catch (error) { setSync(error.message || 'Could not create attendance option') } }} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}<th>Action</th></tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}<td><button type="button" className="danger-button" onClick={()=>deleteAttendanceRecord(r.id)}>Delete</button></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
-        {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} />}
-        {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} />}
+        {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
+        {!loading && page === 'finance' && <FinancePage user={user} initialDate={reportingContext?.date} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
         {!loading && page === 'calendar' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'settings' && <SettingsPage user={user} onEditProfile={() => setModal('profile')} onLogout={logout} />}
@@ -636,20 +636,26 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
       <Stat icon="⌁" name="Total balance" value={money(periodBalance)} note="Money in minus money out" />
     </div>
 
-    <div className="quick">{!isAdmin && <><Action icon="₦" title="Record money in or out" text="Record income received or expenses paid." onClick={() => go('finance')} /><Action icon="▣" title="Record activity" text="Plan a service, meeting, outreach or church program." onClick={() => open('activity')} /></>}{isAdmin && <Action icon="▤" title="Print reports" text="Print attendance, expense and activity tables." onClick={() => go('reports')} />}</div>
-    <div className="dash-grid"><ActivityTrend activities={activities} /><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
+    <div className="quick">{!isAdmin && <><Action icon="₦" title="Record money in or out" text="Record income received or expenses paid." onClick={() => go('finance')} /><Action icon="▣" title="Record activity" text="Open the weekly activity report and save it to the shared report." onClick={() => go('activities')} /></>}{isAdmin && <Action icon="▤" title="Print reports" text="Print attendance, expense and activity tables." onClick={() => go('reports')} />}</div>
+    <div className="dash-grid"><ActivityTrend activities={activities} weeklyReports={weeklyReports} /><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
   </>
 }
 
-function ActivityTrend({ activities = [] }) {
-  const years = [...new Set(activities.map(item => new Date(item.date).getFullYear()).filter(Number.isFinite))].sort((a, b) => b - a)
+function ActivityTrend({ activities = [], weeklyReports = [] }) {
+  const reportRows = weeklyReports.flatMap(report => (Array.isArray(report.numerical) ? report.numerical : []).map(row => ({
+    name: String(row?.service || '').trim(),
+    date: report.reportDate,
+    recorded: Number(row?.total || 0) > 0,
+  })).filter(row => row.name && row.recorded))
+  const source = reportRows.length ? reportRows : activities
+  const years = [...new Set(source.map(item => new Date(item.date).getUTCFullYear()).filter(Number.isFinite))].sort((a, b) => b - a)
   const currentYear = years[0] || new Date().getFullYear()
   const [year, setYear] = useState(currentYear)
-  const names = [...new Set(activities.map(item => String(item.name || '').trim()).filter(Boolean))].sort()
+  const names = [...new Set(source.map(item => String(item.name || '').trim()).filter(Boolean))].sort()
   const [selectedActivity, setSelectedActivity] = useState('')
   useEffect(() => { if (selectedActivity && !names.includes(selectedActivity)) setSelectedActivity('') }, [names.join('|')])
   const monthLabels = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(year, i, 1)).toLocaleDateString('en-NG', { month: 'short', timeZone: 'UTC' }))
-  const values = monthLabels.map((_, month) => activities.filter(item => {
+  const values = monthLabels.map((_, month) => source.filter(item => {
     const d = new Date(item.date)
     return d.getUTCFullYear() === Number(year) && d.getUTCMonth() === month && (!selectedActivity || item.name === selectedActivity)
   }).length)
