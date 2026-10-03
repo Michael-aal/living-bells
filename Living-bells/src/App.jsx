@@ -570,15 +570,31 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
     () => attendance.filter(item => inPeriod(item.activity?.date, range)),
     [attendance, range],
   )
-  const latestAttendance = useMemo(
-    () => [...periodAttendance]
+  const latestAttendance = useMemo(() => {
+    // The weekly report is the canonical source for the dashboard's
+    // "Latest Sunday Service" metric because Activities records the
+    // actual service attendance inside the saved weekly report.
+    const weeklyServiceReports = weeklyReports
+      .filter(report => inPeriod(report.reportDate, range))
+      .map(report => {
+        const rows = Array.isArray(report.numerical) ? report.numerical : []
+        const row = rows.find(item => /^(worship service|sunday service)$/i.test(String(item?.service || '').trim()))
+        if (!row) return null
+        const total = Number(row.adult || 0) + Number(row.children || 0) + Number(row.visitor || 0)
+        return { reportDate: report.reportDate, total, source: 'weekly-report' }
+      })
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.reportDate) - new Date(a.reportDate))
+
+    if (weeklyServiceReports.length) return weeklyServiceReports[0]
+
+    return [...periodAttendance]
       .filter(item => {
         const date = new Date(item.activity?.date || '')
         return !Number.isNaN(date.getTime()) && date.getUTCDay() === 0
       })
-      .sort((a, b) => new Date(b.activity?.date || 0) - new Date(a.activity?.date || 0))[0],
-    [periodAttendance],
-  )
+      .sort((a, b) => new Date(b.activity?.date || 0) - new Date(a.activity?.date || 0))[0] || null
+  }, [periodAttendance, weeklyReports, range])
   const periodReports = useMemo(
     () => weeklyReports.filter(report => inPeriod(report.reportDate, range)),
     [weeklyReports, range],
@@ -593,9 +609,9 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
   )
   const periodBalance = periodMoneyIn - periodMoneyOut
   const durationLabel = duration === 'weekly' ? 'Weekly' : duration === 'monthly' ? 'Monthly' : 'Yearly'
-  const latestService = latestAttendance?.service || 'No service yet'
-  const latestServiceDate = latestAttendance?.activity?.date
-    ? new Date(latestAttendance.activity.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  const latestService = latestAttendance?.service || 'Sunday Service'
+  const latestServiceDate = latestAttendance?.reportDate || latestAttendance?.activity?.date
+    ? new Date(latestAttendance.reportDate || latestAttendance.activity.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
     : null
 
   return <>
@@ -630,7 +646,7 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
     </section>
 
     <div className="stats">
-      <Stat icon="◉" name="Latest Sunday Service" value={latestAttendance?.total || 0} note={latestAttendance?.activity?.date ? new Date(latestAttendance.activity.date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'No Sunday attendance recorded'} />
+      <Stat icon="◉" name="Latest Sunday Service" value={latestAttendance?.total ?? 0} note={latestServiceDate || 'No Sunday attendance recorded'} />
       <Stat icon="₦" name="Total money in" value={money(periodMoneyIn)} note={durationLabel} />
       <Stat icon="₦" name="Total money out" value={money(periodMoneyOut)} note={durationLabel} />
       <Stat icon="⌁" name="Total balance" value={money(periodBalance)} note="Money in minus money out" />
