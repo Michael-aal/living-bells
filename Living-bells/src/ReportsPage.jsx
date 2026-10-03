@@ -643,13 +643,8 @@ function DailyReview({ review, close }) {
         <button className="close" onClick={close}>×</button>
       </div>
       {type === 'attendance' && <div className="review-detail-list">
-        {[
-          ['Service', item.activity?.name || 'Service'],
-          ['Children male', item.childrenMale], ['Children female', item.childrenFemale],
-          ['Teenagers male', item.teenagersMale], ['Teenagers female', item.teenagersFemale],
-          ['Youth male', item.youthMale], ['Youth female', item.youthFemale],
-          ['Adults male', item.adultsMale], ['Adults female', item.adultsFemale],
-        ].map(([label, value]) => <Detail key={label} label={label} value={typeof value === 'number' ? formatNumber(value) : value} />)}
+        <Detail label="Service" value={item.activity?.name || 'Service'} />
+        <Detail label="Total attendance" value={formatNumber(attendanceTotalFor(item))} />
       </div>}
       {type === 'activity' && <div className="review-detail-list"><Detail label="Activity" value={item.name} /><Detail label="Type" value={item.type || 'Activity'} /><Detail label="Recorded by" value={item.recordedBy?.name || 'Unknown'} /></div>}
       {type === 'finance' && <div className="review-finance">
