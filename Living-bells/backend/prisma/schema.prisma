@@ -285,6 +285,7 @@ model StaffInvitation {
   name        String
   email       String
   department  String
+  position    String
   codeHash    String    @unique
   invitedById Int
   expiresAt   DateTime
