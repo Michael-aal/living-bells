@@ -92,7 +92,7 @@ function numberFromRow(row, keys) {
   return 0
 }
 
-export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinance, onEditActivity, onEditAttendance }) {
+export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinance, onEditActivity, onEditAttendance, onOpenRecord }) {
   const [reports, setReports] = useState([])
   const [activities, setActivities] = useState([])
   const [attendance, setAttendance] = useState([])
@@ -102,6 +102,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [anchor, setAnchor] = useState(todayKey())
   const [review, setReview] = useState(null)
   const [searchText, setSearchText] = useState('')
+  const [searchType, setSearchType] = useState('')
   const [searchYear, setSearchYear] = useState('')
   const [searchMonth, setSearchMonth] = useState('')
   const [searchWeek, setSearchWeek] = useState('')
@@ -170,6 +171,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     const matches = (dateValue, haystack) => {
       const date = parseDate(dateValue)
       if (!date) return false
+      if (searchType && !haystack.toLowerCase().includes(searchType.toLowerCase())) return false
       if (searchYear && date.getFullYear() !== Number(searchYear)) return false
       if (searchMonth && date.getMonth() + 1 !== Number(searchMonth)) return false
       if (searchDay && date.getDate() !== Number(searchDay)) return false
@@ -191,6 +193,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         results.push({
           type: 'Finance',
           date,
+          recordId: report.id,
           title: 'Finance record',
           detail: `${incomeNames.length} income categories · ${expenditureNames.length} expenditure categories · ${money(report.totalIncome || 0)} in · ${money(report.totalExpenditure || 0)} out`,
         })
@@ -199,6 +202,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         results.push({
           type: 'Activities',
           date,
+          recordId: report.id,
           title: 'Weekly activities',
           detail: activityNames.length ? activityNames.join(' · ') : 'No activity rows saved',
         })
@@ -213,6 +217,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         results.push({
           type: 'Attendance',
           date,
+          recordId: item.id,
           title: service,
           detail: `${formatNumber(attendanceTotalFor(item))} total attendance`,
         })
@@ -220,10 +225,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     })
 
     return results.sort((a, b) => keyOf(b.date).localeCompare(keyOf(a.date)))
-  }, [reports, attendance, searchText, searchYear, searchMonth, searchWeek, searchDay])
+  }, [reports, attendance, searchText, searchType, searchYear, searchMonth, searchWeek, searchDay])
 
   const clearSearch = () => {
     setSearchText('')
+    setSearchType('')
     setSearchYear('')
     setSearchMonth('')
     setSearchWeek('')
@@ -409,7 +415,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           <h2>Search saved records</h2>
           <p className="card-subtitle">Search across Attendance, Finance and Activities by year, month, week, day, or a keyword. The saved date remains the source of truth.</p>
         </div>
-        {(searchText || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Clear search</button>}
+        {(searchText || searchType || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Clear search</button>}
       </div>
 
       <div className="record-search-input">
@@ -422,7 +428,16 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         />
       </div>
 
-      <div className="record-search-filters">
+      <form className="record-search-filters" onSubmit={e => e.preventDefault()}>
+        <label>
+          Record type
+          <select value={searchType} onChange={e => setSearchType(e.target.value)}>
+            <option value="">All records</option>
+            <option value="Activities">Activities</option>
+            <option value="Finance">Finance</option>
+            <option value="Attendance">Attendance</option>
+          </select>
+        </label>
         <label>
           Year
           <select value={searchYear} onChange={e => { setSearchYear(e.target.value); setSearchWeek(''); setSearchDay('') }}>
@@ -451,7 +466,8 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
             {searchDays.map(day => <option key={day} value={day}>{day}</option>)}
           </select>
         </label>
-      </div>
+        <button className="primary search-submit" type="submit">Search</button>
+      </form>
 
       <div className="search-results-head">
         <strong>{formatNumber(searchResults.length)} result{searchResults.length === 1 ? '' : 's'}</strong>
@@ -461,14 +477,14 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       {searchResults.length > 0 ? (
         <div className="record-search-results">
           {searchResults.map((result, index) => (
-            <article className="record-search-result" key={`${result.type}-${keyOf(result.date)}-${index}`}>
+            <button type="button" className="record-search-result" key={`${result.type}-${keyOf(result.date)}-${index}`} onClick={() => onOpenRecord?.(result)}>
               <div>
                 <span className="record-search-type">{result.type}</span>
                 <h3>{result.title}</h3>
                 <p>{result.detail}</p>
               </div>
               <time dateTime={keyOf(result.date)}>{displayDate(result.date)}</time>
-            </article>
+            </button>
           ))}
         </div>
       ) : (
