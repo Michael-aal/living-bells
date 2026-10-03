@@ -630,7 +630,6 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
     </section>
 
     <div className="stats">
-      <Stat icon="◷" name="Latest service" value={latestService} note={latestServiceDate || 'No attendance recorded'} />
       <Stat icon="◉" name="Latest Sunday Service" value={latestAttendance?.total || 0} note={latestAttendance?.activity?.date ? new Date(latestAttendance.activity.date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'No Sunday attendance recorded'} />
       <Stat icon="₦" name="Total money in" value={money(periodMoneyIn)} note={durationLabel} />
       <Stat icon="₦" name="Total money out" value={money(periodMoneyOut)} note={durationLabel} />
