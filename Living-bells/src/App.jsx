@@ -847,6 +847,124 @@ function ActivityForm({ close, save, initial = null, recordingDate = null }) {
     <button type="button" className="primary wide" disabled={saving || !form.name || !form.date} onClick={submit}>{saving ? 'Saving…' : initial ? 'Save changes' : 'Submit activity'}</button>
   </Modal>
 }
+function ReportingWeekPicker({ date, onDateChange }) {
+  const [months, setMonths] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [openWeekId, setOpenWeekId] = useState(null)
+
+  const selectedDate = String(date || new Date().toISOString()).slice(0, 10)
+  const selectedDateObj = new Date(selectedDate + 'T12:00:00Z')
+  const selectedYear = selectedDateObj.getUTCFullYear()
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    api.reportingMonths(selectedYear)
+      .then(data => { if (!cancelled) setMonths(data || []) })
+      .catch(() => { if (!cancelled) setMonths([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [selectedYear])
+
+  const allWeeks = useMemo(
+    () => months.flatMap(month => (month.weeks || []).map(week => ({ ...week, month }))),
+    [months]
+  )
+
+  const containingWeek = useMemo(
+    () => allWeeks.find(week => {
+      const start = String(week.startDate).slice(0, 10)
+      const end = String(week.endDate).slice(0, 10)
+      return selectedDate >= start && selectedDate <= end
+    }) || null,
+    [allWeeks, selectedDate]
+  )
+
+  const visibleWeeks = useMemo(
+    () => containingWeek
+      ? (containingWeek.month.weeks || []).map(week => ({ ...week, month: containingWeek.month }))
+      : months.flatMap(month => (month.weeks || []).map(week => ({ ...week, month }))).filter(week => Number(week.month.month) === selectedDateObj.getUTCMonth() + 1),
+    [containingWeek, months, selectedDateObj]
+  )
+
+  const currentWeek = useMemo(
+    () => allWeeks.find(week => {
+      const start = String(week.startDate).slice(0, 10)
+      const end = String(week.endDate).slice(0, 10)
+      return dateKey(new Date()) >= start && dateKey(new Date()) <= end
+    }) || null,
+    [allWeeks]
+  )
+
+  useEffect(() => {
+    if (containingWeek) setOpenWeekId(containingWeek.id)
+  }, [containingWeek?.id])
+
+  const label = value => new Date(value + 'T12:00:00Z').toLocaleDateString('en-NG', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+
+  const days = week => Array.from({ length: 7 }, (_, index) => {
+    const d = new Date(String(week.startDate).slice(0, 10) + 'T12:00:00Z')
+    d.setUTCDate(d.getUTCDate() + index)
+    return {
+      date: d.toISOString().slice(0, 10),
+      weekday: d.toLocaleDateString('en-NG', { weekday: 'short', timeZone: 'UTC' }),
+      day: d.getUTCDate(),
+      month: d.toLocaleDateString('en-NG', { month: 'short', timeZone: 'UTC' }),
+    }
+  }).filter(day => day.date <= String(week.endDate).slice(0, 10))
+
+  if (loading) return <div className="reporting-week-picker"><small className="reporting-week-loading">Loading saved weeks…</small></div>
+  if (!visibleWeeks.length) return <div className="reporting-week-picker"><small className="reporting-week-empty">No saved reporting week covers this date.</small></div>
+
+  return <div className="reporting-week-picker" aria-label="Saved reporting weeks">
+    <div className="reporting-week-heading">
+      <div>
+        <span className="eyebrow">Reporting calendar</span>
+        <strong>{containingWeek ? `${new Date(Date.UTC(containingWeek.month.year, containingWeek.month.month - 1, 1)).toLocaleDateString('en-NG', { month: 'long', year: 'numeric', timeZone: 'UTC' })} · Week ${containingWeek.weekNumber}` : 'Select a saved week'}</strong>
+      </div>
+      {containingWeek && <small>{label(String(containingWeek.startDate).slice(0, 10))} → {label(String(containingWeek.endDate).slice(0, 10))}</small>}
+    </div>
+
+    <div className="reporting-week-strip" role="tablist" aria-label="Reporting weeks">
+      {visibleWeeks.map(week => {
+        const selected = containingWeek?.id === week.id
+        const current = currentWeek?.id === week.id
+        const monthName = new Date(Date.UTC(week.month.year, week.month.month - 1, 1)).toLocaleDateString('en-NG', { month: 'short', timeZone: 'UTC' })
+        return <button
+          key={week.id}
+          type="button"
+          role="tab"
+          aria-selected={selected}
+          className={`reporting-week-tab${selected ? ' selected' : ''}${current ? ' current' : ''}`}
+          onClick={() => {
+            setOpenWeekId(openWeekId === week.id ? null : week.id)
+            if (selected) return
+            const firstDay = String(week.startDate).slice(0, 10)
+            onDateChange(firstDay)
+          }}
+        >
+          <span>Week {week.weekNumber}</span>
+          <small>{monthName}</small>
+          {current && <em>Current</em>}
+        </button>
+      })}
+    </div>
+
+    {containingWeek && openWeekId === containingWeek.id && <div className="reporting-day-strip" aria-label={`Days in Week ${containingWeek.weekNumber}`}>
+      {days(containingWeek).map(day => <button
+        key={day.date}
+        type="button"
+        className={selectedDate === day.date ? 'selected' : ''}
+        onClick={() => onDateChange(day.date)}
+      >
+        <span>{day.weekday}</span>
+        <strong>{day.day}</strong>
+        <small>{day.month}</small>
+      </button>)}
+    </div>}
+  </div>
+}
+
 function AttendanceForm({ close, save, initial = null, recordingDate = null, options = [] }) {
   const activity = initial?.activity || {}
   const [service, setService] = useState(initial?.service || activity.name || 'Sunday Service')
@@ -871,6 +989,7 @@ function AttendanceForm({ close, save, initial = null, recordingDate = null, opt
   return <Modal title={initial ? 'Edit attendance' : 'Record attendance'} close={close}>
     <label>Service<input list="attendance-options" value={service} onChange={e => setService(e.target.value)} /><datalist id="attendance-options">{options.map(option => <option key={option.id || option.name} value={option.name} />)}</datalist></label>
     <label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+    <ReportingWeekPicker date={date} onDateChange={setDate} />
     <div className="attendance-form"><div className="frow header"><span>Group</span><span>Male</span><span>Female</span></div>{Object.entries(groups).map(([g, v]) => <div className="frow" key={g}><b>{g}</b><input type="number" min="0" value={v.male} onChange={e => update(g, 'male', e.target.value)} placeholder="0" /><input type="number" min="0" value={v.female} onChange={e => update(g, 'female', e.target.value)} placeholder="0" /></div>)}</div>
     <div className="total">Total attendance <b>{total}</b></div>
     <button type="button" className="primary wide" onClick={submit} disabled={saving || !service || !date}>{saving ? 'Saving…' : initial ? 'Save changes' : 'Save attendance'}</button>
