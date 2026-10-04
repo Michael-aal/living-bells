@@ -734,7 +734,6 @@ function SettingsPage({ user, onEditProfile, onLogout }) {
         </div>
       </div>
       <div className="settings-account">
-        <div className="settings-avatar">{user.name?.slice(0, 2).toUpperCase() || 'ST'}</div>
         <div>
           <b>{user.name || 'User'}</b>
           <span>{user.email}</span>
