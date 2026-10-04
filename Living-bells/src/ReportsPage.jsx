@@ -542,12 +542,13 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
 
     <section className="card full report-controls">
       <div className="report-period-tabs" role="tablist" aria-label="Report period">
-        {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
+        {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => { setSearchPeriod(null); setMode(item) }}>{item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
       <label>
         {mode === 'week' ? 'Choose a date for this week' : mode === 'month' ? 'Choose a month' : 'Choose a reporting year (July–June)'}
         <input type={mode === 'year' ? 'number' : mode === 'month' ? 'month' : 'date'} value={mode === 'year' ? String(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) : mode === 'month' ? keyOf(anchor).slice(0, 7) : anchor} onChange={e => {
           const value = e.target.value
+          setSearchPeriod(null)
           setAnchor(mode === 'year' ? `${value}-07-01` : mode === 'month' ? `${value}-01` : value)
         }} />
       </label>
@@ -555,13 +556,14 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         <span className="eyebrow">Selected period</span>
         <strong>{searchPeriod?.label || periodLabel(mode, anchor)}</strong>
         {searchPeriod && <small>Average view · {searchPeriod.type} search · selected date range</small>}
-        {mode === 'year' && <small>July {parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June {(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
+        {mode === 'year' && !searchPeriod && <small>July {parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June {(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
         <small>{selectedReports.length} official weekly report{selectedReports.length === 1 ? '' : 's'} · {selectedAttendance.length} attendance record{selectedAttendance.length === 1 ? '' : 's'}</small>
         {searchPeriod && <button type="button" className="secondary small-button" onClick={() => setSearchPeriod(null)}>Clear selected search period</button>}
       </div>
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
+    {!loading && searchPeriod && selectedReports.length === 0 && selectedAttendance.length === 0 && <div className="record-search-empty"><strong>No records found for {searchPeriod.label}.</strong><span>There is no saved data in this period to calculate an average from.</span></div>}
     {loading ? <section className="card full"><p>Loading reports…</p></section> : <>
       <ReportSection title="Attendance" eyebrow="Attendance summary" description="Attendance is shown as the saved total for the selected period, without age or gender breakdowns." action={canEditOperational ? () => onEditAttendance?.() : null}>
         <div className="finance-total-grid">
