@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from './api'
 import './auth.css'
 
-export default function Auth({ onAuthenticated }) {
+export default function Auth({ onAuthenticated, onBack }) {
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'STAFF', inviteCode: '', department: '' })
   const [error, setError] = useState('')
@@ -80,6 +80,7 @@ export default function Auth({ onAuthenticated }) {
 
   return <main className="auth-shell">
     <section className="auth-card">
+      {onBack && <button type="button" className="auth-back" onClick={onBack}>← Back to website</button>}
       <div className="auth-brand"><span>L</span><div><b>Living Bells</b><small>Church operations</small></div></div>
       <span className="eyebrow">Secure workspace</span>
       <h1>{isLogin ? 'Welcome back' : 'Create your account'}</h1>
