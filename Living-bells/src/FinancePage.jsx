@@ -18,7 +18,29 @@ export default function FinancePage({ user, initialDate = null, onInitialDateHan
   async function loadHistory(){try{setLoading(true);setError('');const data=await api.weeklyReports();setReports(data||[]);const target=initialDate||selectedDate;const current=(data||[]).find(r=>String(r.reportDate).slice(0,10)===target);if(current){const n=normalizeReport(current);setSelectedDate(target);setReport(n);setSaved(n)}else if(initialDate){setSelectedDate(initialDate);setReport(emptyReport(initialDate));setSaved(emptyReport(initialDate))}onInitialDateHandled?.()}catch(e){setError(e.message||'Could not load weekly finance reports')}finally{setLoading(false)}}
   function selectDate(date){if(dirty&&!window.confirm('You have unsaved changes. Discard them and open another report?'))return;setSelectedDate(date);const existing=reports.find(r=>String(r.reportDate).slice(0,10)===date);const n=existing?normalizeReport(existing):emptyReport(date);setReport(n);setSaved(n);setPrintReport(n);setNotice(existing?'Saved report loaded.':'New report for this date.')}
   function update(section,index,key,value){setReport(current=>({...current,[section]:current[section].map((row,i)=>i===index?{...row,[key]:key==='amount'?Math.max(0,Math.round((Number(value)||0)*100)/100):value}:row)}))}
-  async function save(){if(!editable)return;try{setSaving(true);setError('');const savedDate=report.reportDate;const payload=reportPayload(report);const savedReport=report.id?await api.updateWeeklyReport(report.id,payload):await api.saveWeeklyReport(payload);const savedSnapshot=normalizeReport(savedReport);setReports(current=>[savedReport,...current.filter(r=>String(r.reportDate).slice(0,10)!==savedDate)]);setPrintReport(savedSnapshot);const next=new Date(String(savedDate).slice(0,10)+'T12:00:00');next.setDate(next.getDate()+7);const nextDate=next.toISOString().slice(0,10);const blank=emptyReport(nextDate);setSelectedDate(nextDate);setReport(blank);setSaved(blank);onChanged?.();setNotice('Weekly finance report saved. The saved report is ready in the archive and for PDF printing.');setTimeout(()=>setNotice(''),3000)}catch(e){setError(e.message||'Could not save the weekly finance report')}finally{setSaving(false)}}
+  async function save(){
+    if(!editable || saving || !dirty) return
+    const action = report.id ? 'update' : 'save'
+    const label = report.id ? 'update this saved financial report' : 'save this financial report'
+    if(!window.confirm(`Are you sure you want to ${label} for ${dateLabel(report.reportDate)}?\n\nThis will save the amounts exactly as shown.`)) return
+    try{
+      setSaving(true)
+      setError('')
+      const savedDate=String(report.reportDate).slice(0,10)
+      const payload=reportPayload(report)
+      const savedReport=report.id?await api.updateWeeklyReport(report.id,payload):await api.saveWeeklyReport(payload)
+      const savedSnapshot=normalizeReport(savedReport)
+      setReports(current=>[savedReport,...current.filter(r=>String(r.reportDate).slice(0,10)!==savedDate)])
+      setSelectedDate(savedDate)
+      setReport(savedSnapshot)
+      setSaved(savedSnapshot)
+      setPrintReport(savedSnapshot)
+      onChanged?.()
+      setNotice(action==='update'?'Financial report updated successfully.':'Financial report saved successfully.')
+      setTimeout(()=>setNotice(''),3000)
+    }catch(e){setError(e.message||'Could not save the weekly finance report')}
+    finally{setSaving(false)}
+  }
   async function deleteReport(id) { if(!id||!window.confirm('Delete this weekly finance report? This cannot be undone.')) return; try { await api.deleteWeeklyReport(id); setReports(current=>current.filter(r=>r.id!==id)); if(report.id===id){const blank=emptyReport(selectedDate);setReport(blank);setSaved(blank);setPrintReport(blank)} onChanged?.();setNotice('Weekly finance report deleted.'); } catch(e){setError(e.message||'Could not delete weekly finance report')} }
   async function createFinanceOption(kind) {
     const name = window.prompt(kind === 'INCOME' ? 'New money-in option name' : 'New money-out option name')

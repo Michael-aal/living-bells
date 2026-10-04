@@ -113,6 +113,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [searchMonth, setSearchMonth] = useState('')
   const [searchWeek, setSearchWeek] = useState('')
   const [searchDay, setSearchDay] = useState('')
+  const [searchPeriod, setSearchPeriod] = useState(null)
 
   const canEditOperational = ['ADMIN', 'SECRETARY', 'PASTOR', 'STAFF'].includes(user?.role)
 
@@ -229,6 +230,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   }, [reports, attendance, searchType, searchYear, searchMonth, searchWeek, searchDay])
 
   const clearSearch = () => {
+    setSearchPeriod(null)
     setSearchType('')
     setSearchYear('')
     setSearchMonth('')
@@ -236,7 +238,50 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     setSearchDay('')
   }
 
+  const openSearchPeriod = result => {
+    const year = Number(searchYear || parseDate(result.date)?.getFullYear())
+    const month = Number(searchMonth)
+    let start
+    let end
+    let label
+    let selectedMode = 'week'
+    let selectedAnchor = keyOf(result.date)
+
+    if (searchWeek && year && month) {
+      const first = new Date(year, month - 1, 1)
+      const weekStart = new Date(year, month - 1, 1 - first.getDay() + (Number(searchWeek) - 1) * 7)
+      start = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate())
+      end = new Date(start)
+      end.setDate(start.getDate() + 6)
+      end.setHours(23, 59, 59, 999)
+      label = `Week ${searchWeek} · ${first.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })}`
+      selectedAnchor = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`
+    } else if (searchMonth && year) {
+      start = new Date(year, month - 1, 1)
+      end = new Date(year, month, 0, 23, 59, 59, 999)
+      label = start.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
+      selectedMode = 'month'
+      selectedAnchor = `${year}-${pad(month)}-01`
+    } else if (searchYear) {
+      start = new Date(year, 0, 1)
+      end = new Date(year, 11, 31, 23, 59, 59, 999)
+      label = `Calendar year ${year}`
+      selectedMode = 'year'
+      selectedAnchor = `${year}-01-01`
+    } else {
+      start = startOfWeek(result.date)
+      end = endOfWeek(result.date)
+      label = `Week of ${displayDate(start)}`
+    }
+
+    setMode(selectedMode)
+    setAnchor(selectedAnchor)
+    setSearchPeriod({ start, end, label, type: result.type })
+    requestAnimationFrame(() => document.querySelector('.report-controls')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
   const range = useMemo(() => {
+    if (searchPeriod) return { start: searchPeriod.start, end: searchPeriod.end }
     const selected = parseDate(anchor) || new Date()
     if (mode === 'week') return { start: startOfWeek(anchor), end: endOfWeek(anchor) }
     if (mode === 'month') return {
@@ -248,7 +293,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       start: reportingYearStart(reportingYear),
       end: reportingYearEnd(reportingYear),
     }
-  }, [mode, anchor])
+  }, [mode, anchor, searchPeriod])
 
   const selectedReports = useMemo(
     () => reports.filter(report => inRange(report.reportDate, range.start, range.end)),
@@ -310,6 +355,8 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         label: row.label,
         averageAdult: roundAverage(average(row.adults, denominator)),
         averageChildren: roundAverage(average(row.children, denominator)),
+        averageVisitors: roundAverage(average(row.visitors, denominator)),
+        averageTotal: roundAverage(average(row.adults + row.children + row.visitors, denominator)),
         total: row.adults + row.children + row.visitors,
       }))
 
@@ -328,6 +375,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         Array.from(categoryMap.values()).reduce((sum, row) => sum + row.children, 0),
         denominator,
       )),
+      averageVisitors: roundAverage(average(
+        Array.from(categoryMap.values()).reduce((sum, row) => sum + row.visitors, 0),
+        denominator,
+      )),
+      averageTotal: roundAverage(average(overallTotal, denominator)),
       reports: selectedReports.length,
       serviceRows,
       decisions,
@@ -369,6 +421,9 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       income,
       expenditure,
       balance: income - expenditure,
+      averageIncome: roundAverage(average(income, selectedReports.length)),
+      averageExpenditure: roundAverage(average(expenditure, selectedReports.length)),
+      averageBalance: roundAverage(average(income - expenditure, selectedReports.length)),
       categories,
       records: selectedReports.length,
     }
@@ -467,7 +522,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       {searchResults.length > 0 ? (
         <div className="record-search-results">
           {searchResults.map((result, index) => (
-            <button type="button" className="record-search-result" key={`${result.type}-${keyOf(result.date)}-${index}`} onClick={() => onOpenRecord?.(result)}>
+            <button type="button" className="record-search-result" key={`${result.type}-${keyOf(result.date)}-${index}`} onClick={() => openSearchPeriod(result)}>
               <div>
                 <span className="record-search-type">{result.type}</span>
                 <h3>{result.title}</h3>
@@ -487,24 +542,28 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
 
     <section className="card full report-controls">
       <div className="report-period-tabs" role="tablist" aria-label="Report period">
-        {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => setMode(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}
+        {['week', 'month', 'year'].map(item => <button key={item} type="button" className={mode === item ? 'active' : ''} onClick={() => { setSearchPeriod(null); setMode(item) }}>{item[0].toUpperCase() + item.slice(1)}</button>)}
       </div>
       <label>
         {mode === 'week' ? 'Choose a date for this week' : mode === 'month' ? 'Choose a month' : 'Choose a reporting year (July–June)'}
         <input type={mode === 'year' ? 'number' : mode === 'month' ? 'month' : 'date'} value={mode === 'year' ? String(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) : mode === 'month' ? keyOf(anchor).slice(0, 7) : anchor} onChange={e => {
           const value = e.target.value
+          setSearchPeriod(null)
           setAnchor(mode === 'year' ? `${value}-07-01` : mode === 'month' ? `${value}-01` : value)
         }} />
       </label>
       <div className="period-summary">
         <span className="eyebrow">Selected period</span>
-        <strong>{periodLabel(mode, anchor)}</strong>
-        {mode === 'year' && <small>July {parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June {(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
+        <strong>{searchPeriod?.label || periodLabel(mode, anchor)}</strong>
+        {searchPeriod && <small>Average view · {searchPeriod.type} search · selected date range</small>}
+        {mode === 'year' && !searchPeriod && <small>July {parseDate(anchor)?.getFullYear() || new Date().getFullYear()} through June {(parseDate(anchor)?.getFullYear() || new Date().getFullYear()) + 1}</small>}
         <small>{selectedReports.length} official weekly report{selectedReports.length === 1 ? '' : 's'} · {selectedAttendance.length} attendance record{selectedAttendance.length === 1 ? '' : 's'}</small>
+        {searchPeriod && <button type="button" className="secondary small-button" onClick={() => setSearchPeriod(null)}>Clear selected search period</button>}
       </div>
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
+    {!loading && searchPeriod && selectedReports.length === 0 && selectedAttendance.length === 0 && <div className="record-search-empty"><strong>No records found for {searchPeriod.label}.</strong><span>There is no saved data in this period to calculate an average from.</span></div>}
     {loading ? <section className="card full"><p>Loading reports…</p></section> : <>
       <ReportSection title="Attendance" eyebrow="Attendance summary" description="Attendance is shown as the saved total for the selected period, without age or gender breakdowns." action={canEditOperational ? () => onEditAttendance?.() : null}>
         <div className="finance-total-grid">
@@ -515,12 +574,13 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       </ReportSection>
 
       <ReportSection title="Activities" eyebrow="Weekly activity report" description="Activities are calculated independently from attendance using the Adults, Children and Visitors columns in each saved weekly report." action={canEditOperational ? () => onEditActivity?.() : null}>
-        <SummaryTable headers={['Category', 'Average adult attendance', 'Average children attendance', 'Total']} rows={activitySummary.rows.map(row => [
+        <SummaryTable headers={['Category', 'Avg. adults', 'Avg. children', 'Avg. visitors', 'Avg. total']} rows={activitySummary.rows.map(row => [
           row.label,
           formatNumber(row.averageAdult, Number.isInteger(row.averageAdult) ? 0 : 2),
           formatNumber(row.averageChildren, Number.isInteger(row.averageChildren) ? 0 : 2),
-          formatNumber(row.total),
-        ])} totalRow={['Overall activity attendance', formatNumber(activitySummary.averageAdult, Number.isInteger(activitySummary.averageAdult) ? 0 : 2), formatNumber(activitySummary.averageChildren, Number.isInteger(activitySummary.averageChildren) ? 0 : 2), formatNumber(activitySummary.total)]} />
+          formatNumber(row.averageVisitors, Number.isInteger(row.averageVisitors) ? 0 : 2),
+          formatNumber(row.averageTotal, Number.isInteger(row.averageTotal) ? 0 : 2),
+        ])} totalRow={['Overall activity average', formatNumber(activitySummary.averageAdult, Number.isInteger(activitySummary.averageAdult) ? 0 : 2), formatNumber(activitySummary.averageChildren, Number.isInteger(activitySummary.averageChildren) ? 0 : 2), formatNumber(activitySummary.averageVisitors, Number.isInteger(activitySummary.averageVisitors) ? 0 : 2), formatNumber(activitySummary.averageTotal, Number.isInteger(activitySummary.averageTotal) ? 0 : 2)]} />
         <div className="report-subtable-grid">
           <MiniTable title="Activity records" headers={['Measure', 'Value']} rows={[
             ['Weekly reports', formatNumber(activitySummary.reports)],
@@ -533,6 +593,12 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       </ReportSection>
 
       <ReportSection title="Finance" eyebrow="Finance categories" description="Categories use the same names and the same order as the Finance page." action={onEditFinance || onEdit ? () => (onEditFinance || onEdit)?.() : null}>
+        <div className="finance-total-grid">
+          <Metric label="Average money in / report" value={money(financeSummary.averageIncome)} />
+          <Metric label="Average money out / report" value={money(financeSummary.averageExpenditure)} />
+          <Metric label="Average balance / report" value={money(financeSummary.averageBalance)} />
+          <Metric label="Finance reports included" value={formatNumber(financeSummary.records)} />
+        </div>
         <div className="report-subtable-grid">
           <MiniTable title="INCOME" headers={['S/N', 'INCOME', 'AMOUNT']} rows={INCOME_ROWS.filter(Boolean).map((name, index) => {
             const row = financeSummary.categories.find(item => item.category === name)

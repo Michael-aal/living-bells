@@ -734,7 +734,6 @@ function SettingsPage({ user, onEditProfile, onLogout }) {
         </div>
       </div>
       <div className="settings-account">
-        <div className="settings-avatar">{user.name?.slice(0, 2).toUpperCase() || 'ST'}</div>
         <div>
           <b>{user.name || 'User'}</b>
           <span>{user.email}</span>
@@ -921,7 +920,7 @@ function AttendanceForm({ close, save, initial = null, recordingDate = null, opt
     <label>Service<input list="attendance-options" value={service} onChange={e => setService(e.target.value)} /><datalist id="attendance-options">{options.map(option => <option key={option.id || option.name} value={option.name} />)}</datalist></label>
     <label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
     <ReportingWeekPicker date={date} onDateChange={setDate} />
-    <div className="attendance-form"><div className="frow header"><span>Group</span><span>Male</span><span>Female</span></div>{Object.entries(groups).map(([g, v]) => <div className="frow" key={g}><b>{g}</b><input type="number" min="0" value={v.male} onChange={e => update(g, 'male', e.target.value)} placeholder="0" /><input type="number" min="0" value={v.female} onChange={e => update(g, 'female', e.target.value)} placeholder="0" /></div>)}</div>
+    <div className="attendance-form"><div className="frow header"><span>Group</span><span>Male</span><span>Female</span></div>{Object.entries(groups).map(([g, v]) => <div className="frow" key={g}><b>{g}</b><input type="number" min="0" value={v.male} onChange={e => update(g, 'male', e.target.value)} /><input type="number" min="0" value={v.female} onChange={e => update(g, 'female', e.target.value)} /></div>)}</div>
     <div className="total">Total attendance <b>{total}</b></div>
     <button type="button" className="primary wide" onClick={submit} disabled={saving || !service || !date}>{saving ? 'Saving…' : initial ? 'Save changes' : 'Save attendance'}</button>
   </Modal>
