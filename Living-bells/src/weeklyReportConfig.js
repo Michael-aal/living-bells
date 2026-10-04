@@ -31,10 +31,10 @@ export function currentSunday() {
 export function emptyReport(reportDate=currentSunday()) {
   return {
     reportDate,
-    numerical: NUMERICAL_ROWS.map((service,index)=>({sn:index+1,service,adult:0,children:0,visitor:0,total:0})),
-    spiritual: Object.fromEntries(SPIRITUAL_ROWS.map(label=>[label,0])),
-    income: INCOME_ROWS.map((name,index)=>({sn:index+1,name,amount:0})),
-    expenditure: EXPENDITURE_ROWS.map((name,index)=>({sn:index+1,name,amount:0})),
+    numerical: NUMERICAL_ROWS.map((service,index)=>({sn:index+1,service,adult:'',children:'',visitor:'',total:0})),
+    spiritual: Object.fromEntries(SPIRITUAL_ROWS.map(label=>[label,''])),
+    income: INCOME_ROWS.map((name,index)=>({sn:index+1,name,amount:''})),
+    expenditure: EXPENDITURE_ROWS.map((name,index)=>({sn:index+1,name,amount:''})),
   }
 }
 export function normalizeReport(report) {
