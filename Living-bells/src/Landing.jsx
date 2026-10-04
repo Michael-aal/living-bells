@@ -62,7 +62,7 @@ export default function Landing({ onSignIn }) {
       </section>
 
       <section className="lb-gather" id="gather">
-        <div className="lb-gather-inner"><span className="lb-gather-kicker">YOUR NEXT STEP STARTS HERE</span><h2>Let’s grow<br/><em>together.</em></h2><p>We would love to help you find your place in the life of The Bells. Reach out to the church or come along and get to know the community.</p><a className="lb-button-light" href="mailto:hello@livingbells.org">Get in touch <span>→</span></a></div>
+        <div className="lb-gather-inner"><span className="lb-gather-kicker">YOUR NEXT STEP STARTS HERE</span><h2>Let’s grow<br/><em>together.</em></h2><p>We would love to help you find your place in the life of The Bells. Reach out to the church or come along and get to know the community.</p><a className="lb-button-light" href="#welcome">Get in touch <span>→</span></a></div>
         <div className="lb-gather-decoration">✳</div>
       </section>
     </main>
