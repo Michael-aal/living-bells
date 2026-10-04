@@ -5,6 +5,7 @@ import ReportsPage from './ReportsPage'
 import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import Auth from './Auth'
+import Landing from './Landing'
 import ReportingWeekPicker from './ReportingWeekPicker'
 import { api, syncOfflineQueue } from './api'
 import { getQueueForOwner } from './offlineStore'
@@ -89,6 +90,7 @@ function App() {
     try { return JSON.parse(localStorage.getItem('living_bells_user') || 'null') } catch { return null }
   })
   const [page, setPage] = useState('dashboard')
+  const [showAuth, setShowAuth] = useState(false)
   const [reportEditDate, setReportEditDate] = useState(null)
   const [financeEditDate, setFinanceEditDate] = useState(null)
   const [reportRefresh, setReportRefresh] = useState(0)
@@ -249,7 +251,9 @@ function App() {
     return () => { cancelled = true }
   }, [user, selectedStaff])
 
-  if (!user) return <Auth onAuthenticated={setUser} />
+  if (!user) return showAuth
+    ? <Auth onAuthenticated={setUser} onBack={() => setShowAuth(false)} />
+    : <Landing onSignIn={() => setShowAuth(true)} />
 
   function logout() {
     localStorage.removeItem('living_bells_token')
