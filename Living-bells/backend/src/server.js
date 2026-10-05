@@ -262,7 +262,7 @@ function monthDays(year,month){
   return new Date(Date.UTC(year,month,0)).getUTCDate()
 }
 async function validateReportingWeekRange({year,month,weekNumber,startDate,endDate,excludeId=null}){
-  if(!Number.isInteger(year)||year<2000||year>2200) return 'A valid reporting year is required'
+  if(!Number.isInteger(year)) return 'A valid reporting year is required'
   if(!Number.isInteger(month)||month<1||month>12) return 'A valid reporting month is required'
   if(!Number.isInteger(weekNumber)||weekNumber<1||weekNumber>5) return 'Week must be between 1 and 5'
 
