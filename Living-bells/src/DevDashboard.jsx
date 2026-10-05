@@ -159,7 +159,7 @@ export default function DevDashboard({ user, onLogout }) {
             <span>{user.email}</span>
           </div>
           <div className="dev-notification-wrap">
-            <button className="dev-bell" aria-label="Notifications" onClick={() => setNotificationsOpen(value => !value)}>♢<span className="dev-notification-count">{notifications.filter(item => !item.readAt).length}</span></button>
+            <button className="dev-bell" aria-label="Notifications" onClick={() => setNotificationsOpen(value => !value)}><svg className="dev-bell-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg><span className="dev-notification-count">{notifications.filter(item => !item.readAt).length}</span></button>
             {notificationsOpen && <div className="dev-notification-panel">
               <div className="dev-notification-head"><strong>Notifications</strong><span>{notifications.filter(item => !item.readAt).length} unread</span></div>
               {!notifications.length && <div className="dev-empty">No notifications yet.</div>}
