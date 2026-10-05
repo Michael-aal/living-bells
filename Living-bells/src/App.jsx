@@ -5,6 +5,7 @@ import ReportsPage from './ReportsPage'
 import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import DevDashboard from './DevDashboard'
+import DevPasswordSetup from './DevPasswordSetup'
 import Auth from './Auth'
 import Landing from './Landing'
 import ReportingWeekPicker from './ReportingWeekPicker'
@@ -255,6 +256,7 @@ function App() {
   if (!user) return showAuth
     ? <Auth onAuthenticated={setUser} onBack={() => setShowAuth(false)} />
     : <Landing onSignIn={() => setShowAuth(true)} />
+  if (user.role === 'DEV' && user.mustChangePassword) return <DevPasswordSetup user={user} onCompleted={setUser} onLogout={logout} />
   if (user.role === 'DEV') return <DevDashboard user={user} onLogout={logout} />
 
   function logout() {
