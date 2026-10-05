@@ -265,32 +265,63 @@ async function validateReportingWeekRange({year,month,weekNumber,startDate,endDa
   if(!Number.isInteger(year)||year<2000||year>2200) return 'A valid reporting year is required'
   if(!Number.isInteger(month)||month<1||month>12) return 'A valid reporting month is required'
   if(!Number.isInteger(weekNumber)||weekNumber<1||weekNumber>5) return 'Week must be between 1 and 5'
+
   const start=normalizeDay(startDate), end=normalizeDay(endDate)
   if(!start||!end) return 'A valid start and end date are required'
   if(daysInclusive(start,end)!==7) return 'A reporting week must contain exactly 7 days'
 
-  // A week belongs to the calendar month where its 7-day period ends.
-  // If the range crosses into a new month, that new month owns the week.
+  // A week belongs to the calendar month where its seven-day period ends.
+  // The year is part of the calendar identity, so 2022 and 2026 are
+  // completely independent reporting calendars.
   const expectedYear=end.getUTCFullYear()
   const expectedMonth=end.getUTCMonth()+1
   if(expectedYear!==year||expectedMonth!==month){
     return 'The reporting month must match the month where the reporting week ends'
   }
 
+  // Validate against the actual date range instead of loading a month first.
+  // This makes the calendar explicitly date-driven and prevents a historical
+  // week from being compared with a week from another year.
+  const overlappingWeek=await prisma.reportingWeek.findFirst({
+    where:{
+      ...(excludeId ? {id:{not:excludeId}} : {}),
+      startDate:{lte:end},
+      endDate:{gte:start},
+    },
+    select:{
+      id:true,
+      weekNumber:true,
+      startDate:true,
+      endDate:true,
+      month:{select:{year:true,month:true}},
+    },
+  })
+
+  if(overlappingWeek){
+    const conflictYear=overlappingWeek.month.year
+    const conflictMonth=String(overlappingWeek.month.month).padStart(2,'0')
+    return `This date range overlaps Week ${overlappingWeek.weekNumber} (${conflictYear}-${conflictMonth})`
+  }
+
+  // Week numbers are scoped to the exact year + month via the existing
+  // ReportingMonth/ReportingWeek composite uniqueness constraints.
   const monthRecord=await prisma.reportingMonth.findUnique({
     where:{year_month:{year,month}},
-    include:{
-      weeks:{
-        where:excludeId?{id:{not:excludeId}}:undefined,
-        orderBy:{weekNumber:'asc'}
-      }
-    }
+    select:{id:true},
   })
-  const weeks=monthRecord?.weeks||[]
-  if(weeks.some(w=>start<=w.endDate&&end>=w.startDate)){
-    return 'This date range overlaps another reporting week in this month'
+
+  if(monthRecord){
+    const numberedWeek=await prisma.reportingWeek.findFirst({
+      where:{
+        monthId:monthRecord.id,
+        weekNumber,
+        ...(excludeId ? {id:{not:excludeId}} : {}),
+      },
+      select:{id:true},
+    })
+    if(numberedWeek) return 'That reporting week already exists'
   }
-  if(weeks.some(w=>w.weekNumber===weekNumber)) return 'That reporting week already exists'
+
   return null
 }
 function reportingMonthDto(month){
