@@ -23,6 +23,8 @@ export default function DevDashboard({ user, onLogout }) {
   const [invitations, setInvitations] = useState([])
   const [counts, setCounts] = useState({ active: 0, pending: 0, total: 0 })
   const [dashboard, setDashboard] = useState(null)
+  const [developers, setDevelopers] = useState([])
+  const [devForm, setDevForm] = useState({ name: '', email: '', password: '' })
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [tab, setTab] = useState('overview')
@@ -30,16 +32,18 @@ export default function DevDashboard({ user, onLogout }) {
   async function load() {
     setLoading(true)
     try {
-      const [staffData, invitationData, countData, dashboardData] = await Promise.all([
+      const [staffData, invitationData, countData, dashboardData, developersData] = await Promise.all([
         request('/api/admin/staff'),
         request('/api/admin/staff/invitations'),
         request('/api/admin/staff/count'),
         request('/api/dashboard'),
+        request('/api/dev/developers'),
       ])
       setStaff(staffData || [])
       setInvitations(invitationData || [])
       setCounts(countData || { active: 0, pending: 0, total: 0 })
       setDashboard(dashboardData || {})
+      setDevelopers(developersData || [])
       setMessage('')
     } catch (error) {
       setMessage(error.message || 'Could not load developer console')
@@ -53,6 +57,20 @@ export default function DevDashboard({ user, onLogout }) {
   const verified = useMemo(() => staff.filter(item => item.emailVerified).length, [staff])
   const active = useMemo(() => staff.filter(item => item.isActive !== false).length, [staff])
   const recentStaff = useMemo(() => staff.slice(0, 8), [staff])
+
+  async function addDeveloper(event) {
+    event.preventDefault()
+    setMessage('')
+    try {
+      await request('/api/dev/developers', { method: 'POST', body: JSON.stringify(devForm) })
+      setDevForm({ name: '', email: '', password: '' })
+      await load()
+      setMessage('Developer account onboarded.')
+    } catch (error) {
+      setMessage(error.message || 'Could not onboard developer')
+    }
+  }
+
 
   return (
     <div className="dev-console">
@@ -80,7 +98,7 @@ export default function DevDashboard({ user, onLogout }) {
 
         <nav className="dev-nav">
           {['overview','users','invitations'].map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item[0].toUpperCase()+item.slice(1)}</button>)}
-          <button onClick={load}>Refresh</button>
+          <button className={tab === 'developers' ? 'active' : ''} onClick={() => setTab('developers')}>Developers</button><button onClick={load}>Refresh</button>
         </nav>
 
         {message && <div className="dev-banner">{message}</div>}
@@ -96,6 +114,17 @@ export default function DevDashboard({ user, onLogout }) {
               <section className="dev-section dev-card"><h2>Recent onboarded staff</h2>{recentStaff.length ? <table className="dev-table"><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Status</th></tr></thead><tbody>{recentStaff.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.email}</td><td>{item.department || '—'}</td><td><span className={`dev-pill ${item.isActive !== false ? 'ok' : 'warn'}`}>{item.isActive !== false ? 'Active' : 'Inactive'}</span></td></tr>)}</tbody></table> : <div className="dev-empty">No staff accounts yet.</div>}</section>
             </>}
             {tab === 'users' && <section className="dev-section dev-card"><h2>Staff accounts</h2><table className="dev-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Records</th><th>Status</th></tr></thead><tbody>{staff.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.email}</td><td>{item.role}</td><td>{item.department || '—'}</td><td>{item.recordCount ?? 0}</td><td>{item.isActive !== false ? 'Active' : 'Inactive'}</td></tr>)}</tbody></table></section>}
+            {tab === 'developers' && <section className="dev-section dev-card">
+              <h2>Developer access</h2>
+              <p className="dev-sub">Only developers can create another developer account.</p>
+              <form onSubmit={addDeveloper} style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:10,margin:'14px 0 22px'}}>
+                <input value={devForm.name} onChange={e => setDevForm({...devForm,name:e.target.value})} placeholder="Name" required style={{padding:10,border:'1px solid #ddd8e8',borderRadius:9}} />
+                <input type="email" value={devForm.email} onChange={e => setDevForm({...devForm,email:e.target.value})} placeholder="Email" required style={{padding:10,border:'1px solid #ddd8e8',borderRadius:9}} />
+                <input type="password" value={devForm.password} onChange={e => setDevForm({...devForm,password:e.target.value})} placeholder="Temporary password (8+)" minLength="8" required style={{padding:10,border:'1px solid #ddd8e8',borderRadius:9}} />
+                <button className="dev-btn" type="submit" style={{width:'fit-content'}}>Onboard developer</button>
+              </form>
+              <table className="dev-table"><thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Joined</th></tr></thead><tbody>{developers.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.email}</td><td>{item.isActive ? 'Active' : 'Inactive'}</td><td>{new Date(item.createdAt).toLocaleDateString('en-NG')}</td></tr>)}</tbody></table>
+            </section>}
             {tab === 'invitations' && <section className="dev-section dev-card"><h2>Staff onboarding</h2><table className="dev-table"><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Status</th><th>Created</th></tr></thead><tbody>{invitations.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.email}</td><td>{item.department}</td><td>{item.status}</td><td>{new Date(item.createdAt).toLocaleDateString('en-NG')}</td></tr>)}</tbody></table></section>}
           </>
         )}
