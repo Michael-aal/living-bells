@@ -40,6 +40,7 @@ export default function DevDashboard({ user, onLogout }) {
   const [staff, setStaff] = useState([])
   const [invitations, setInvitations] = useState([])
   const [developers, setDevelopers] = useState([])
+  const [directory, setDirectory] = useState([])
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
@@ -56,15 +57,16 @@ export default function DevDashboard({ user, onLogout }) {
     setLoading(true)
     setError('')
     try {
-      const [overviewData, staffData, invitationData, developerData, notificationData] = await Promise.all([
+      const [overviewData, directoryData, invitationData, developerData, notificationData] = await Promise.all([
         api.devOverview(),
-        request('/api/admin/staff'),
+        request('/api/dev/users'),
         request('/api/admin/staff/invitations'),
         request('/api/dev/developers'),
         api.notifications(),
       ])
       setOverview(overviewData)
-      setStaff(staffData || [])
+      setDirectory(directoryData?.users || [])
+      setStaff((directoryData?.users || []).filter(item => item.role === 'STAFF'))
       setInvitations(invitationData || [])
       setDevelopers(developerData || [])
       setNotifications(notificationData || [])
@@ -222,10 +224,13 @@ export default function DevDashboard({ user, onLogout }) {
         </div>}
 
         {tab === 'users' && <section className="dev-panel">
-          <div className="dev-panel-head"><div><span className="dev-eyebrow">Church accounts</span><h2>Staff directory</h2><p>Read-only platform view of church staff accounts.</p></div></div>
-          <div className="dev-table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Position</th><th>Records</th><th>Status</th></tr></thead><tbody>
-            {staff.map(item => <tr key={item.id}><td><strong>{item.name}</strong></td><td>{item.email}</td><td>{item.department || '—'}</td><td>{item.position || '—'}</td><td>{item.recordCount ?? 0}</td><td><span className={item.isActive ? 'dev-status ok' : 'dev-status off'}>{item.isActive ? 'Active' : 'Inactive'}</span></td></tr>)}
-          </tbody></table>{!staff.length && <div className="dev-empty">No staff accounts found.</div>}</div>
+          <div className="dev-panel-head"><div><span className="dev-eyebrow">Database truth</span><h2>All platform accounts</h2><p>Every account below is read directly from the User table. No placeholder counts.</p></div><span className="dev-live">Database source</span></div>
+          <div className="dev-account-summary">
+            {['ADMIN', 'STAFF', 'DEV'].map(role => <div key={role}><span>{role === 'ADMIN' ? 'Administrators' : role === 'STAFF' ? 'Staff' : 'Developers'}</span><strong>{directory.filter(item => item.role === role).length}</strong></div>)}
+          </div>
+          <div className="dev-table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Position</th><th>Status</th><th>Created</th></tr></thead><tbody>
+            {directory.map(item => <tr key={item.id}><td><strong>{item.name}</strong></td><td>{item.email}</td><td><span className="dev-status">{item.role}</span></td><td>{item.department || '—'}</td><td>{item.position || '—'}</td><td><span className={item.isActive ? 'dev-status ok' : 'dev-status off'}>{item.isActive ? 'Active' : 'Inactive'}</span></td><td>{date(item.createdAt)}</td></tr>)}
+          </tbody></table>{!directory.length && <div className="dev-empty">The database returned no user accounts.</div>}</div>
         </section>}
 
         {tab === 'invitations' && <section className="dev-panel">
