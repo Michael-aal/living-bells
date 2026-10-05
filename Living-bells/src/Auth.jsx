@@ -5,7 +5,7 @@ import './auth.css'
 export default function Auth({ onAuthenticated, onBack }) {
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'STAFF', inviteCode: '', department: '' })
-  const [recovery, setRecovery] = useState({ email: '', recoverySecret: '', password: '', confirmPassword: '' })
+  const [recovery, setRecovery] = useState({ email: '', recoveryKey: '', password: '', confirmPassword: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [invitation, setInvitation] = useState(null)
@@ -41,7 +41,7 @@ export default function Auth({ onAuthenticated, onBack }) {
       if (mode === 'recovery') {
         const recoveryEmail = recovery.email.trim().toLowerCase()
         if (recovery.password !== recovery.confirmPassword) throw new Error('Passwords do not match')
-        const result = await api.recoverDevPassword({ email: recoveryEmail, recoverySecret: recovery.recoverySecret, newPassword: recovery.password })
+        const result = await api.recoverDevPassword({ email: recoveryEmail, recoveryKey: recovery.recoveryKey, newPassword: recovery.password })
         if (result.token) localStorage.setItem('living_bells_token', result.token)
         localStorage.removeItem('living_bells_offline_session')
         localStorage.setItem('living_bells_user', JSON.stringify(result.user))
@@ -99,7 +99,7 @@ export default function Auth({ onAuthenticated, onBack }) {
       <h1>{isRecovery ? 'Recover developer access' : isLogin ? 'Welcome back' : 'Create your account'}</h1>
       <p className="auth-subtitle">
         {isRecovery
-          ? 'Use the private developer recovery credential configured on the backend.'
+          ? 'Use the recovery key generated for your developer account. You can view it again from Developer Console → Security.'
           : isLogin
             ? 'Sign in with your email and password.'
             : 'Staff registration uses a code provided by your church admin.'}
@@ -110,7 +110,7 @@ export default function Auth({ onAuthenticated, onBack }) {
       <form onSubmit={submit}>
         {isRecovery && <>
           <label>Developer email<input type="email" value={recovery.email} onChange={e => setRecovery(current => ({ ...current, email: e.target.value }))} autoComplete="email" required /></label>
-          <label>Recovery secret<input type="password" value={recovery.recoverySecret} onChange={e => setRecovery(current => ({ ...current, recoverySecret: e.target.value }))} autoComplete="off" required /></label>
+          <label>Recovery key<input type="text" value={recovery.recoveryKey} onChange={e => setRecovery(current => ({ ...current, recoveryKey: e.target.value.toUpperCase() }))} autoComplete="off" placeholder="LB-XXXXX-XXXXX-XXXXX-XXXXX" required /></label>
           <label>New password<input type="password" minLength="8" value={recovery.password} onChange={e => setRecovery(current => ({ ...current, password: e.target.value }))} autoComplete="new-password" required /></label>
           <label>Confirm new password<input type="password" minLength="8" value={recovery.confirmPassword} onChange={e => setRecovery(current => ({ ...current, confirmPassword: e.target.value }))} autoComplete="new-password" required /></label>
           <button className="primary auth-submit" disabled={loading}>{loading ? 'Recovering…' : 'Reset developer password'}</button>
