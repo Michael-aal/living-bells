@@ -56,7 +56,7 @@ export default function DevDashboard({ user, onLogout }) {
     setLoading(true)
     setError('')
     try {
-      const [overviewData, staffData, invitationData, developerData] = await Promise.all([
+      const [overviewData, staffData, invitationData, developerData, notificationData] = await Promise.all([
         api.devOverview(),
         request('/api/admin/staff'),
         request('/api/admin/staff/invitations'),
