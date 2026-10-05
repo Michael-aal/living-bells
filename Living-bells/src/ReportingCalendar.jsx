@@ -235,7 +235,7 @@ export default function ReportingCalendar({ user, current }) {
       <div className="calendar-builder-grid">
         <label>
           <span>Year</span>
-          <input type="number" min="2000" max="2200" value={form.year} onChange={e => { setField('year', e.target.value); setYear(Number(e.target.value) || currentYear) }} />
+          <input type="number" value={form.year} onChange={e => { setField('year', e.target.value); setYear(Number(e.target.value) || currentYear) }} />
         </label>
         <label>
           <span>Month</span>
