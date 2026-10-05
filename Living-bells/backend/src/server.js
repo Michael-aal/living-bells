@@ -238,6 +238,60 @@ app.patch('/api/auth/me', authenticate, async (req, res, next) => {
 
 app.use('/api', authenticate)
 
+app.get('/api/dev/overview', requireDev, async (_req, res, next) => {
+  try {
+    const [
+      totalUsers,
+      activeUsers,
+      staffUsers,
+      adminUsers,
+      developerUsers,
+      pendingInvitations,
+      activities,
+      attendanceRecords,
+      financialRecords,
+      weeklyReports,
+      latestReport,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.user.count({ where: { role: 'STAFF' } }),
+      prisma.user.count({ where: { role: 'ADMIN' } }),
+      prisma.user.count({ where: { role: 'DEV' } }),
+      prisma.staffInvitation.count({ where: { usedAt: null, expiresAt: { gt: new Date() } } }),
+      prisma.activity.count(),
+      prisma.attendanceRecord.count(),
+      prisma.financialRecord.count(),
+      prisma.weeklyReport.count(),
+      prisma.weeklyReport.findFirst({ orderBy: { reportDate: 'desc' }, select: { reportDate: true, updatedAt: true } }),
+    ])
+
+    res.json({
+      system: { status: 'operational', checkedAt: new Date().toISOString() },
+      users: { total: totalUsers, active: activeUsers, staff: staffUsers, admins: adminUsers, developers: developerUsers },
+      records: { activities, attendance: attendanceRecords, finances: financialRecords, weeklyReports },
+      pendingInvitations,
+      latestReport,
+    })
+  } catch (error) { next(error) }
+})
+
+app.patch('/api/dev/security/password', requireDev, async (req, res, next) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || '')
+    const newPassword = String(req.body?.newPassword || '')
+    if (newPassword.length < 8) return res.status(400).json({ message: 'New password must be at least 8 characters' })
+    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) } })
+    if (!user || user.role !== 'DEV') return res.status(404).json({ message: 'Developer account not found' })
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      return res.status(401).json({ message: 'Current password is incorrect' })
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12)
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } })
+    res.json({ message: 'Developer password changed successfully' })
+  } catch (error) { next(error) }
+})
+
 app.get('/api/dev/developers', requireDev, async (_req, res, next) => {
   try {
     const developers = await prisma.user.findMany({
@@ -1045,8 +1099,37 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ message: 'Internal server error' })
 })
 
-const server = app.listen(PORT, () => {
-  console.log(`Living Bells backend running on http://localhost:${PORT}`)
+async function ensureDevAdmin() {
+  const email = String(process.env.DEV_ADMIN_EMAIL || 'livingbells@gmail.com').trim().toLowerCase()
+  const password = String(process.env.DEV_ADMIN_PASSWORD || 'Living Bells')
+  const name = String(process.env.DEV_ADMIN_NAME || 'Living Bells Developer').trim()
+
+  const existing = await prisma.user.findUnique({ where: { email } })
+  if (existing) {
+    if (existing.role !== 'DEV') {
+      console.warn(`DEV_ADMIN_EMAIL is already used by a non-developer account: ${email}`)
+    }
+    return
+  }
+
+  if (password.length < 8) {
+    throw new Error('DEV_ADMIN_PASSWORD must be at least 8 characters')
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12)
+  await prisma.user.create({
+    data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date(), isActive: true },
+  })
+  console.log(`Developer account initialized: ${email}`)
+}
+
+const server = app.listen(PORT, async () => {
+  try {
+    await ensureDevAdmin()
+    console.log(`Living Bells backend running on http://localhost:${PORT}`)
+  } catch (error) {
+    console.error('Developer account initialization failed:', error)
+  }
 })
 
 const shutdown = async () => {
