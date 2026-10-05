@@ -7,6 +7,8 @@ export default function DevPasswordSetup({ user, onCompleted, onLogout }) {
   const [confirm, setConfirm] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [recoveryKey, setRecoveryKey] = useState('')
+  const [saved, setSaved] = useState(false)
 
   async function submit(event) {
     event.preventDefault()
@@ -18,13 +20,32 @@ export default function DevPasswordSetup({ user, onCompleted, onLogout }) {
       const result = await api.completeDevPasswordSetup({ newPassword: password })
       if (result.token) localStorage.setItem('living_bells_token', result.token)
       localStorage.setItem('living_bells_user', JSON.stringify(result.user))
-      onCompleted(result.user)
+      setRecoveryKey(result.recoveryKey || '')
     } catch (err) {
       setError(err.message || 'Could not complete developer setup.')
     } finally {
       setSaving(false)
     }
   }
+
+  function continueToConsole() {
+    if (!saved) return
+    onCompleted({ ...user, mustChangePassword: false })
+  }
+
+  if (recoveryKey) return <main className="dev-setup-shell">
+    <section className="dev-setup-card recovery-card">
+      <div className="dev-setup-logo">L</div>
+      <span className="dev-setup-eyebrow">Security key generated</span>
+      <h1>Save your recovery key</h1>
+      <p className="dev-setup-copy">This key is securely stored for your developer account and can be viewed later from Developer Console → Security. Keep it private.</p>
+      <div className="dev-recovery-key" aria-label="Developer recovery key">{recoveryKey}</div>
+      <button type="button" className="dev-setup-secondary" onClick={() => navigator.clipboard?.writeText(recoveryKey)}>Copy recovery key</button>
+      <label className="dev-recovery-check"><input type="checkbox" checked={saved} onChange={e => setSaved(e.target.checked)} /> I saved my recovery key somewhere secure.</label>
+      <button className="dev-setup-primary" disabled={!saved} onClick={continueToConsole}>Continue to Developer Console</button>
+      <small className="dev-recovery-note">Living Bells never displays this key in normal notifications. The notification only tells you where to find it.</small>
+    </section>
+  </main>
 
   return <main className="dev-setup-shell">
     <section className="dev-setup-card">
