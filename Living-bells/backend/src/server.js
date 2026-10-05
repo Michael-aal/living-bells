@@ -96,7 +96,7 @@ app.post('/api/auth/dev-bootstrap', async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 12)
     const user = await prisma.user.create({
-      data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date() },
+      data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date(), mustChangePassword: true },
     })
 
     res.status(201).json({
@@ -233,7 +233,7 @@ app.get('/api/auth/me', authenticate, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: Number(req.user.sub) },
-      select: { id: true, name: true, email: true, role: true, department: true },
+      select: { id: true, name: true, email: true, role: true, department: true, mustChangePassword: true },
     })
     if (!user) return res.status(401).json({ message: 'User account not found' })
     res.json({ ...user, emailVerified: true })
@@ -293,7 +293,7 @@ app.patch('/api/dev/security/password', requireDevReady, async (req, res, next) 
   } catch (error) { next(error) }
 })
 
-app.get('/api/dev/developers', requireDev, async (_req, res, next) => {
+app.get('/api/dev/developers', requireDevReady, async (_req, res, next) => {
   try {
     const developers = await prisma.user.findMany({
       where: { role: 'DEV' },
@@ -304,7 +304,7 @@ app.get('/api/dev/developers', requireDev, async (_req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.post('/api/dev/developers', requireDev, async (req, res, next) => {
+app.post('/api/dev/developers', requireDevReady, async (req, res, next) => {
   try {
     const name = String(req.body?.name || '').trim()
     const email = String(req.body?.email || '').trim().toLowerCase()
@@ -317,8 +317,8 @@ app.post('/api/dev/developers', requireDev, async (req, res, next) => {
     }
     const passwordHash = await bcrypt.hash(password, 12)
     const developer = await prisma.user.create({
-      data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date() },
-      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+      data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date(), mustChangePassword: true },
+      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true, mustChangePassword: true },
     })
     res.status(201).json(developer)
   } catch (error) { next(error) }
