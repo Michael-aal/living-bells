@@ -10,6 +10,58 @@ const app = express()
 const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
 const DEV_RECOVERY_SECRET = String(process.env.DEV_ADMIN_RECOVERY_SECRET || '').trim()
+const DEV_RECOVERY_ENCRYPTION_KEY = crypto.createHash('sha256').update(String(process.env.DEV_RECOVERY_ENCRYPTION_KEY || JWT_SECRET)).digest()
+
+function generateRecoveryKey() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = crypto.randomBytes(20)
+  let raw = ''
+  for (const byte of bytes) raw += alphabet[byte % alphabet.length]
+  return `LB-${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10, 15)}-${raw.slice(15, 20)}`
+}
+
+function encryptRecoveryKey(value) {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', DEV_RECOVERY_ENCRYPTION_KEY, iv)
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return { encrypted: Buffer.concat([encrypted, tag]).toString('base64'), nonce: iv.toString('base64') }
+}
+
+function decryptRecoveryKey(encrypted, nonce) {
+  const packed = Buffer.from(encrypted, 'base64')
+  const iv = Buffer.from(nonce, 'base64')
+  const tag = packed.subarray(packed.length - 16)
+  const ciphertext = packed.subarray(0, packed.length - 16)
+  const decipher = crypto.createDecipheriv('aes-256-gcm', DEV_RECOVERY_ENCRYPTION_KEY, iv)
+  decipher.setAuthTag(tag)
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')
+}
+
+async function getOrCreateDevRecoveryKey(user) {
+  if (user.devRecoveryKeyEncrypted && user.devRecoveryKeyNonce) {
+    return { key: decryptRecoveryKey(user.devRecoveryKeyEncrypted, user.devRecoveryKeyNonce), created: false }
+  }
+  const key = generateRecoveryKey()
+  const encrypted = encryptRecoveryKey(key)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { devRecoveryKeyEncrypted: encrypted.encrypted, devRecoveryKeyNonce: encrypted.nonce, devRecoveryKeyCreatedAt: new Date() },
+  })
+  return { key, created: true }
+}
+
+async function createDevRecoveryNotification(userId) {
+  return prisma.notification.create({
+    data: {
+      userId,
+      type: 'SECURITY',
+      title: 'Developer recovery key ready',
+      message: 'Your encrypted recovery key is available in Developer Console → Security. Keep it private and use it if you need to recover this account.',
+      metadata: { action: 'developer-recovery-key' },
+    },
+  })
+}
 
 app.use(cors())
 app.use(express.json())
@@ -272,8 +324,36 @@ app.post('/api/dev/security/initial-password', authenticate, requireDev, async (
     if (!user) return res.status(404).json({ message: 'Developer account not found' })
     if (!user.mustChangePassword) return res.status(409).json({ message: 'Initial developer password setup has already been completed' })
     const passwordHash = await bcrypt.hash(newPassword, 12)
+    const recovery = await getOrCreateDevRecoveryKey(user)
     const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false } })
-    res.json({ message: 'Developer password setup completed', token: signToken(updated), user: { id: updated.id, name: updated.name, email: updated.email, role: updated.role, emailVerified: true, mustChangePassword: false } })
+    if (recovery.created) await createDevRecoveryNotification(user.id)
+    res.json({ message: 'Developer password setup completed', recoveryKey: recovery.key, token: signToken(updated), user: { id: updated.id, name: updated.name, email: updated.email, role: updated.role, emailVerified: true, mustChangePassword: false } })
+  } catch (error) { next(error) }
+})
+
+app.get('/api/dev/security/recovery-key', requireDevReady, async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) }, select: { id: true, devRecoveryKeyEncrypted: true, devRecoveryKeyNonce: true } })
+    if (!user) return res.status(404).json({ message: 'Developer account not found' })
+    const recovery = await getOrCreateDevRecoveryKey(user)
+    if (recovery.created) await createDevRecoveryNotification(user.id)
+    res.json({ recoveryKey: recovery.key })
+  } catch (error) { next(error) }
+})
+
+app.get('/api/notifications', async (req, res, next) => {
+  try {
+    const notifications = await prisma.notification.findMany({ where: { userId: currentUserId(req) }, orderBy: { createdAt: 'desc' }, take: 50 })
+    res.json(notifications)
+  } catch (error) { next(error) }
+})
+
+app.patch('/api/notifications/:id/read', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const notification = await prisma.notification.updateMany({ where: { id, userId: currentUserId(req) }, data: { readAt: new Date() } })
+    if (!notification.count) return res.status(404).json({ message: 'Notification not found' })
+    res.json({ message: 'Notification marked as read' })
   } catch (error) { next(error) }
 })
 
