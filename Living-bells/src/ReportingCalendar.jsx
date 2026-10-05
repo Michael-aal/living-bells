@@ -132,9 +132,15 @@ export default function ReportingCalendar({ user, current }) {
       setNotice('')
       setHighlightedWeekId(null)
 
+      // The ending date is the source of truth for the reporting
+      // year/month. This prevents a stale year selector from accidentally
+      // submitting a historical week against the current calendar.
+      const end = new Date(String(form.endDate).slice(0, 10) + 'T12:00:00Z')
+      if (Number.isNaN(end.getTime())) throw new Error('A valid end date is required')
+
       const payload = {
-        year: Number(form.year),
-        month: Number(form.month),
+        year: end.getUTCFullYear(),
+        month: end.getUTCMonth() + 1,
         weekNumber: Number(form.weekNumber),
         startDate: form.startDate,
         endDate: form.endDate,
