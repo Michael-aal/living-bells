@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { api } from './api'
+import './DevDashboard.css'
 
 function token() {
   return localStorage.getItem('living_bells_token') || ''
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -18,35 +20,56 @@ async function request(path, options = {}) {
   return data
 }
 
+function date(value) {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function Stat({ label, value, hint }) {
+  return <article className="dev-stat">
+    <span>{label}</span>
+    <strong>{value}</strong>
+    <small>{hint}</small>
+  </article>
+}
+
 export default function DevDashboard({ user, onLogout }) {
+  const [tab, setTab] = useState('overview')
+  const [overview, setOverview] = useState(null)
   const [staff, setStaff] = useState([])
   const [invitations, setInvitations] = useState([])
-  const [counts, setCounts] = useState({ active: 0, pending: 0, total: 0 })
-  const [dashboard, setDashboard] = useState(null)
   const [developers, setDevelopers] = useState([])
-  const [devForm, setDevForm] = useState({ name: '', email: '', password: '' })
   const [loading, setLoading] = useState(true)
-  const [message, setMessage] = useState('')
-  const [tab, setTab] = useState('overview')
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [devForm, setDevForm] = useState({ name: '', email: '', password: '' })
+  const [devSaving, setDevSaving] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [recoveryKey, setRecoveryKey] = useState('')
+  const [recoveryVisible, setRecoveryVisible] = useState(false)
 
   async function load() {
     setLoading(true)
+    setError('')
     try {
-      const [staffData, invitationData, countData, dashboardData, developersData] = await Promise.all([
+      const [overviewData, staffData, invitationData, developerData, notificationData] = await Promise.all([
+        api.devOverview(),
         request('/api/admin/staff'),
         request('/api/admin/staff/invitations'),
-        request('/api/admin/staff/count'),
-        request('/api/dashboard'),
         request('/api/dev/developers'),
+        api.notifications(),
       ])
+      setOverview(overviewData)
       setStaff(staffData || [])
       setInvitations(invitationData || [])
-      setCounts(countData || { active: 0, pending: 0, total: 0 })
-      setDashboard(dashboardData || {})
-      setDevelopers(developersData || [])
-      setMessage('')
-    } catch (error) {
-      setMessage(error.message || 'Could not load developer console')
+      setDevelopers(developerData || [])
+      setNotifications(notificationData || [])
+    } catch (err) {
+      setError(err.message || 'Could not load the developer console')
     } finally {
       setLoading(false)
     }
@@ -54,81 +77,202 @@ export default function DevDashboard({ user, onLogout }) {
 
   useEffect(() => { load() }, [])
 
-  const verified = useMemo(() => staff.filter(item => item.emailVerified).length, [staff])
-  const active = useMemo(() => staff.filter(item => item.isActive !== false).length, [staff])
-  const recentStaff = useMemo(() => staff.slice(0, 8), [staff])
-
-  async function addDeveloper(event) {
-    event.preventDefault()
-    setMessage('')
+  async function loadRecoveryKey() {
+    setError('')
     try {
-      await request('/api/dev/developers', { method: 'POST', body: JSON.stringify(devForm) })
-      setDevForm({ name: '', email: '', password: '' })
-      await load()
-      setMessage('Developer account onboarded.')
-    } catch (error) {
-      setMessage(error.message || 'Could not onboard developer')
+      const result = await api.devRecoveryKey()
+      setRecoveryKey(result.recoveryKey || '')
+      setRecoveryVisible(true)
+    } catch (err) { setError(err.message || 'Could not load the recovery key') }
+  }
+
+  async function markNotificationRead(id) {
+    try {
+      await api.markNotificationRead(id)
+      setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item))
+    } catch (err) { setError(err.message || 'Could not update notification') }
+  }
+
+  async function changePassword(event) {
+    event.preventDefault()
+    setNotice('')
+    setError('')
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setError('New passwords do not match.')
+      return
+    }
+    setPasswordSaving(true)
+    try {
+      await api.changeDevPassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      })
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setNotice('Developer password changed successfully.')
+    } catch (err) {
+      setError(err.message || 'Could not change developer password')
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
+  async function addDeveloper(event) {
+    event.preventDefault()
+    setNotice('')
+    setError('')
+    setDevSaving(true)
+    try {
+      await request('/api/dev/developers', { method: 'POST', body: JSON.stringify(devForm) })
+      setDevForm({ name: '', email: '', password: '' })
+      setNotice('Developer account created.')
+      await load()
+    } catch (err) {
+      setError(err.message || 'Could not create developer account')
+    } finally {
+      setDevSaving(false)
+    }
+  }
 
-  return (
-    <div className="dev-console">
-      <style>{`
-        .dev-console{min-height:100vh;background:#f7f7fb;color:#17131f;font-family:Inter,system-ui,-apple-system,sans-serif}
-        .dev-shell{max-width:1240px;margin:0 auto;padding:24px}
-        .dev-top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px}
-        .dev-brand{display:flex;align-items:center;gap:12px}.dev-mark{width:40px;height:40px;border-radius:12px;background:#6d3df5;color:white;display:grid;place-items:center;font-weight:800}
-        .dev-kicker{font-size:12px;color:#766f82;text-transform:uppercase;letter-spacing:.12em}.dev-title{font-size:24px;font-weight:800;margin:2px 0}
-        .dev-user{display:flex;align-items:center;gap:12px}.dev-user small{color:#766f82}.dev-btn{border:1px solid #ddd8e8;background:white;border-radius:10px;padding:9px 13px;cursor:pointer}
-        .dev-nav{display:flex;gap:8px;margin-bottom:20px;overflow:auto}.dev-nav button{border:0;background:transparent;padding:9px 13px;border-radius:9px;cursor:pointer;color:#625b70}.dev-nav button.active{background:#eee8ff;color:#5c2bd9;font-weight:700}
-        .dev-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.dev-card{background:white;border:1px solid #e7e2ef;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(28,18,45,.04)}
-        .dev-label{font-size:13px;color:#766f82}.dev-value{font-size:28px;font-weight:800;margin-top:8px}.dev-sub{font-size:12px;color:#8a8395;margin-top:4px}
-        .dev-section{margin-top:18px}.dev-section h2{font-size:16px;margin:0 0 12px}.dev-table{width:100%;border-collapse:collapse}.dev-table th,.dev-table td{text-align:left;padding:12px 10px;border-bottom:1px solid #eeeaf2;font-size:13px}.dev-table th{color:#766f82;font-weight:600}
-        .dev-pill{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:700;background:#eeeaf4}.dev-pill.ok{background:#e8f7ed;color:#247342}.dev-pill.warn{background:#fff3db;color:#986000}
-        .dev-banner{padding:12px 14px;border-radius:10px;background:#fff3db;color:#7a5100;margin-bottom:16px}.dev-empty{color:#8a8395;padding:18px 0}
-        @media(max-width:800px){.dev-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dev-top{align-items:flex-start}.dev-user span{display:none}}
-        @media(max-width:520px){.dev-shell{padding:16px}.dev-grid{grid-template-columns:1fr 1fr}.dev-value{font-size:23px}.dev-table{min-width:650px}.dev-section{overflow-x:auto}}
-      `}</style>
-      <div className="dev-shell">
-        <header className="dev-top">
-          <div className="dev-brand"><div className="dev-mark">L</div><div><div className="dev-kicker">Developer Console</div><div className="dev-title">Living Bells Platform</div></div></div>
-          <div className="dev-user"><div><strong>{user.name || 'Developer'}</strong><br/><small>{user.email}</small></div><button className="dev-btn" onClick={onLogout}>Log out</button></div>
-        </header>
+  const users = overview?.users || {}
+  const records = overview?.records || {}
+  const tabs = [
+    ['overview', 'Overview'],
+    ['users', 'Users'],
+    ['invitations', 'Invitations'],
+    ['developers', 'Developers'],
+    ['security', 'Security'],
+  ]
 
-        <nav className="dev-nav">
-          {['overview','users','invitations'].map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item[0].toUpperCase()+item.slice(1)}</button>)}
-          <button className={tab === 'developers' ? 'active' : ''} onClick={() => setTab('developers')}>Developers</button><button onClick={load}>Refresh</button>
-        </nav>
-
-        {message && <div className="dev-banner">{message}</div>}
-        {loading ? <div className="dev-card">Loading developer console…</div> : (
-          <>
-            {tab === 'overview' && <>
-              <section className="dev-grid">
-                <div className="dev-card"><div className="dev-label">Active staff</div><div className="dev-value">{active}</div><div className="dev-sub">{counts.pending} pending invitations</div></div>
-                <div className="dev-card"><div className="dev-label">Verified accounts</div><div className="dev-value">{verified}</div><div className="dev-sub">Email verification status</div></div>
-                <div className="dev-card"><div className="dev-label">Activities</div><div className="dev-value">{dashboard?.activities?.length ?? 0}</div><div className="dev-sub">Latest records loaded</div></div>
-                <div className="dev-card"><div className="dev-label">Console access</div><div className="dev-value">DEV</div><div className="dev-sub">Protected platform role</div></div>
-              </section>
-              <section className="dev-section dev-card"><h2>Recent onboarded staff</h2>{recentStaff.length ? <table className="dev-table"><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Status</th></tr></thead><tbody>{recentStaff.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.email}</td><td>{item.department || '—'}</td><td><span className={`dev-pill ${item.isActive !== false ? 'ok' : 'warn'}`}>{item.isActive !== false ? 'Active' : 'Inactive'}</span></td></tr>)}</tbody></table> : <div className="dev-empty">No staff accounts yet.</div>}</section>
-            </>}
-            {tab === 'users' && <section className="dev-section dev-card"><h2>Staff accounts</h2><table className="dev-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Records</th><th>Status</th></tr></thead><tbody>{staff.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.email}</td><td>{item.role}</td><td>{item.department || '—'}</td><td>{item.recordCount ?? 0}</td><td>{item.isActive !== false ? 'Active' : 'Inactive'}</td></tr>)}</tbody></table></section>}
-            {tab === 'developers' && <section className="dev-section dev-card">
-              <h2>Developer access</h2>
-              <p className="dev-sub">Only developers can create another developer account.</p>
-              <form onSubmit={addDeveloper} style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:10,margin:'14px 0 22px'}}>
-                <input value={devForm.name} onChange={e => setDevForm({...devForm,name:e.target.value})} placeholder="Name" required style={{padding:10,border:'1px solid #ddd8e8',borderRadius:9}} />
-                <input type="email" value={devForm.email} onChange={e => setDevForm({...devForm,email:e.target.value})} placeholder="Email" required style={{padding:10,border:'1px solid #ddd8e8',borderRadius:9}} />
-                <input type="password" value={devForm.password} onChange={e => setDevForm({...devForm,password:e.target.value})} placeholder="Temporary password (8+)" minLength="8" required style={{padding:10,border:'1px solid #ddd8e8',borderRadius:9}} />
-                <button className="dev-btn" type="submit" style={{width:'fit-content'}}>Onboard developer</button>
-              </form>
-              <table className="dev-table"><thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Joined</th></tr></thead><tbody>{developers.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.email}</td><td>{item.isActive ? 'Active' : 'Inactive'}</td><td>{new Date(item.createdAt).toLocaleDateString('en-NG')}</td></tr>)}</tbody></table>
-            </section>}
-            {tab === 'invitations' && <section className="dev-section dev-card"><h2>Staff onboarding</h2><table className="dev-table"><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Status</th><th>Created</th></tr></thead><tbody>{invitations.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.email}</td><td>{item.department}</td><td>{item.status}</td><td>{new Date(item.createdAt).toLocaleDateString('en-NG')}</td></tr>)}</tbody></table></section>}
-          </>
-        )}
+  return <div className="dev-console">
+    <header className="dev-header">
+      <div className="dev-header-inner">
+        <div className="dev-brand">
+          <div className="dev-logo">L</div>
+          <div>
+            <span>Living Bells</span>
+            <strong>Developer Console</strong>
+          </div>
+        </div>
+        <div className="dev-account">
+          <div className="dev-account-copy">
+            <strong>{user.name || 'Developer'}</strong>
+            <span>{user.email}</span>
+          </div>
+          <div className="dev-notification-wrap">
+            <button className="dev-bell" aria-label="Notifications" onClick={() => setNotificationsOpen(value => !value)}>♢<span className="dev-notification-count">{notifications.filter(item => !item.readAt).length}</span></button>
+            {notificationsOpen && <div className="dev-notification-panel">
+              <div className="dev-notification-head"><strong>Notifications</strong><span>{notifications.filter(item => !item.readAt).length} unread</span></div>
+              {!notifications.length && <div className="dev-empty">No notifications yet.</div>}
+              {notifications.map(item => <button key={item.id} className={item.readAt ? 'dev-notification read' : 'dev-notification'} onClick={() => markNotificationRead(item.id)}><strong>{item.title}</strong><span>{item.message}</span><small>{date(item.createdAt)}</small></button>)}
+            </div>}
+          </div>
+          <button className="dev-ghost" onClick={onLogout}>Log out</button>
+        </div>
       </div>
-    </div>
-  )
+    </header>
+
+    <main className="dev-main">
+      <section className="dev-hero">
+        <div>
+          <span className="dev-eyebrow">Platform administration</span>
+          <h1>Dev Console</h1>
+          <p>Monitor the Living Bells platform, manage privileged developer access, and inspect real system data.</p>
+        </div>
+        <div className="dev-health"><i /> <span>System operational</span></div>
+      </section>
+
+      <nav className="dev-tabs" aria-label="Developer console sections">
+        {tabs.map(([key, label]) => <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}</button>)}
+        <button className="refresh" onClick={load}>Refresh</button>
+      </nav>
+
+      {notice && <div className="dev-notice">{notice}</div>}
+      {error && <div className="dev-error">{error}</div>}
+
+      {loading ? <section className="dev-panel dev-loading">Loading platform data…</section> : <>
+        {tab === 'overview' && <div className="dev-content">
+          <div className="dev-stats">
+            <Stat label="Total users" value={users.total ?? 0} hint={`${users.active ?? 0} active accounts`} />
+            <Stat label="Staff" value={users.staff ?? 0} hint={`${overview?.pendingInvitations ?? 0} pending invitations`} />
+            <Stat label="Administrators" value={users.admins ?? 0} hint="Church admin accounts" />
+            <Stat label="Developers" value={users.developers ?? 0} hint="Privileged platform accounts" />
+          </div>
+
+          <div className="dev-two-col">
+            <section className="dev-panel">
+              <div className="dev-panel-head"><div><span className="dev-eyebrow">Database activity</span><h2>Platform records</h2></div><span className="dev-live">Live counts</span></div>
+              <div className="dev-record-grid">
+                <div><b>{records.activities ?? 0}</b><span>Activities</span></div>
+                <div><b>{records.attendance ?? 0}</b><span>Attendance</span></div>
+                <div><b>{records.finances ?? 0}</b><span>Financial records</span></div>
+                <div><b>{records.weeklyReports ?? 0}</b><span>Weekly reports</span></div>
+              </div>
+            </section>
+
+            <section className="dev-panel">
+              <div className="dev-panel-head"><div><span className="dev-eyebrow">Reporting</span><h2>Latest weekly report</h2></div></div>
+              {overview?.latestReport ? <div className="dev-latest"><strong>{date(overview.latestReport.reportDate)}</strong><span>Last updated {date(overview.latestReport.updatedAt)}</span></div> : <div className="dev-empty">No weekly reports have been recorded yet.</div>}
+            </section>
+          </div>
+
+          <section className="dev-panel">
+            <div className="dev-panel-head"><div><span className="dev-eyebrow">Access</span><h2>Security boundary</h2></div></div>
+            <div className="dev-security-note"><div className="dev-lock">✓</div><div><strong>Developer-only console</strong><p>Normal registration cannot create developer accounts. Developer access is assigned by the backend and protected by the DEV role.</p></div></div>
+          </section>
+        </div>}
+
+        {tab === 'users' && <section className="dev-panel">
+          <div className="dev-panel-head"><div><span className="dev-eyebrow">Church accounts</span><h2>Staff directory</h2><p>Read-only platform view of church staff accounts.</p></div></div>
+          <div className="dev-table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Position</th><th>Records</th><th>Status</th></tr></thead><tbody>
+            {staff.map(item => <tr key={item.id}><td><strong>{item.name}</strong></td><td>{item.email}</td><td>{item.department || '—'}</td><td>{item.position || '—'}</td><td>{item.recordCount ?? 0}</td><td><span className={item.isActive ? 'dev-status ok' : 'dev-status off'}>{item.isActive ? 'Active' : 'Inactive'}</span></td></tr>)}
+          </tbody></table>{!staff.length && <div className="dev-empty">No staff accounts found.</div>}</div>
+        </section>}
+
+        {tab === 'invitations' && <section className="dev-panel">
+          <div className="dev-panel-head"><div><span className="dev-eyebrow">Onboarding</span><h2>Staff invitations</h2><p>Invitation state is read directly from the backend.</p></div></div>
+          <div className="dev-table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Position</th><th>Status</th><th>Expires</th></tr></thead><tbody>
+            {invitations.map(item => <tr key={item.id}><td><strong>{item.name}</strong></td><td>{item.email}</td><td>{item.department}</td><td>{item.position || '—'}</td><td><span className="dev-status">{item.status || 'Unused'}</span></td><td>{date(item.expiresAt)}</td></tr>)}
+          </tbody></table>{!invitations.length && <div className="dev-empty">No invitations found.</div>}</div>
+        </section>}
+
+        {tab === 'developers' && <section className="dev-panel">
+          <div className="dev-panel-head"><div><span className="dev-eyebrow">Privileged access</span><h2>Developer accounts</h2><p>Only an authenticated developer can provision another developer.</p></div></div>
+          <form className="dev-form" onSubmit={addDeveloper}>
+            <label>Name<input value={devForm.name} onChange={e => setDevForm({ ...devForm, name: e.target.value })} required /></label>
+            <label>Email<input type="email" value={devForm.email} onChange={e => setDevForm({ ...devForm, email: e.target.value })} required /></label>
+            <label>Temporary password<input type="password" minLength="8" value={devForm.password} onChange={e => setDevForm({ ...devForm, password: e.target.value })} required /></label>
+            <button className="dev-primary" disabled={devSaving}>{devSaving ? 'Creating…' : 'Create developer'}</button>
+          </form>
+          <div className="dev-table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Created</th></tr></thead><tbody>
+            {developers.map(item => <tr key={item.id}><td><strong>{item.name}</strong></td><td>{item.email}</td><td><span className={item.isActive ? 'dev-status ok' : 'dev-status off'}>{item.isActive ? 'Active' : 'Inactive'}</span></td><td>{date(item.createdAt)}</td></tr>)}
+          </tbody></table></div>
+        </section>}
+
+        {tab === 'security' && <section className="dev-two-col">
+          <div className="dev-panel">
+            <div className="dev-panel-head"><div><span className="dev-eyebrow">Account security</span><h2>Change developer password</h2><p>Update the password for the current developer account.</p></div></div>
+            <form className="dev-password" onSubmit={changePassword}>
+              <label>Current password<input type="password" value={passwordForm.currentPassword} onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} required /></label>
+              <label>New password<input type="password" minLength="8" value={passwordForm.newPassword} onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} required /></label>
+              <label>Confirm new password<input type="password" minLength="8" value={passwordForm.confirmPassword} onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} required /></label>
+              <button className="dev-primary" disabled={passwordSaving}>{passwordSaving ? 'Saving…' : 'Change password'}</button>
+            </form>
+          </div>
+          <div className="dev-panel dev-credentials">
+            <span className="dev-eyebrow">Recovery</span>
+            <h2>Developer recovery key</h2>
+            <p>Use this key to recover the developer account if the password is forgotten. It is encrypted at rest and only revealed after authenticated developer access.</p>
+            {recoveryVisible ? <div className="dev-recovery-display">{recoveryKey}<button type="button" onClick={() => navigator.clipboard?.writeText(recoveryKey)}>Copy</button></div> : <button type="button" className="dev-primary" onClick={loadRecoveryKey}>View recovery key</button>}
+            <div className="dev-credentials-divider" />
+            <span className="dev-eyebrow">Developer identity</span>
+            <h2>{user.email}</h2>
+            <p>This account is created by the backend bootstrap process, not the normal registration page.</p>
+            <div><span>Role</span><strong>DEV</strong></div>
+            <div><span>Authentication</span><strong>JWT + bcrypt</strong></div>
+            <div><span>Registration</span><strong>Backend only</strong></div>
+          </div>
+        </section>}
+      </>}
+    </main>
+  </div>
 }

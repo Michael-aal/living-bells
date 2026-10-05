@@ -40,6 +40,11 @@ model User {
   department           String?
   position             String?
   isActive             Boolean   @default(true)
+  mustChangePassword    Boolean   @default(false)
+  devRecoveryKeyEncrypted String?
+  devRecoveryKeyNonce     String?
+  devRecoveryKeyCreatedAt DateTime?
+
 
   recordedActivities   Activity[]   @relation("ActivityRecorder")
   reportingMonthsCreated ReportingMonth[] @relation("ReportingMonthCreator")
@@ -53,6 +58,7 @@ model User {
   weeklyReportsCreated WeeklyReport[]    @relation("WeeklyReportCreator")
   invitationsSent      StaffInvitation[]  @relation("InvitationSender")
   createdOptions       ConfigOption[]    @relation("OptionCreator")
+  notifications        Notification[]
 }
 
 model Activity {
@@ -298,4 +304,20 @@ model StaffInvitation {
   @@index([email])
   @@index([expiresAt])
   @@index([usedAt])
+}
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  type      String
+  title     String
+  message   String
+  metadata  Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
