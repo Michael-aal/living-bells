@@ -146,13 +146,13 @@ export async function syncOfflineQueue() {
 export const api = {
   register: async payload => {
     const result = await apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) })
-    await saveOfflineIdentity(result.user, payload.password).catch(() => {})
+    if (result.user?.role !== 'DEV') await saveOfflineIdentity(result.user, payload.password).catch(() => {})
     return result
   },
   login: async payload => {
     try {
       const result = await apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) })
-      await saveOfflineIdentity(result.user, payload.password).catch(() => {})
+      if (result.user?.role !== 'DEV') await saveOfflineIdentity(result.user, payload.password).catch(() => {})
       return result
     } catch (error) {
       // Only fall back to the local verifier when the network/server cannot be reached.
@@ -167,6 +167,8 @@ export const api = {
   me: () => apiRequest('/api/auth/me'),
   devOverview: () => apiRequest('/api/dev/overview'),
   changeDevPassword: payload => apiRequest('/api/dev/security/password', { method: 'PATCH', body: JSON.stringify(payload) }),
+  completeDevPasswordSetup: payload => apiRequest('/api/dev/security/initial-password', { method: 'POST', body: JSON.stringify(payload) }),
+  recoverDevPassword: payload => apiRequest('/api/auth/dev-recover', { method: 'POST', body: JSON.stringify(payload) }),
   updateProfile: payload => apiRequest('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
   dashboard: () => apiRequest('/api/dashboard'),
   activities: () => apiRequest('/api/activities'),
