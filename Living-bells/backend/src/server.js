@@ -416,6 +416,34 @@ app.post('/api/dev/developers', requireDevReady, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+app.get('/api/dev/overview', requireDevReady, async (_req, res, next) => {
+  try {
+    const [total, active, staff, admins, developers, activities, attendance, finances, weeklyReports, pendingInvitations, latestReport] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.user.count({ where: { role: 'STAFF' } }),
+      prisma.user.count({ where: { role: 'ADMIN' } }),
+      prisma.user.count({ where: { role: 'DEV' } }),
+      prisma.activity.count(),
+      prisma.attendance.count(),
+      prisma.financialRecord.count(),
+      prisma.weeklyReport.count(),
+      prisma.staffInvitation.count({ where: { usedAt: null, expiresAt: { gt: new Date() } } }),
+      prisma.weeklyReport.findFirst({ orderBy: { reportDate: 'desc' }, select: { reportDate: true, updatedAt: true } }),
+    ])
+
+    res.json({
+      users: { total, active, staff, admins, developers },
+      pendingInvitations,
+      records: { activities, attendance, finances, weeklyReports },
+      latestReport,
+      source: 'database',
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
 const OPTION_KINDS = ['ACTIVITY', 'ATTENDANCE', 'FINANCE_INCOME', 'FINANCE_EXPENSE']
 
 app.get('/api/options', async (req, res, next) => {
