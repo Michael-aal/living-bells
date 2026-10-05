@@ -47,6 +47,10 @@ export default function DevDashboard({ user, onLogout }) {
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [devForm, setDevForm] = useState({ name: '', email: '', password: '' })
   const [devSaving, setDevSaving] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [recoveryKey, setRecoveryKey] = useState('')
+  const [recoveryVisible, setRecoveryVisible] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -57,11 +61,13 @@ export default function DevDashboard({ user, onLogout }) {
         request('/api/admin/staff'),
         request('/api/admin/staff/invitations'),
         request('/api/dev/developers'),
+        api.notifications(),
       ])
       setOverview(overviewData)
       setStaff(staffData || [])
       setInvitations(invitationData || [])
       setDevelopers(developerData || [])
+      setNotifications(notificationData || [])
     } catch (err) {
       setError(err.message || 'Could not load the developer console')
     } finally {
@@ -70,6 +76,22 @@ export default function DevDashboard({ user, onLogout }) {
   }
 
   useEffect(() => { load() }, [])
+
+  async function loadRecoveryKey() {
+    setError('')
+    try {
+      const result = await api.devRecoveryKey()
+      setRecoveryKey(result.recoveryKey || '')
+      setRecoveryVisible(true)
+    } catch (err) { setError(err.message || 'Could not load the recovery key') }
+  }
+
+  async function markNotificationRead(id) {
+    try {
+      await api.markNotificationRead(id)
+      setNotifications(current => current.map(item => item.id === id ? { ...item, readAt: new Date().toISOString() } : item))
+    } catch (err) { setError(err.message || 'Could not update notification') }
+  }
 
   async function changePassword(event) {
     event.preventDefault()
@@ -135,6 +157,14 @@ export default function DevDashboard({ user, onLogout }) {
           <div className="dev-account-copy">
             <strong>{user.name || 'Developer'}</strong>
             <span>{user.email}</span>
+          </div>
+          <div className="dev-notification-wrap">
+            <button className="dev-bell" aria-label="Notifications" onClick={() => setNotificationsOpen(value => !value)}>♢<span className="dev-notification-count">{notifications.filter(item => !item.readAt).length}</span></button>
+            {notificationsOpen && <div className="dev-notification-panel">
+              <div className="dev-notification-head"><strong>Notifications</strong><span>{notifications.filter(item => !item.readAt).length} unread</span></div>
+              {!notifications.length && <div className="dev-empty">No notifications yet.</div>}
+              {notifications.map(item => <button key={item.id} className={item.readAt ? 'dev-notification read' : 'dev-notification'} onClick={() => markNotificationRead(item.id)}><strong>{item.title}</strong><span>{item.message}</span><small>{date(item.createdAt)}</small></button>)}
+            </div>}
           </div>
           <button className="dev-ghost" onClick={onLogout}>Log out</button>
         </div>
@@ -229,6 +259,11 @@ export default function DevDashboard({ user, onLogout }) {
             </form>
           </div>
           <div className="dev-panel dev-credentials">
+            <span className="dev-eyebrow">Recovery</span>
+            <h2>Developer recovery key</h2>
+            <p>Use this key to recover the developer account if the password is forgotten. It is encrypted at rest and only revealed after authenticated developer access.</p>
+            {recoveryVisible ? <div className="dev-recovery-display">{recoveryKey}<button type="button" onClick={() => navigator.clipboard?.writeText(recoveryKey)}>Copy</button></div> : <button type="button" className="dev-primary" onClick={loadRecoveryKey}>View recovery key</button>}
+            <div className="dev-credentials-divider" />
             <span className="dev-eyebrow">Developer identity</span>
             <h2>{user.email}</h2>
             <p>This account is created by the backend bootstrap process, not the normal registration page.</p>
