@@ -1,0 +1,21 @@
+:root{
+  --lb-primary:#7c3aed;
+  --lb-primary-dark:#5b21b6;
+  --lb-primary-soft:#ede9fe;
+  --lb-bg:#f8f7fc;
+  --lb-surface:#ffffff;
+  --lb-text:#18181b;
+  --lb-muted:#77727f;
+  --lb-border:#e8e5ef;
+  --lb-green:#16a34a;
+  --lb-shadow:#24143d;
+}
+
+.lb-site{
+  --purple:var(--lb-primary);
+  --deep:var(--lb-primary-dark);
+  --lilac:var(--lb-primary-soft);
+  --cream:var(--lb-bg);
+  --ink:var(--lb-text);
+  --muted:var(--lb-muted);
+}
