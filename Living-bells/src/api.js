@@ -165,6 +165,8 @@ export const api = {
     }
   },
   me: () => apiRequest('/api/auth/me'),
+  devOverview: () => apiRequest('/api/dev/overview'),
+  changeDevPassword: payload => apiRequest('/api/dev/security/password', { method: 'PATCH', body: JSON.stringify(payload) }),
   updateProfile: payload => apiRequest('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
   dashboard: () => apiRequest('/api/dashboard'),
   activities: () => apiRequest('/api/activities'),
