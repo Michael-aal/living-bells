@@ -11,6 +11,7 @@ datasource db {
 enum UserRole {
   STAFF
   ADMIN
+  DEV
   SECRETARY
   PASTOR
 }
