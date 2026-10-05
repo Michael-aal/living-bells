@@ -1109,6 +1109,11 @@ async function ensureDevAdmin() {
   if (existing) {
     if (existing.role !== 'DEV') {
       console.warn(`DEV_ADMIN_EMAIL is already used by a non-developer account: ${email}`)
+    } else if (process.env.DEV_ADMIN_REARM_SETUP === 'true') {
+      if (password.length < 8) throw new Error('DEV_ADMIN_PASSWORD must be at least 8 characters')
+      const passwordHash = await bcrypt.hash(password, 12)
+      await prisma.user.update({ where: { id: existing.id }, data: { passwordHash, mustChangePassword: true, isActive: true } })
+      console.log(`Developer first-login setup re-armed: ${email}`)
     }
     return
   }
