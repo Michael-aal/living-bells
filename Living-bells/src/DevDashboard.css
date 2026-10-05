@@ -144,3 +144,31 @@
   .dev-tabs button{padding:9px 10px;font-size:9px}
   .dev-tabs .refresh{margin-left:0}
 }
+
+
+/* Developer console: compact, breathable navbar */
+.dev-header-inner{min-height:54px;padding:0 18px;gap:12px}
+.dev-header{box-shadow:0 5px 20px rgba(36,20,61,.045)}
+.dev-brand{gap:8px}
+.dev-logo{width:31px;height:31px;border-radius:9px;font-size:12px}
+.dev-brand span{font-size:7px;letter-spacing:.09em}
+.dev-brand strong{font-size:12px}
+.dev-account{gap:6px}
+.dev-account-copy{max-width:180px}
+.dev-account-copy strong{font-size:10px}
+.dev-account-copy span{font-size:8px}
+.dev-bell{width:31px;height:31px;border-radius:8px}
+.dev-bell-icon{width:15px;height:15px}
+.dev-ghost{padding:7px 10px;font-size:9px;border-radius:8px}
+@media(max-width:720px){
+  .dev-header-inner{min-height:52px;padding:0 10px}
+  .dev-logo{width:29px;height:29px}
+  .dev-brand strong{font-size:11px}
+  .dev-ghost{padding:7px 9px}
+}
+.dev-account-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 18px}
+.dev-account-summary div{padding:13px 15px;border:1px solid var(--lb-border);border-radius:12px;background:#fbfaff}
+.dev-account-summary span,.dev-account-summary strong{display:block}
+.dev-account-summary span{font-size:9px;color:var(--lb-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:800}
+.dev-account-summary strong{font-size:24px;margin-top:5px}
+@media(max-width:620px){.dev-account-summary{grid-template-columns:1fr}}
