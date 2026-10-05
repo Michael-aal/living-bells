@@ -9,6 +9,7 @@ import { prisma } from './db.js'
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
+const DEV_RECOVERY_SECRET = String(process.env.DEV_ADMIN_RECOVERY_SECRET || '').trim()
 
 app.use(cors())
 app.use(express.json())
@@ -32,6 +33,14 @@ function requireAdmin(req, res, next) {
 
 function requireDev(req, res, next) {
   if (req.user?.role !== 'DEV') return res.status(403).json({ message: 'Developer access is required' })
+  next()
+}
+
+async function requireDevReady(req, res, next) {
+  if (req.user?.role !== 'DEV') return res.status(403).json({ message: 'Developer access is required' })
+  const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) }, select: { mustChangePassword: true } })
+  if (!user) return res.status(401).json({ message: 'Developer account not found' })
+  if (user.mustChangePassword) return res.status(403).json({ message: 'Complete developer password setup before accessing the console', code: 'DEV_PASSWORD_SETUP_REQUIRED' })
   next()
 }
 
@@ -196,11 +205,28 @@ app.post('/api/auth/login', async (req, res, next) => {
         position: user.position,
         isActive: user.isActive,
         emailVerified: true,
+        mustChangePassword: Boolean(user.mustChangePassword),
       },
     })
   } catch (error) {
     next(error)
   }
+})
+
+app.post('/api/auth/dev-recover', async (req, res, next) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase()
+    const recoverySecret = String(req.body?.recoverySecret || '')
+    const newPassword = String(req.body?.newPassword || '')
+    if (!DEV_RECOVERY_SECRET) return res.status(503).json({ message: 'Developer recovery is not configured' })
+    if (!email || !recoverySecret || newPassword.length < 8) return res.status(400).json({ message: 'Email, recovery secret and a password of at least 8 characters are required' })
+    if (recoverySecret !== DEV_RECOVERY_SECRET) return res.status(403).json({ message: 'Developer recovery verification failed' })
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (!user || user.role !== 'DEV') return res.status(404).json({ message: 'Developer account not found' })
+    const passwordHash = await bcrypt.hash(newPassword, 12)
+    const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false, isActive: true } })
+    res.json({ message: 'Developer password reset successfully', token: signToken(updated), user: { id: updated.id, name: updated.name, email: updated.email, role: updated.role, emailVerified: true, mustChangePassword: false } })
+  } catch (error) { next(error) }
 })
 
 app.get('/api/auth/me', authenticate, async (req, res, next) => {
@@ -238,45 +264,20 @@ app.patch('/api/auth/me', authenticate, async (req, res, next) => {
 
 app.use('/api', authenticate)
 
-app.get('/api/dev/overview', requireDev, async (_req, res, next) => {
+app.post('/api/dev/security/initial-password', authenticate, requireDev, async (req, res, next) => {
   try {
-    const [
-      totalUsers,
-      activeUsers,
-      staffUsers,
-      adminUsers,
-      developerUsers,
-      pendingInvitations,
-      activities,
-      attendanceRecords,
-      financialRecords,
-      weeklyReports,
-      latestReport,
-    ] = await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: { isActive: true } }),
-      prisma.user.count({ where: { role: 'STAFF' } }),
-      prisma.user.count({ where: { role: 'ADMIN' } }),
-      prisma.user.count({ where: { role: 'DEV' } }),
-      prisma.staffInvitation.count({ where: { usedAt: null, expiresAt: { gt: new Date() } } }),
-      prisma.activity.count(),
-      prisma.attendanceRecord.count(),
-      prisma.financialRecord.count(),
-      prisma.weeklyReport.count(),
-      prisma.weeklyReport.findFirst({ orderBy: { reportDate: 'desc' }, select: { reportDate: true, updatedAt: true } }),
-    ])
-
-    res.json({
-      system: { status: 'operational', checkedAt: new Date().toISOString() },
-      users: { total: totalUsers, active: activeUsers, staff: staffUsers, admins: adminUsers, developers: developerUsers },
-      records: { activities, attendance: attendanceRecords, finances: financialRecords, weeklyReports },
-      pendingInvitations,
-      latestReport,
-    })
+    const newPassword = String(req.body?.newPassword || '')
+    if (newPassword.length < 8) return res.status(400).json({ message: 'New password must be at least 8 characters' })
+    const user = await prisma.user.findUnique({ where: { id: Number(req.user.sub) } })
+    if (!user) return res.status(404).json({ message: 'Developer account not found' })
+    if (!user.mustChangePassword) return res.status(409).json({ message: 'Initial developer password setup has already been completed' })
+    const passwordHash = await bcrypt.hash(newPassword, 12)
+    const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false } })
+    res.json({ message: 'Developer password setup completed', token: signToken(updated), user: { id: updated.id, name: updated.name, email: updated.email, role: updated.role, emailVerified: true, mustChangePassword: false } })
   } catch (error) { next(error) }
 })
 
-app.patch('/api/dev/security/password', requireDev, async (req, res, next) => {
+app.patch('/api/dev/security/password', requireDevReady, async (req, res, next) => {
   try {
     const currentPassword = String(req.body?.currentPassword || '')
     const newPassword = String(req.body?.newPassword || '')
@@ -1118,7 +1119,7 @@ async function ensureDevAdmin() {
 
   const passwordHash = await bcrypt.hash(password, 12)
   await prisma.user.create({
-    data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date(), isActive: true },
+    data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date(), isActive: true, mustChangePassword: true },
   })
   console.log(`Developer account initialized: ${email}`)
 }
