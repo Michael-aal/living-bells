@@ -26,7 +26,12 @@ function authenticate(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'ADMIN') return res.status(403).json({ message: 'Admin access is required' })
+  if (!['ADMIN', 'DEV'].includes(req.user?.role)) return res.status(403).json({ message: 'Admin or developer access is required' })
+  next()
+}
+
+function requireDev(req, res, next) {
+  if (req.user?.role !== 'DEV') return res.status(403).json({ message: 'Developer access is required' })
   next()
 }
 
@@ -52,6 +57,44 @@ app.get('/api/auth/staff-invitation', async (req, res, next) => {
     if (!invitation) return res.status(404).json({ message: 'Invalid, expired or already used staff code' })
 
     res.json(invitation)
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/auth/dev-bootstrap', async (req, res, next) => {
+  try {
+    const bootstrapKey = String(process.env.DEV_BOOTSTRAP_KEY || '').trim()
+    const suppliedKey = String(req.body?.bootstrapKey || '').trim()
+    if (!bootstrapKey || !suppliedKey || suppliedKey !== bootstrapKey) {
+      return res.status(403).json({ message: 'Developer bootstrap is not authorized' })
+    }
+
+    const existing = await prisma.user.count({ where: { role: 'DEV' } })
+    if (existing > 0 && process.env.DEV_BOOTSTRAP_ALLOW_REUSE !== 'true') {
+      return res.status(409).json({ message: 'A developer account already exists' })
+    }
+
+    const name = String(req.body?.name || '').trim()
+    const email = String(req.body?.email || '').trim().toLowerCase()
+    const password = String(req.body?.password || '')
+    if (name.length < 2 || !email.includes('@') || password.length < 8) {
+      return res.status(400).json({ message: 'Name, valid email and password of at least 8 characters are required' })
+    }
+    if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
+      return res.status(409).json({ message: 'An account with this email already exists' })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12)
+    const user = await prisma.user.create({
+      data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date() },
+    })
+
+    res.status(201).json({
+      message: 'Developer account created successfully',
+      token: signToken(user),
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, emailVerified: true },
+    })
   } catch (error) {
     next(error)
   }
@@ -194,6 +237,37 @@ app.patch('/api/auth/me', authenticate, async (req, res, next) => {
 })
 
 app.use('/api', authenticate)
+
+app.get('/api/dev/developers', requireDev, async (_req, res, next) => {
+  try {
+    const developers = await prisma.user.findMany({
+      where: { role: 'DEV' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, email: true, isActive: true, createdAt: true },
+    })
+    res.json(developers)
+  } catch (error) { next(error) }
+})
+
+app.post('/api/dev/developers', requireDev, async (req, res, next) => {
+  try {
+    const name = String(req.body?.name || '').trim()
+    const email = String(req.body?.email || '').trim().toLowerCase()
+    const password = String(req.body?.password || '')
+    if (name.length < 2 || !email.includes('@') || password.length < 8) {
+      return res.status(400).json({ message: 'Name, valid email and password of at least 8 characters are required' })
+    }
+    if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
+      return res.status(409).json({ message: 'An account with this email already exists' })
+    }
+    const passwordHash = await bcrypt.hash(password, 12)
+    const developer = await prisma.user.create({
+      data: { name, email, passwordHash, role: 'DEV', emailVerifiedAt: new Date() },
+      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+    })
+    res.status(201).json(developer)
+  } catch (error) { next(error) }
+})
 
 const OPTION_KINDS = ['ACTIVITY', 'ATTENDANCE', 'FINANCE_INCOME', 'FINANCE_EXPENSE']
 
