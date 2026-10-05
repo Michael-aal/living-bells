@@ -7,10 +7,10 @@ const highlights = [
 ]
 
 const ministries = [
-  { icon: '✳', title: 'Children & Teens', text: 'Helping the next generation build a strong foundation of faith.' },
-  { icon: '◉', title: 'Youth & Young Adults', text: 'A community to grow, connect and make faith part of everyday life.' },
-  { icon: '⌁', title: 'Worship & Prayer', text: 'Gathering together in worship, prayer and the Word.' },
-  { icon: '↗', title: 'Outreach & Service', text: 'Sharing hope and serving people in our wider community.' },
+  { icon: 'fa-solid fa-children', title: 'Children & Teens', text: 'Helping the next generation build a strong foundation of faith.' },
+  { icon: 'fa-solid fa-people-group', title: 'Youth & Young Adults', text: 'A community to grow, connect and make faith part of everyday life.' },
+  { icon: 'fa-solid fa-hands-praying', title: 'Worship & Prayer', text: 'Gathering together in worship, prayer and the Word.' },
+  { icon: 'fa-solid fa-hand-holding-heart', title: 'Outreach & Service', text: 'Sharing hope and serving people in our wider community.' },
 ]
 
 export default function Landing({ onSignIn }) {
@@ -23,11 +23,11 @@ export default function Landing({ onSignIn }) {
       <nav className="lb-nav-links" aria-label="Main navigation">
         <a href="#welcome">Our church</a><a href="#ministries">Ministries</a><a href="#gather">Get connected</a>
       </nav>
-      <button className="lb-nav-cta" onClick={onSignIn}>Staff portal <span>↗</span></button>
+      <button className="lb-nav-cta" onClick={onSignIn}><i className="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i><span>Staff portal</span></button>
     </header>
 
     <main id="home">
-      <section className="lb-hero">
+      <section className="lb-hero lb-reveal">
         <div className="lb-hero-copy">
           <div className="lb-kicker"><span></span> FAITH · COMMUNITY · PURPOSE</div>
           <h1>A place to belong.<br/><em>A faith that lives.</em></h1>
@@ -36,7 +36,7 @@ export default function Landing({ onSignIn }) {
             <a className="lb-button-primary" href="#welcome">Discover our church <span>→</span></a>
             <a className="lb-button-quiet" href="#gather">Get connected</a>
           </div>
-          <div className="lb-hero-note"><span className="lb-note-icon">✦</span><span><b>Faith for everyday life</b><small>Growing together, serving together.</small></span></div>
+          <div className="lb-hero-note"><span className="lb-note-icon"><i className="fa-solid fa-sparkles" aria-hidden="true"></i></span><span><b>Faith for everyday life</b><small>Growing together, serving together.</small></span></div>
         </div>
         <div className="lb-hero-art" aria-label="Abstract warm stained-glass inspired artwork">
           <div className="lb-art-orbit lb-orbit-one"></div><div className="lb-art-orbit lb-orbit-two"></div>
@@ -46,7 +46,7 @@ export default function Landing({ onSignIn }) {
         </div>
       </section>
 
-      <section className="lb-welcome" id="welcome">
+      <section className="lb-welcome lb-reveal" id="welcome">
         <div className="lb-section-label">WELCOME HOME <span>01 / OUR CHURCH</span></div>
         <div className="lb-welcome-grid">
           <h2>Church is more than<br/>a place. <em>It’s people.</em></h2>
@@ -55,22 +55,22 @@ export default function Landing({ onSignIn }) {
         <div className="lb-values">{highlights.map(item => <article className="lb-value" key={item.number}><span>{item.number}</span><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
       </section>
 
-      <section className="lb-ministries" id="ministries">
+      <section className="lb-ministries lb-reveal" id="ministries">
         <div className="lb-section-label">FIND YOUR PLACE <span>02 / LIFE TOGETHER</span></div>
         <div className="lb-ministry-heading"><h2>There’s a place<br/>for <em>you here.</em></h2><p>Discover ways to connect, grow and take part in the life of our church.</p></div>
-        <div className="lb-ministry-grid">{ministries.map(item => <article className="lb-ministry" key={item.title}><span className="lb-ministry-icon">{item.icon}</span><h3>{item.title}</h3><p>{item.text}</p><span className="lb-ministry-arrow">↗</span></article>)}</div>
+        <div className="lb-ministry-grid">{ministries.map(item => <article className="lb-ministry" key={item.title}><span className="lb-ministry-icon"><i className={item.icon} aria-hidden="true"></i></span><h3>{item.title}</h3><p>{item.text}</p><span className="lb-ministry-arrow"><i className="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></span></article>)}</div>
       </section>
 
-      <section className="lb-gather" id="gather">
+      <section className="lb-gather lb-reveal" id="gather">
         <div className="lb-gather-inner"><span className="lb-gather-kicker">YOUR NEXT STEP STARTS HERE</span><h2>Let’s grow<br/><em>together.</em></h2><p>We would love to help you find your place in the life of The Bells. Reach out to the church or come along and get to know the community.</p><a className="lb-button-light" href="#welcome">Get in touch <span>→</span></a></div>
-        <div className="lb-gather-decoration">✳</div>
+        <div className="lb-gather-decoration"><i className="fa-solid fa-sparkles" aria-hidden="true"></i></div>
       </section>
     </main>
 
     <footer className="lb-footer">
       <a className="lb-brand" href="#home"><span className="lb-brand-mark">L</span><span><strong>Living Bells</strong><small>Foursquare Gospel Church · The Bells</small></span></a>
       <span className="lb-footer-copy">Growing in faith. Living in love. Serving with purpose.</span>
-      <button className="lb-footer-portal" onClick={onSignIn}>Staff portal ↗</button>
+      <button className="lb-footer-portal" onClick={onSignIn}><i className="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i> Staff portal</button>
       <span className="lb-copyright">© {new Date().getFullYear()} The Bells</span>
     </footer>
   </div>

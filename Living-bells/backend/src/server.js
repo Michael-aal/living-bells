@@ -416,6 +416,61 @@ app.post('/api/dev/developers', requireDevReady, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+app.get('/api/dev/overview', requireDevReady, async (_req, res, next) => {
+  try {
+    const [total, active, staff, admins, developers, activities, attendance, finances, weeklyReports, pendingInvitations, latestReport] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.user.count({ where: { role: 'STAFF' } }),
+      prisma.user.count({ where: { role: 'ADMIN' } }),
+      prisma.user.count({ where: { role: 'DEV' } }),
+      prisma.activity.count(),
+      prisma.attendance.count(),
+      prisma.financialRecord.count(),
+      prisma.weeklyReport.count(),
+      prisma.staffInvitation.count({ where: { usedAt: null, expiresAt: { gt: new Date() } } }),
+      prisma.weeklyReport.findFirst({ orderBy: { reportDate: 'desc' }, select: { reportDate: true, updatedAt: true } }),
+    ])
+
+    res.set('Cache-Control', 'no-store')
+    res.json({
+      users: { total, active, staff, admins, developers },
+      pendingInvitations,
+      records: { activities, attendance, finances, weeklyReports },
+      latestReport,
+      source: 'database',
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/dev/users', requireDevReady, async (_req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true, name: true, email: true, role: true, department: true,
+        position: true, isActive: true, createdAt: true,
+      },
+    })
+    res.set('Cache-Control', 'no-store')
+    res.json({
+      users,
+      counts: {
+        total: users.length,
+        active: users.filter(user => user.isActive).length,
+        admins: users.filter(user => user.role === 'ADMIN').length,
+        staff: users.filter(user => user.role === 'STAFF').length,
+        developers: users.filter(user => user.role === 'DEV').length,
+      },
+      source: 'database',
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
 const OPTION_KINDS = ['ACTIVITY', 'ATTENDANCE', 'FINANCE_INCOME', 'FINANCE_EXPENSE']
 
 app.get('/api/options', async (req, res, next) => {
