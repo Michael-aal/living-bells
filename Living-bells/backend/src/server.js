@@ -268,13 +268,25 @@ app.post('/api/auth/login', async (req, res, next) => {
 app.post('/api/auth/dev-recover', async (req, res, next) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase()
+    const recoveryKey = String(req.body?.recoveryKey || '').trim()
     const recoverySecret = String(req.body?.recoverySecret || '')
     const newPassword = String(req.body?.newPassword || '')
-    if (!DEV_RECOVERY_SECRET) return res.status(503).json({ message: 'Developer recovery is not configured' })
-    if (!email || !recoverySecret || newPassword.length < 8) return res.status(400).json({ message: 'Email, recovery secret and a password of at least 8 characters are required' })
-    if (recoverySecret !== DEV_RECOVERY_SECRET) return res.status(403).json({ message: 'Developer recovery verification failed' })
+    if (!email || (!recoveryKey && !recoverySecret) || newPassword.length < 8) return res.status(400).json({ message: 'Email, recovery key and a password of at least 8 characters are required' })
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || user.role !== 'DEV') return res.status(404).json({ message: 'Developer account not found' })
+
+    let verified = false
+    if (recoveryKey && user.devRecoveryKeyEncrypted && user.devRecoveryKeyNonce) {
+      try {
+        const storedKey = decryptRecoveryKey(user.devRecoveryKeyEncrypted, user.devRecoveryKeyNonce)
+        const left = Buffer.from(storedKey)
+        const right = Buffer.from(recoveryKey)
+        verified = left.length === right.length && crypto.timingSafeEqual(left, right)
+      } catch {}
+    }
+    if (!verified && DEV_RECOVERY_SECRET && recoverySecret === DEV_RECOVERY_SECRET) verified = true
+    if (!verified) return res.status(403).json({ message: 'Developer recovery verification failed' })
+
     const passwordHash = await bcrypt.hash(newPassword, 12)
     const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false, isActive: true } })
     res.json({ message: 'Developer password reset successfully', token: signToken(updated), user: { id: updated.id, name: updated.name, email: updated.email, role: updated.role, emailVerified: true, mustChangePassword: false } })
