@@ -64,7 +64,7 @@ export default function DevDashboard({ user, onLogout }) {
         request('/api/dev/developers'),
         api.notifications(),
       ])
-      setOverview(overviewData)
+      setOverview({ ...overviewData, users: directoryData?.counts || overviewData?.users || {} })
       setDirectory(directoryData?.users || [])
       setStaff((directoryData?.users || []).filter(item => item.role === 'STAFF'))
       setInvitations(invitationData || [])
