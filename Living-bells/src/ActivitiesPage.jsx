@@ -6,9 +6,22 @@ import ReportingWeekPicker from './ReportingWeekPicker'
 
 const canEdit = role => ['ADMIN','SECRETARY','PASTOR','STAFF'].includes(role)
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b)
+const lagosToday = (value = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value)
+  const map = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]))
+  return `${map.year}-${map.month}-${map.day}`
+}
 
 export default function ActivitiesPage({ user, initialDate = null, onInitialDateHandled, onChanged }) {
-  const base=emptyReport(initialDate || undefined),[reports,setReports]=useState([]),[report,setReport]=useState(base),[saved,setSaved]=useState(base)
+  // A new form always starts on today's Nigerian date. A saved report is only
+  // loaded when that exact date is explicitly selected or opened from history.
+  const defaultDate = initialDate || lagosToday()
+  const base=emptyReport(defaultDate),[reports,setReports]=useState([]),[report,setReport]=useState(base),[saved,setSaved]=useState(base)
   const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[selectedDate,setSelectedDate]=useState(base.reportDate),[printReport,setPrintReport]=useState(base)
   const editable=canEdit(user.role),dirty=useMemo(()=>!same(reportPayload(report),reportPayload(saved)),[report,saved])
   useEffect(()=>{loadHistory()},[])
@@ -22,7 +35,33 @@ export default function ActivitiesPage({ user, initialDate = null, onInitialDate
     onInitialDateHandled?.()
   },[initialDate,reports])
   useEffect(()=>{const handler=e=>{if(dirty)e.preventDefault()};window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler)},[dirty])
-  async function loadHistory(){try{setLoading(true);setError('');const data=await api.weeklyReports();setReports(data||[]);const target=initialDate||selectedDate;const current=(data||[]).find(r=>String(r.reportDate).slice(0,10)===target);if(current){const n=normalizeReport(current);setReport(n);setSaved(n)}}catch(e){setError(e.message||'Could not load weekly activity reports')}finally{setLoading(false)}}
+  async function loadHistory(){
+    try{
+      setLoading(true)
+      setError('')
+      const data=await api.weeklyReports()
+      const loadedReports=data||[]
+      setReports(loadedReports)
+      const target=initialDate || selectedDate
+      const current=loadedReports.find(r=>String(r.reportDate).slice(0,10)===target)
+      if(current){
+        const n=normalizeReport(current)
+        setReport(n)
+        setSaved(n)
+      }else if(!initialDate){
+        // Never carry the previous saved report into a new/current form.
+        const fresh=emptyReport(lagosToday())
+        setSelectedDate(fresh.reportDate)
+        setReport(fresh)
+        setSaved(fresh)
+        setPrintReport(fresh)
+      }
+    }catch(e){
+      setError(e.message||'Could not load weekly activity reports')
+    }finally{
+      setLoading(false)
+    }
+  }
   function selectDate(date){if(dirty&&!window.confirm('You have unsaved changes. Discard them and open another report?'))return;setSelectedDate(date);const existing=reports.find(r=>String(r.reportDate).slice(0,10)===date);const n=existing?normalizeReport(existing):emptyReport(date);setReport(n);setSaved(n);setPrintReport(n);setNotice(existing?'Saved report loaded.':'New report for this date.')}
   function setNumerical(index,key,value){const number=Math.max(0,Math.trunc(Number(value)||0));setReport(current=>({...current,numerical:current.numerical.map((row,i)=>i===index?{...row,[key]:number,total:key==='adult'?number+row.children+row.visitor:key==='children'?row.adult+number+row.visitor:row.adult+row.children+number}:row)}))}
   function setSpiritual(label,value){setReport(current=>({...current,spiritual:{...current.spiritual,[label]:Math.max(0,Math.trunc(Number(value)||0))}}))}
