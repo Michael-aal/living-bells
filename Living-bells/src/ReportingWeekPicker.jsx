@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 
-function dateKey(value) {
-  if (!value) return null
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  return date.toISOString().slice(0, 10)
+function dateKey(value = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value)
+  const map = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]))
+  return `${map.year}-${map.month}-${map.day}`
 }
 
 function daysForWeek(week) {
@@ -139,6 +143,17 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
     if (activeWeek) setOpenWeekId(activeWeek.id)
   }, [activeWeek?.id])
 
+  useEffect(() => {
+    if (!selectedDate || loading) return
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-reporting-day="${selectedDate}"]`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
+      })
+    })
+  }, [selectedDate, loading, openWeekId])
+
   if (loading) {
     return (
       <div className="reporting-week-picker">
@@ -235,7 +250,12 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
             <button
               key={day.date}
               type="button"
-              className={selectedDate === day.date ? 'selected' : ''}
+              className={[
+                selectedDate === day.date ? 'selected' : '',
+                dateKey() === day.date ? 'current' : '',
+              ].filter(Boolean).join(' ')}
+              data-reporting-day={day.date}
+              aria-current={dateKey() === day.date ? 'date' : undefined}
               onClick={() => onDateChange(day.date)}
             >
               <span>{day.weekday}</span>
