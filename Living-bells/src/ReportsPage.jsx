@@ -294,6 +294,12 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       end.setHours(23, 59, 59, 999)
       label = `Week ${configuredWeek.weekNumber} · ${displayDate(start)} – ${displayDate(configuredWeek.endDate)}`
       selectedAnchor = keyOf(configuredWeek.startDate)
+    } else if (searchDay && searchMonth && year) {
+      start = new Date(year, month - 1, Number(searchDay), 0, 0, 0, 0)
+      end = new Date(year, month - 1, Number(searchDay), 23, 59, 59, 999)
+      label = start.toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' })
+      selectedMode = 'week'
+      selectedAnchor = `${year}-${pad(month)}-${pad(Number(searchDay))}`
     } else if (searchMonth && year) {
       start = new Date(year, month - 1, 1)
       end = new Date(year, month, 0, 23, 59, 59, 999)
@@ -317,6 +323,18 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     setSearchPeriod({ start, end, label, type: result.type })
     requestAnimationFrame(() => document.querySelector('.report-controls')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
+
+  useEffect(() => {
+    if (!searchType && !searchYear && !searchMonth && !searchWeek && !searchDay) {
+      setSearchPeriod(null)
+      return
+    }
+    if (!searchResults.length) {
+      setSearchPeriod(null)
+      return
+    }
+    openSearchPeriod(searchResults[0])
+  }, [searchType, searchYear, searchMonth, searchWeek, searchDay, searchResults, configuredWeeks])
 
   const range = useMemo(() => {
     if (searchPeriod) return { start: searchPeriod.start, end: searchPeriod.end }
