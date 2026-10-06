@@ -44,6 +44,12 @@ function normalizeExpense(record) {
   }
 }
 
+function lagosDateKey(value = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value)
+  const map = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]))
+  return `${map.year}-${map.month}-${map.day}`
+}
+
 function dateKey(value) {
   if (!value) return null
   const date = new Date(value)
@@ -114,6 +120,7 @@ function App() {
   const [staffInvitations, setStaffInvitations] = useState([])
   const [staffCount, setStaffCount] = useState({ active: 0, pending: 0, total: 0 })
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
+  const [todayKey, setTodayKey] = useState(() => lagosDateKey())
 
   useEffect(() => {
     if (!user || user.demo) return
@@ -146,7 +153,6 @@ function App() {
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
   const moneyIn = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports])
   const moneyOut = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0), [weeklyReports])
-  const todayKey = new Date().toISOString().slice(0, 10)
   const todayMoneyIn = useMemo(() => weeklyReports.filter(report => String(report.reportDate).slice(0, 10) === todayKey).reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports, todayKey])
   const todayMoneyOut = useMemo(() => weeklyReports.filter(report => String(report.reportDate).slice(0, 10) === todayKey).reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0), [weeklyReports, todayKey])
   const netMoney = moneyIn - moneyOut
@@ -233,6 +239,14 @@ function App() {
     loadData()
     return () => { cancelled = true }
   }, [user, dataRefreshKey])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const next = lagosDateKey()
+      setTodayKey(previous => previous === next ? previous : next)
+    }, 60000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (!user || user.role !== 'ADMIN' || !selectedStaff) return
