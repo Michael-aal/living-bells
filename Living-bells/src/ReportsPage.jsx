@@ -126,6 +126,8 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [searchWeek, setSearchWeek] = useState('')
   const [searchDay, setSearchDay] = useState('')
   const [searchPeriod, setSearchPeriod] = useState(null)
+  const [reportingMonths, setReportingMonths] = useState([])
+  const [calendarLoading, setCalendarLoading] = useState(false)
 
   const canEditOperational = ['ADMIN', 'SECRETARY', 'PASTOR', 'STAFF'].includes(user?.role)
 
@@ -171,13 +173,35 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     return Array.from(years).sort((a, b) => b - a)
   }, [reports, attendance, activities])
 
-  const searchWeeks = useMemo(() => {
-    if (!searchYear || !searchMonth) return [1, 2, 3, 4, 5, 6]
-    const days = new Date(Number(searchYear), Number(searchMonth), 0).getDate()
-    const firstDay = new Date(Number(searchYear), Number(searchMonth) - 1, 1).getDay()
-    const count = Math.ceil((days + firstDay) / 7)
-    return Array.from({ length: count }, (_, index) => index + 1)
-  }, [searchYear, searchMonth])
+  useEffect(() => {
+    let cancelled = false
+    async function loadReportingCalendar() {
+      if (!searchYear) {
+        setReportingMonths([])
+        return
+      }
+      try {
+        setCalendarLoading(true)
+        const rows = await api.reportingMonths(Number(searchYear))
+        if (!cancelled) setReportingMonths(Array.isArray(rows) ? rows : [])
+      } catch {
+        if (!cancelled) setReportingMonths([])
+      } finally {
+        if (!cancelled) setCalendarLoading(false)
+      }
+    }
+    loadReportingCalendar()
+    return () => { cancelled = true }
+  }, [searchYear])
+
+  const configuredWeeks = useMemo(() => {
+    const month = Number(searchMonth)
+    if (!searchYear || !month) return []
+    const selectedMonth = reportingMonths.find(item => Number(item.month) === month)
+    return (selectedMonth?.weeks || []).slice().sort((a, b) => Number(a.weekNumber) - Number(b.weekNumber))
+  }, [reportingMonths, searchYear, searchMonth])
+
+  const searchWeeks = useMemo(() => configuredWeeks.map(week => Number(week.weekNumber)), [configuredWeeks])
 
   const searchDays = useMemo(() => {
     if (!searchYear || !searchMonth) return Array.from({ length: 31 }, (_, index) => index + 1)
@@ -193,7 +217,10 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       if (searchYear && date.getFullYear() !== Number(searchYear)) return false
       if (searchMonth && date.getMonth() + 1 !== Number(searchMonth)) return false
       if (searchDay && date.getDate() !== Number(searchDay)) return false
-      if (searchWeek && weekOfMonth(dateValue) !== Number(searchWeek)) return false
+      if (searchWeek) {
+        const configuredWeek = configuredWeeks.find(week => Number(week.weekNumber) === Number(searchWeek))
+        if (!configuredWeek || keyOf(dateValue) < keyOf(configuredWeek.startDate) || keyOf(dateValue) > keyOf(configuredWeek.endDate)) return false
+      }
       return true
     }
 
@@ -239,7 +266,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     })
 
     return results.sort((a, b) => keyOf(b.date).localeCompare(keyOf(a.date)))
-  }, [reports, attendance, searchType, searchYear, searchMonth, searchWeek, searchDay])
+  }, [reports, attendance, searchType, searchYear, searchMonth, searchWeek, searchDay, configuredWeeks])
 
   const clearSearch = () => {
     setSearchPeriod(null)
@@ -260,14 +287,13 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     let selectedAnchor = keyOf(result.date)
 
     if (searchWeek && year && month) {
-      const first = new Date(year, month - 1, 1)
-      const weekStart = new Date(year, month - 1, 1 - first.getDay() + (Number(searchWeek) - 1) * 7)
-      start = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate())
-      end = new Date(start)
-      end.setDate(start.getDate() + 6)
+      const configuredWeek = configuredWeeks.find(week => Number(week.weekNumber) === Number(searchWeek))
+      if (!configuredWeek) return
+      start = parseDate(configuredWeek.startDate)
+      end = parseDate(configuredWeek.endDate)
       end.setHours(23, 59, 59, 999)
-      label = `Week ${searchWeek} · ${first.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })}`
-      selectedAnchor = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`
+      label = `Week ${configuredWeek.weekNumber} · ${displayDate(start)} – ${displayDate(configuredWeek.endDate)}`
+      selectedAnchor = keyOf(configuredWeek.startDate)
     } else if (searchMonth && year) {
       start = new Date(year, month - 1, 1)
       end = new Date(year, month, 0, 23, 59, 59, 999)
@@ -275,11 +301,11 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       selectedMode = 'month'
       selectedAnchor = `${year}-${pad(month)}-01`
     } else if (searchYear) {
-      start = new Date(year, 0, 1)
-      end = new Date(year, 11, 31, 23, 59, 59, 999)
-      label = `Calendar year ${year}`
+      start = reportingYearStart(year)
+      end = reportingYearEnd(year)
+      label = `Reporting year ${reportingYearLabel(year)}`
       selectedMode = 'year'
-      selectedAnchor = `${year}-01-01`
+      selectedAnchor = `${year}-07-01`
     } else {
       start = startOfWeek(result.date)
       end = endOfWeek(result.date)
@@ -513,7 +539,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           Week
           <select value={searchWeek} onChange={e => setSearchWeek(e.target.value)}>
             <option value="">Any week</option>
-            {searchWeeks.map(week => <option key={week} value={week}>Week {week}</option>)}
+            {calendarLoading ? <option value="" disabled>Loading calendar…</option> : searchWeeks.length ? searchWeeks.map(week => <option key={week} value={week}>Week {week}</option>) : <option value="" disabled>{searchYear && searchMonth ? 'No configured weeks' : 'Choose year and month first'}</option>}
           </select>
         </label>
         <label>
@@ -534,7 +560,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       {searchResults.length > 0 ? (
         <div className="record-search-results">
           {searchResults.map((result, index) => (
-            <button type="button" className="record-search-result" key={`${result.type}-${keyOf(result.date)}-${index}`} onClick={() => openSearchPeriod(result)}>
+            <button type="button" className="record-search-result" key={`${result.type}-${keyOf(result.date)}-${index}`} onClick={() => onOpenRecord?.(result)}>
               <div>
                 <span className="record-search-type">{result.type}</span>
                 <h3>{result.title}</h3>
