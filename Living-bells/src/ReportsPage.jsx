@@ -4,9 +4,10 @@ import { money, NUMERICAL_ROWS, INCOME_ROWS, EXPENDITURE_ROWS } from './weeklyRe
 import './ReportsPage.css'
 
 const pad = value => String(value).padStart(2, '0')
-const todayKey = () => {
-  const now = new Date()
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+const todayKey = (value = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value)
+  const map = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]))
+  return `${map.year}-${map.month}-${map.day}`
 }
 const keyOf = value => String(value || '').slice(0, 10)
 
@@ -106,8 +107,19 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mode, setMode] = useState('week')
-  const [anchor, setAnchor] = useState(todayKey())
+  const [today, setToday] = useState(() => todayKey())
+  const [anchor, setAnchor] = useState(() => todayKey())
   const [review, setReview] = useState(null)
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const next = todayKey()
+      setToday(previous => previous === next ? previous : next)
+    }, 60000)
+    return () => window.clearInterval(timer)
+  }, [])
+  useEffect(() => {
+    setAnchor(previous => previous === todayKey(new Date(Date.now() - 86400000)) ? today : previous)
+  }, [today])
   const [searchType, setSearchType] = useState('')
   const [searchYear, setSearchYear] = useState('')
   const [searchMonth, setSearchMonth] = useState('')
