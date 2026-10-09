@@ -1,0 +1,64 @@
+name: Living Bells quality checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Living-bells/**'
+      - '.github/workflows/quality.yml'
+  push:
+    branches:
+      - main
+      - 'fix/audit-security-empty-reports-fiscal-year'
+    paths:
+      - 'Living-bells/**'
+      - '.github/workflows/quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend lint and production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Living-bells
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --package-lock=false
+      - name: ESLint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+
+  backend:
+    name: Backend syntax and Prisma validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Living-bells/backend
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/living_bells_ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/living_bells_ci
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --package-lock=false
+      - name: Check backend JavaScript syntax
+        run: node --check src/server.js
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Generate Prisma client
+        run: npx prisma generate
