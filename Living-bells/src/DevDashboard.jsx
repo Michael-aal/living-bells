@@ -37,7 +37,6 @@ function Stat({ label, value, hint }) {
 export default function DevDashboard({ user, onLogout }) {
   const [tab, setTab] = useState('overview')
   const [overview, setOverview] = useState(null)
-  const [staff, setStaff] = useState([])
   const [invitations, setInvitations] = useState([])
   const [developers, setDevelopers] = useState([])
   const [directory, setDirectory] = useState([])
@@ -66,7 +65,7 @@ export default function DevDashboard({ user, onLogout }) {
       ])
       setOverview({ ...overviewData, users: directoryData?.counts || overviewData?.users || {} })
       setDirectory(directoryData?.users || [])
-      setStaff((directoryData?.users || []).filter(item => item.role === 'STAFF'))
+
       setInvitations(invitationData || [])
       setDevelopers(developerData || [])
       setNotifications(notificationData || [])
