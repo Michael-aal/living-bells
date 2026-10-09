@@ -35,7 +35,8 @@ jobs:
         run: npm install --package-lock=false
       - name: ESLint
         run: npm run lint
-      - name: Production build
+      - name: Production build (runs even if lint fails)
+        if: always()
         run: npm run build
 
   backend:
