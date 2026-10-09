@@ -120,7 +120,6 @@ function App() {
   const [staffInvitations, setStaffInvitations] = useState([])
   const [staffCount, setStaffCount] = useState({ active: 0, pending: 0, total: 0 })
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
-  const [todayKey, setTodayKey] = useState(() => lagosDateKey())
 
   useEffect(() => {
     if (!user || user.demo) return
@@ -151,8 +150,6 @@ function App() {
   const mobileNavRef = useState(() => ({ current: null }))[0]
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
-  const moneyIn = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports])
-  const moneyOut = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0), [weeklyReports])
   const normalizedQuery = query.trim().toLowerCase()
   const visibleAttendance = useMemo(() => !normalizedQuery ? attendance : attendance.filter(item => `${item.service} ${item.date}`.toLowerCase().includes(normalizedQuery)), [attendance, normalizedQuery])
   const visibleExpenses = useMemo(() => !normalizedQuery ? expenses : expenses.filter(item => `${item.title} ${item.category} ${item.date}`.toLowerCase().includes(normalizedQuery)), [expenses, normalizedQuery])
@@ -234,14 +231,6 @@ function App() {
     loadData()
     return () => { cancelled = true }
   }, [user, dataRefreshKey])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const next = lagosDateKey()
-      setTodayKey(previous => previous === next ? previous : next)
-    }, 60000)
-    return () => window.clearInterval(timer)
-  }, [])
 
   useEffect(() => {
     if (!user || user.role !== 'ADMIN' || !selectedStaff) return
@@ -571,7 +560,7 @@ function App() {
   </div>
 }
 
-function Dashboard({ user, reportingContext, attendance, expenses, activities, weeklyReports, money, open, go, isAdmin }) {
+function Dashboard({ user, reportingContext, attendance, expenses, activities, weeklyReports, money, go, isAdmin }) {
   const [duration, setDuration] = useState('weekly')
   const todayValue = reportingContext?.date || new Date().toISOString().slice(0, 10)
   const today = new Date(todayValue + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
