@@ -1,4 +1,4 @@
-import { enqueueRequest, getQueue, removeQueuedRequest, updateQueuedRequest, cacheResponse, getCachedResponse, queueCount, queueCountForOwner, saveOfflineIdentity, verifyOfflineIdentity } from './offlineStore'
+import { enqueueRequest, getQueue, removeQueuedRequest, updateQueuedRequest, cacheResponse, getCachedResponse, queueCountForOwner, saveOfflineIdentity, verifyOfflineIdentity } from './offlineStore'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -56,11 +56,11 @@ export async function apiRequest(path, options = {}) {
     if (method === 'GET') {
       const cached = await getCachedResponse(cacheKey(path)).catch(() => null)
       if (cached !== null) return cached
-      throw new Error('Offline and this data has not been cached on this device yet.')
+      throw new Error('Offline and this data has not been cached on this device yet.', { cause: error })
     }
 
     if ((!localStorage.getItem('living_bells_token') && !localStorage.getItem('living_bells_offline_session')) || path.startsWith('/api/auth/')) {
-      throw new Error('You are offline. Sign in while online before using offline recording.')
+      throw new Error('You are offline. Sign in while online before using offline recording.', { cause: error })
     }
 
     const id = await enqueueRequest({

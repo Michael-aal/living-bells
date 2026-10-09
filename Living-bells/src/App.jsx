@@ -120,7 +120,6 @@ function App() {
   const [staffInvitations, setStaffInvitations] = useState([])
   const [staffCount, setStaffCount] = useState({ active: 0, pending: 0, total: 0 })
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
-  const [todayKey, setTodayKey] = useState(() => lagosDateKey())
 
   useEffect(() => {
     if (!user || user.demo) return
@@ -151,16 +150,9 @@ function App() {
   const mobileNavRef = useState(() => ({ current: null }))[0]
 
   const money = n => '₦' + Number(n || 0).toLocaleString('en-NG')
-  const moneyIn = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports])
-  const moneyOut = useMemo(() => weeklyReports.reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0), [weeklyReports])
-  const todayMoneyIn = useMemo(() => weeklyReports.filter(report => String(report.reportDate).slice(0, 10) === todayKey).reduce((sum, report) => sum + Number(report.totalIncome || 0), 0), [weeklyReports, todayKey])
-  const todayMoneyOut = useMemo(() => weeklyReports.filter(report => String(report.reportDate).slice(0, 10) === todayKey).reduce((sum, report) => sum + Number(report.totalExpenditure || 0), 0), [weeklyReports, todayKey])
-  const netMoney = moneyIn - moneyOut
-  const totalSpend = useMemo(() => expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0), [expenses])
   const normalizedQuery = query.trim().toLowerCase()
   const visibleAttendance = useMemo(() => !normalizedQuery ? attendance : attendance.filter(item => `${item.service} ${item.date}`.toLowerCase().includes(normalizedQuery)), [attendance, normalizedQuery])
   const visibleExpenses = useMemo(() => !normalizedQuery ? expenses : expenses.filter(item => `${item.title} ${item.category} ${item.date}`.toLowerCase().includes(normalizedQuery)), [expenses, normalizedQuery])
-  const visibleFinances = useMemo(() => !normalizedQuery ? finances : finances.filter(item => `${item.type} ${item.category} ${item.description} ${item.date}`.toLowerCase().includes(normalizedQuery)), [finances, normalizedQuery])
   const visibleActivities = useMemo(() => !normalizedQuery ? activities : activities.filter(item => `${item.name} ${item.type || ''} ${formatDate(item.date)}`.toLowerCase().includes(normalizedQuery)), [activities, normalizedQuery])
 
   useEffect(() => {
@@ -239,14 +231,6 @@ function App() {
     loadData()
     return () => { cancelled = true }
   }, [user, dataRefreshKey])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const next = lagosDateKey()
-      setTodayKey(previous => previous === next ? previous : next)
-    }, 60000)
-    return () => window.clearInterval(timer)
-  }, [])
 
   useEffect(() => {
     if (!user || user.role !== 'ADMIN' || !selectedStaff) return
@@ -394,34 +378,6 @@ function App() {
       return true
     } catch (error) {
       setSync(error.message || 'Could not update activity')
-      return false
-    }
-  }
-
-  async function addExpense(payload) {
-    if (user.demo) {
-      const demoRecord = {
-        id: `demo-expense-${Date.now()}`,
-        title: payload.title,
-        category: payload.category,
-        amount: Number(payload.amount || 0),
-        date: formatDate(payload.date),
-      }
-      setExpenses(current => [demoRecord, ...current])
-      setModal(null)
-      setSync('Demo mode')
-      return true
-    }
-
-    try {
-      setSync('Saving expense...')
-      const saved = await api.createExpense(payload)
-      setExpenses(current => [normalizeExpense(saved), ...current.filter(item => item.id !== saved.id)])
-      setModal(null)
-      setSync('Backend connected')
-      return true
-    } catch (error) {
-      setSync(error.message || 'Could not save expense')
       return false
     }
   }
@@ -604,7 +560,7 @@ function App() {
   </div>
 }
 
-function Dashboard({ user, reportingContext, attendance, expenses, activities, weeklyReports, money, open, go, isAdmin }) {
+function Dashboard({ user, reportingContext, attendance, expenses, activities, weeklyReports, money, go, isAdmin }) {
   const [duration, setDuration] = useState('weekly')
   const todayValue = reportingContext?.date || new Date().toISOString().slice(0, 10)
   const today = new Date(todayValue + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -654,7 +610,6 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
   )
   const periodBalance = periodMoneyIn - periodMoneyOut
   const durationLabel = duration === 'weekly' ? 'Weekly' : duration === 'monthly' ? 'Monthly' : 'Yearly'
-  const latestService = latestAttendance?.service || 'Sunday Service'
   const latestServiceDate = latestAttendance?.reportDate || latestAttendance?.activity?.date
     ? new Date(latestAttendance.reportDate || latestAttendance.activity.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
     : null
@@ -975,17 +930,4 @@ function FinanceForm({ close, save, recordingDate = null }) {
   return <Modal title={form.type === 'INCOME' ? 'Submit money in' : 'Submit money out'} close={close}><label>Type<select value={form.type} onChange={e => set('type', e.target.value)}><option value="INCOME">Money in</option><option value="EXPENSE">Money out</option></select></label><label>Category<input list="finance-options" value={form.category} onChange={e => set('category', e.target.value)} placeholder="e.g. Offering" /><datalist id="finance-options">{options.map(option => <option key={option.id || option.name} value={option.name} />)}</datalist></label><button type="button" className="secondary" onClick={async () => { const name = window.prompt(form.type === 'INCOME' ? 'New money-in option name' : 'New money-out option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: form.type === 'INCOME' ? 'FINANCE_INCOME' : 'FINANCE_EXPENSE', name: name.trim() }); setOptions(current => [...current.filter(x => x.name !== created.name), created]); set('category', created.name) } catch (error) { alert(error.message || 'Could not create option') } }}>Create category</button><label>Description<input value={form.description} onChange={e => set('description', e.target.value)} placeholder="Optional description" /></label><label>Amount<input type="number" min="0.01" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" /></label><label>Date<input type="date" value={form.recordDate} onChange={e => set('recordDate', e.target.value)} /></label><button type="button" className="primary wide" disabled={saving || !form.category || !form.amount || Number(form.amount) <= 0} onClick={submit}>{saving ? 'Saving…' : 'Submit transaction'}</button></Modal>
 }
 
-
-function ExpenseForm({ close, save }) {
-  const [d, setD] = useState({ title: '', category: 'General', amount: '', date: new Date().toISOString().slice(0, 10) }), [saving, setSaving] = useState(false), set = (k, v) => setD(x => ({ ...x, [k]: v }))
-
-  async function submit() {
-    if (saving || !d.title || !d.amount) return
-    setSaving(true)
-    const success = await save(d)
-    if (!success) setSaving(false)
-  }
-
-  return <Modal title="Submit expense" close={close}><label>Description<input value={d.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Generator fuel" /></label><label>Category<select value={d.category} onChange={e => set('category', e.target.value)}>{['General', 'Utilities', 'Welfare', 'Choir', 'Evangelism', 'Media'].map(x => <option key={x}>{x}</option>)}</select></label><label>Amount<input type="number" min="0" value={d.amount} onChange={e => set('amount', e.target.value)} placeholder="0" /></label><label>Date<input type="date" value={d.date} onChange={e => set('date', e.target.value)} /></label><button type="button" className="primary wide" disabled={saving || !d.title || !d.amount} onClick={submit}>{saving ? 'Saving…' : 'Submit expense'}</button></Modal>
-}
 export default App

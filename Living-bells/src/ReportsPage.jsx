@@ -38,12 +38,6 @@ function roundAverage(value) {
   return Number.isInteger(value) ? value : Number(value.toFixed(2))
 }
 
-function weekOfMonth(value) {
-  const date = parseDate(value)
-  if (!date) return 0
-  const first = new Date(date.getFullYear(), date.getMonth(), 1)
-  return Math.floor((date.getDate() + first.getDay() - 1) / 7) + 1
-}
 
 function startOfWeek(value) {
   const date = parseDate(value) || new Date()
@@ -74,6 +68,12 @@ function reportingYearEnd(year) {
   return new Date(Number(year) + 1, 5, 30, 23, 59, 59, 999)
 }
 
+function reportingYearForDate(value) {
+  const date = value instanceof Date ? value : parseDate(value)
+  if (!date) return new Date().getFullYear() - (new Date().getMonth() < 6 ? 1 : 0)
+  return date.getMonth() >= 6 ? date.getFullYear() : date.getFullYear() - 1
+}
+
 function reportingYearLabel(year) {
   return `${Number(year)}/${String(Number(year) + 1).slice(-2)}`
 }
@@ -86,7 +86,7 @@ function periodLabel(mode, anchor) {
     const date = parseDate(anchor)
     return date.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
   }
-  return `Reporting year ${reportingYearLabel(parseDate(anchor)?.getFullYear() || new Date().getFullYear())}`
+  return `Reporting year ${reportingYearLabel(reportingYearForDate(anchor))}`
 }
 
 function rowsFromJson(value) {
@@ -344,7 +344,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       start: new Date(selected.getFullYear(), selected.getMonth(), 1, 0, 0, 0, 0),
       end: new Date(selected.getFullYear(), selected.getMonth() + 1, 0, 23, 59, 59, 999),
     }
-    const reportingYear = selected.getFullYear()
+    const reportingYear = reportingYearForDate(selected)
     return {
       start: reportingYearStart(reportingYear),
       end: reportingYearEnd(reportingYear),
@@ -361,10 +361,6 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     [attendance, range],
   )
 
-  const selectedActivities = useMemo(
-    () => activities.filter(item => inRange(item.date, range.start, range.end)),
-    [activities, range],
-  )
 
   const attendanceSummary = useMemo(() => {
     const total = selectedAttendance.reduce((sum, item) => sum + attendanceTotalFor(item), 0)
@@ -415,9 +411,6 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         averageTotal: roundAverage(average(row.adults + row.children + row.visitors, denominator)),
         total: row.adults + row.children + row.visitors,
       }))
-
-    const adultTotal = rows.reduce((sum, row) => sum + row.averageAdult, 0)
-    const childrenTotal = rows.reduce((sum, row) => sum + row.averageChildren, 0)
     const overallTotal = Array.from(categoryMap.values()).reduce((sum, row) => sum + row.adults + row.children + row.visitors, 0)
 
     return {
