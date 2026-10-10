@@ -29,6 +29,39 @@ jobs:
         run: npm run lint
         continue-on-error: true
 
+  backend-migration-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: livingbells
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d livingbells"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: Living-bells/backend
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
+      DIRECT_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Living-bells/backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npx prisma generate
+
   backend-schema:
     runs-on: ubuntu-latest
     defaults:
