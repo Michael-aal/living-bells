@@ -1455,7 +1455,7 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
       activationExpiresAt: updated.activationExpiresAt,
       emailDeliveryFailed,
       message: action === 'APPROVE'
-        ? activationLink ? 'Application approved. Share the one-time activation link securely with the applicant; it expires in 72 hours.' : 'Application approved. An activation email was sent or is ready to be retried from the developer console.'
+        ? emailDeliveryFailed ? 'Application approved, but the activation email was not delivered. Retry sending it from this queue.' : activationLink ? 'Application approved. Share the one-time activation link securely with the applicant; it expires in 72 hours.' : 'Application approved and the activation email was sent.'
         : action === 'REJECT' ? 'Application rejected.' : 'More information requested.',
     })
   } catch (error) {
