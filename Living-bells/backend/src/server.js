@@ -11,6 +11,26 @@ const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
 const DEV_RECOVERY_SECRET = String(process.env.DEV_ADMIN_RECOVERY_SECRET || '').trim()
 const DEV_RECOVERY_ENCRYPTION_KEY = crypto.createHash('sha256').update(String(process.env.DEV_RECOVERY_ENCRYPTION_KEY || JWT_SECRET)).digest()
+
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
+const RESEND_FROM_EMAIL = String(process.env.RESEND_FROM_EMAIL || '').trim()
+const APP_BASE_URL = String(process.env.APP_BASE_URL || 'https://living-bells.vercel.app').replace(/\/$/, '')
+
+function escapeEmailHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])
+}
+
+async function sendPlatformEmail({ to, subject, text, html }) {
+  if (!RESEND_API_KEY || !RESEND_FROM_EMAIL) return false
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: [to], subject, text, html }),
+  })
+  if (!response.ok) throw new Error(`Email provider rejected a message (HTTP ${response.status})`)
+  return true
+}
+
 function generateRecoveryKey() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   const bytes = crypto.randomBytes(20)
