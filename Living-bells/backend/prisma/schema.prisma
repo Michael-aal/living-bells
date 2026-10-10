@@ -80,7 +80,7 @@ model ChurchApplication {
 
 model SupportTicket {
   id          Int                 @id @default(autoincrement())
-  churchId    Int?
+  churchId    Int
   createdById Int
   title       String
   category    String
@@ -89,7 +89,7 @@ model SupportTicket {
   priority    String              @default("NORMAL")
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
-  church      Church?             @relation(fields: [churchId], references: [id], onDelete: SetNull)
+  church      Church              @relation(fields: [churchId], references: [id], onDelete: Restrict)
   createdBy   User                @relation("SupportTicketCreator", fields: [createdById], references: [id], onDelete: Cascade)
   messages    SupportTicketMessage[]
 
@@ -169,7 +169,7 @@ model User {
 }
 
 model Activity {
-  churchId Int?
+  churchId Int
   id           Int          @id @default(autoincrement())
   name         String
   type         String?
@@ -180,7 +180,7 @@ model Activity {
   attendance   Attendance?
   expenses     Expense[]
   reportingWeekId Int?
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   reportingWeek   ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   recordedBy   User?        @relation("ActivityRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
@@ -191,7 +191,7 @@ model Activity {
 }
 
 model Attendance {
-  churchId Int?
+  churchId Int
   id              Int      @id @default(autoincrement())
   activityId      Int      @unique
   recordedById    Int?
@@ -205,15 +205,17 @@ model Attendance {
   adultsFemale    Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   activity        Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
   recordedBy      User?    @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@index([recordedById])
+
+  @@index([churchId])
 }
 
 model Expense {
-  churchId Int?
+  churchId Int
   id           Int      @id @default(autoincrement())
   activityId   Int?
   recordedById Int?
@@ -224,7 +226,7 @@ model Expense {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   reportingWeekId Int?
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   reportingWeek ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   activity     Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
   recordedBy   User?     @relation("ExpenseRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
@@ -234,10 +236,12 @@ model Expense {
   @@index([activityId])
   @@index([recordedById])
   @@index([reportingWeekId])
+
+  @@index([churchId])
 }
 
 model SundayReview {
-  churchId Int?
+  churchId Int
   id         Int          @id @default(autoincrement())
   staffId    Int
   adminId    Int
@@ -247,13 +251,15 @@ model SundayReview {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   staff User @relation("ReviewStaff", fields: [staffId], references: [id], onDelete: Cascade)
   admin User @relation("ReviewAdmin", fields: [adminId], references: [id], onDelete: Restrict)
 
   @@unique([staffId, reviewDate])
   @@index([reviewDate])
   @@index([staffId])
+
+  @@index([churchId])
 }
 
 
@@ -261,14 +267,14 @@ model SundayReview {
 /// Categories are intentionally stored as data, not as hard-coded columns,
 /// so the church owner can define the final categories later.
 model AttendanceRecord {
-  churchId Int?
+  churchId Int
   id           Int                @id @default(autoincrement())
   serviceDate  DateTime
   recordedById Int?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   recordedBy   User?              @relation("AttendanceRecordCreator", fields: [recordedById], references: [id], onDelete: SetNull)
   entries      AttendanceEntry[]
 
@@ -280,7 +286,7 @@ model AttendanceRecord {
 
 /// One row per attendance category for a Sunday.
 model AttendanceEntry {
-  churchId Int?
+  churchId Int
   id                 Int              @id @default(autoincrement())
   attendanceRecordId Int
   category           String
@@ -288,17 +294,19 @@ model AttendanceEntry {
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   attendanceRecord   AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
 
   @@unique([attendanceRecordId, category])
   @@index([category])
+
+  @@index([churchId])
 }
 
 /// Generic financial foundation for both money received and money spent.
 /// The final category names and business rules will be supplied by the owner.
 model FinancialRecord {
-  churchId Int?
+  churchId Int
   id           Int              @id @default(autoincrement())
   type         FinancialType
   category     String
@@ -310,7 +318,7 @@ model FinancialRecord {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   reportingWeek ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   recordedBy   User?            @relation("FinancialRecordCreator", fields: [recordedById], references: [id], onDelete: SetNull)
 
@@ -331,7 +339,7 @@ enum FinancialType {
 
 /// Weekly management snapshot for church leadership.
 model WeeklyReport {
-  churchId Int?
+  churchId Int
   id               Int      @id @default(autoincrement())
   reportDate       DateTime
   reportingWeekId Int?
@@ -347,7 +355,7 @@ model WeeklyReport {
   updatedAt        DateTime @updatedAt
   clientRequestId  String?
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   reportingWeek ReportingWeek? @relation(fields: [reportingWeekId], references: [id], onDelete: SetNull)
   createdBy User? @relation("WeeklyReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
@@ -361,7 +369,7 @@ model WeeklyReport {
 
 
 model ReportingMonth {
-  churchId Int?
+  churchId Int
   id          Int       @id @default(autoincrement())
   year        Int
   month       Int
@@ -370,7 +378,7 @@ model ReportingMonth {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   createdBy User? @relation("ReportingMonthCreator", fields: [createdById], references: [id], onDelete: SetNull)
   weeks     ReportingWeek[]
 
@@ -380,7 +388,7 @@ model ReportingMonth {
 }
 
 model ReportingWeek {
-  churchId Int?
+  churchId Int
   id          Int       @id @default(autoincrement())
   monthId     Int
   weekNumber  Int
@@ -391,7 +399,7 @@ model ReportingWeek {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   month ReportingMonth @relation(fields: [monthId], references: [id], onDelete: Cascade)
   createdBy User? @relation("ReportingWeekCreator", fields: [createdById], references: [id], onDelete: SetNull)
   activities Activity[]
@@ -402,12 +410,14 @@ model ReportingWeek {
   @@unique([monthId, weekNumber])
   @@index([startDate, endDate])
   @@index([monthId])
+
+  @@index([churchId])
 }
 
 
 
 model ConfigOption {
-  churchId Int?
+  churchId Int
   id          Int      @id @default(autoincrement())
   kind        String
   name        String
@@ -415,7 +425,7 @@ model ConfigOption {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   createdBy User? @relation("OptionCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([churchId, kind, name])
@@ -424,7 +434,7 @@ model ConfigOption {
 }
 
 model StaffInvitation {
-  churchId Int?
+  churchId Int
   id          Int       @id @default(autoincrement())
   name        String
   email       String
@@ -436,7 +446,7 @@ model StaffInvitation {
   usedAt      DateTime?
   createdAt   DateTime  @default(now())
 
-  church Church? @relation(fields: [churchId], references: [id], onDelete: Restrict)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Restrict)
   invitedBy User @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
 
   @@index([email])
