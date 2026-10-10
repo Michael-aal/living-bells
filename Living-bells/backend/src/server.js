@@ -944,7 +944,7 @@ app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
   const clientRequestId=String(req.get('X-Client-Request-Id')||'').trim().slice(0,120)||null
 
   if(clientRequestId){
-   const previous=await prisma.weeklyReport.findUnique({where:{clientRequestId},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
+   const previous=await prisma.weeklyReport.findUnique({where:{churchId_clientRequestId:{churchId:Number(req.user.churchId),clientRequestId}},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
    if(previous)return res.status(200).json({...reportDto(previous),duplicate:true,idempotent:true})
   }
 
