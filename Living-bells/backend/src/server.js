@@ -13,7 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
 const DEV_RECOVERY_SECRET = String(process.env.DEV_ADMIN_RECOVERY_SECRET || '').trim()
 const DEV_RECOVERY_ENCRYPTION_KEY = crypto.createHash('sha256').update(String(process.env.DEV_RECOVERY_ENCRYPTION_KEY || JWT_SECRET)).digest()
 const tenantContext = new AsyncLocalStorage()
-const TENANT_MODELS = new Set(['Activity', 'Attendance', 'Expense', 'SundayReview', 'AttendanceRecord', 'AttendanceEntry', 'FinancialRecord', 'WeeklyReport', 'ReportingMonth', 'ReportingWeek', 'ConfigOption', 'StaffInvitation', 'SupportTicket'])
+const TENANT_MODELS = new Set(['User', 'Activity', 'Attendance', 'Expense', 'SundayReview', 'AttendanceRecord', 'AttendanceEntry', 'FinancialRecord', 'WeeklyReport', 'ReportingMonth', 'ReportingWeek', 'ConfigOption', 'StaffInvitation', 'SupportTicket'])
 
 function addChurchToData(data, churchId) {
   if (Array.isArray(data)) return data.map(item => addChurchToData(item, churchId))
