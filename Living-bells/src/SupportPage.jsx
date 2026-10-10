@@ -36,7 +36,14 @@ export default function SupportPage() {
     }
   }
 
-  useEffect(() => { loadTickets() }, [])
+  useEffect(() => {
+    let cancelled = false
+    api.supportTickets()
+      .then(data => { if (!cancelled) setTickets(data || []) })
+      .catch(err => { if (!cancelled) setError(err.message || 'Could not load support tickets') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
 
   async function openTicket(ticket) {
     setSelected(ticket)
