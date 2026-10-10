@@ -687,3 +687,12 @@ main,
     max-width: 100%;
   }
 }
+
+
+/* Historical reporting-period navigation inside attendance, activities and finance forms. */
+.reporting-period-navigation{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.reporting-period-navigation label{display:flex;flex-direction:column;gap:5px;min-width:110px;flex:1}
+.reporting-period-navigation label span{font-size:9px;font-weight:800;color:var(--muted)}
+.reporting-period-navigation input,.reporting-period-navigation select{width:100%;min-height:36px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--text);padding:7px 9px;font:inherit;font-size:11px}
+.reporting-period-navigation button{min-height:36px;white-space:nowrap}
+@media(max-width:480px){.reporting-period-navigation{gap:7px}.reporting-period-navigation label{min-width:calc(50% - 5px)}.reporting-period-navigation button{width:100%}}
