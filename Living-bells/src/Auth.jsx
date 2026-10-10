@@ -3,7 +3,7 @@ import { api } from './api'
 import './auth.css'
 
 export default function Auth({ onAuthenticated, onBack }) {
-  const activationTokenFromUrl = new URLSearchParams(window.location.search).get('churchActivation') || ''
+  const activationTokenFromUrl = new URLSearchParams(window.location.hash.slice(1)).get('churchActivation') || ''
   const [mode, setMode] = useState(activationTokenFromUrl ? 'activate' : 'login')
   const [application, setApplication] = useState({ churchName: '', denomination: '', address: '', applicantName: '', applicantEmail: '', phone: '' })
   const [applicationSubmitted, setApplicationSubmitted] = useState(null)
