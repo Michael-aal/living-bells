@@ -1393,12 +1393,13 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
     if (action === 'APPROVE' && process.env.NODE_ENV === 'production' && (!RESEND_API_KEY || !RESEND_FROM_EMAIL)) return res.status(503).json({ message: 'Email delivery must be configured before approving applications. Set RESEND_API_KEY and RESEND_FROM_EMAIL on the backend.' })
 
     let activationLink = null
+    let activationEmailSent = false
     let updated
     if (action === 'APPROVE') {
       const rawToken = crypto.randomBytes(32).toString('base64url')
       const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
       const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
-            const result = await prisma.$transaction(async tx => {
+      const result = await prisma.$transaction(async tx => {
         const church = await tx.church.create({
           data: { name: application.churchName, denomination: application.denomination, address: application.address, contactEmail: application.applicantEmail, phone: application.phone },
         })
@@ -1419,15 +1420,16 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
       updated = result
       const generatedLink = `${APP_BASE_URL}/?churchActivation=${encodeURIComponent(rawToken)}`
       try {
-        const sent = await sendPlatformEmail({
+        activationEmailSent = await sendPlatformEmail({
           to: application.applicantEmail,
           subject: `Activate ${application.churchName} on Living Bells`,
           text: `Your church application was approved. Open this one-time link within 72 hours to verify this email address and set the church administrator password: ${generatedLink}`,
           html: `<p>Your church application was approved.</p><p><a href="${generatedLink}">Activate your church administrator account</a></p><p>This one-time link expires in 72 hours. Use it to verify this email address and set your password.</p>`,
         })
-        if (!sent && process.env.NODE_ENV !== 'production') activationLink = generatedLink
-        else if (!sent) activationLink = null
+        if (!activationEmailSent && process.env.NODE_ENV !== 'production') activationLink = generatedLink
+        else if (!activationEmailSent) activationLink = null
       } catch {
+        activationEmailSent = false
         activationLink = process.env.NODE_ENV === 'production' ? null : generatedLink
       }
     } else {
@@ -1446,7 +1448,7 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
           : `<p>We need more information about your application for <strong>${escapeEmailHtml(application.churchName)}</strong>.</p><p>Please reply to this email with: ${escapeEmailHtml(note)}</p>`,
       }).catch(() => false)
     }
-    const emailDeliveryFailed = action === 'APPROVE' && process.env.NODE_ENV === 'production' && !activationLink && !RESEND_API_KEY
+    const emailDeliveryFailed = action === 'APPROVE' && process.env.NODE_ENV === 'production' && !activationEmailSent
     res.json({
       application: updated,
       activationLink,
@@ -1460,6 +1462,36 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
     if (error?.code === 'APPLICATION_ALREADY_REVIEWED') return res.status(409).json({ message: error.message })
     next(error)
   }
+})
+
+app.post('/api/dev/church-applications/:id/resend-activation', requireDevReady, async (req, res, next) => {
+  try {
+    if (!RESEND_API_KEY || !RESEND_FROM_EMAIL) return res.status(503).json({ message: 'Configure RESEND_API_KEY and RESEND_FROM_EMAIL on the backend before sending activation emails.' })
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid application id.' })
+    const application = await prisma.churchApplication.findFirst({ where: { id, status: 'APPROVED', activatedAt: null, churchId: { not: null } } })
+    if (!application) return res.status(404).json({ message: 'An approved, unactivated application was not found.' })
+    const rawToken = crypto.randomBytes(32).toString('base64url')
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
+    const updated = await prisma.churchApplication.updateMany({
+      where: { id, status: 'APPROVED', activatedAt: null },
+      data: { activationTokenHash: tokenHash, activationExpiresAt: expiresAt },
+    })
+    if (updated.count !== 1) return res.status(409).json({ message: 'The application changed while the activation email was being prepared.' })
+    const link = `${APP_BASE_URL}/?churchActivation=${encodeURIComponent(rawToken)}`
+    try {
+      await sendPlatformEmail({
+        to: application.applicantEmail,
+        subject: `Activate ${application.churchName} on Living Bells`,
+        text: `Your church application was approved. Use this one-time link within 72 hours to verify this email address and set the administrator password: ${link}`,
+        html: `<p>Your church application was approved.</p><p><a href="${link}">Activate your church administrator account</a></p><p>This one-time link expires in 72 hours.</p>`,
+      })
+    } catch {
+      return res.status(502).json({ message: 'The activation email could not be delivered. You can retry sending it.' })
+    }
+    res.json({ message: 'A new one-time activation email was sent. Any earlier activation link has been replaced.', activationExpiresAt: expiresAt })
+  } catch (error) { next(error) }
 })
 
 function requireChurchAdmin(req, res, next) {
