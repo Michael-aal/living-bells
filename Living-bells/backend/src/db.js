@@ -48,9 +48,8 @@ export const prisma = basePrisma.$extends({
           scoped.create = addChurchRelation(scoped.create, churchId)
           if (scoped.update) scoped.update = addChurchRelation(scoped.update, churchId)
         }
-        if ((operation === 'update' || operation === 'updateMany') && scoped.data) {
-          scoped.data = addChurchScalar(scoped.data, churchId)
-        }
+        if (operation === 'update' && scoped.data) scoped.data = addChurchRelation(scoped.data, churchId)
+        if (operation === 'updateMany' && scoped.data) scoped.data = addChurchScalar(scoped.data, churchId)
         return query(scoped)
       },
     },
