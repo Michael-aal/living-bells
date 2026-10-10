@@ -52,17 +52,27 @@ export default function DevDashboard({ user, onLogout }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [recoveryKey, setRecoveryKey] = useState('')
   const [recoveryVisible, setRecoveryVisible] = useState(false)
+  const [applications, setApplications] = useState([])
+  const [applicationNotes, setApplicationNotes] = useState({})
+  const [activationLink, setActivationLink] = useState('')
+  const [tickets, setTickets] = useState([])
+  const [selectedTicket, setSelectedTicket] = useState(null)
+  const [ticketMessages, setTicketMessages] = useState([])
+  const [ticketReply, setTicketReply] = useState('')
+  const [ticketInternal, setTicketInternal] = useState(false)
 
   async function load() {
     setLoading(true)
     setError('')
     try {
-      const [overviewData, directoryData, invitationData, developerData, notificationData] = await Promise.all([
+      const [overviewData, directoryData, invitationData, developerData, notificationData, applicationData, ticketData] = await Promise.all([
         api.devOverview(),
         request('/api/dev/users'),
         request('/api/admin/staff/invitations'),
         request('/api/dev/developers'),
         api.notifications(),
+        api.churchApplications(),
+        api.supportTickets(),
       ])
       setOverview({ ...overviewData, users: directoryData?.counts || overviewData?.users || {} })
       setDirectory(directoryData?.users || [])
@@ -70,6 +80,8 @@ export default function DevDashboard({ user, onLogout }) {
       setInvitations(invitationData || [])
       setDevelopers(developerData || [])
       setNotifications(notificationData || [])
+      setApplications(applicationData || [])
+      setTickets(ticketData || [])
     } catch (err) {
       setError(err.message || 'Could not load the developer console')
     } finally {
@@ -135,10 +147,67 @@ export default function DevDashboard({ user, onLogout }) {
     }
   }
 
+
+  async function reviewApplication(id, action) {
+    setError('')
+    setNotice('')
+    setActivationLink('')
+    try {
+      const result = await api.reviewChurchApplication(id, { action, note: applicationNotes[id] || '' })
+      if (result.activationLink) setActivationLink(result.activationLink)
+      setNotice(result.message || 'Application updated.')
+      await load()
+    } catch (err) {
+      setError(err.message || 'Could not review church application')
+    }
+  }
+
+  async function openTicket(ticket) {
+    setSelectedTicket(ticket)
+    setTicketReply('')
+    setTicketInternal(false)
+    setError('')
+    try {
+      setTicketMessages(await api.supportTicketMessages(ticket.id))
+    } catch (err) {
+      setError(err.message || 'Could not load ticket conversation')
+    }
+  }
+
+  async function sendTicketReply(event) {
+    event.preventDefault()
+    if (!selectedTicket || !ticketReply.trim()) return
+    setError('')
+    setNotice('')
+    try {
+      await api.addSupportTicketMessage(selectedTicket.id, { body: ticketReply.trim(), internal: ticketInternal })
+      setTicketReply('')
+      setTicketMessages(await api.supportTicketMessages(selectedTicket.id))
+      setNotice('Reply sent.')
+      await load()
+    } catch (err) {
+      setError(err.message || 'Could not send support reply')
+    }
+  }
+
+  async function setTicketStatus(ticket, status) {
+    setError('')
+    try {
+      await api.updateSupportTicket(ticket.id, { status, priority: ticket.priority || 'NORMAL' })
+      setTickets(current => current.map(item => item.id === ticket.id ? { ...item, status } : item))
+      if (selectedTicket?.id === ticket.id) setSelectedTicket(current => ({ ...current, status }))
+      setNotice('Ticket status updated.')
+    } catch (err) {
+      setError(err.message || 'Could not update ticket status')
+    }
+  }
+
   const users = overview?.users || {}
   const records = overview?.records || {}
   const tabs = [
     ['overview', 'Overview'],
+    ['applications', `Church applications ${applications.filter(item => item.status === 'PENDING' || item.status === 'NEEDS_INFO').length ? `(${applications.filter(item => item.status === 'PENDING' || item.status === 'NEEDS_INFO').length})` : ''}`],
+    ['support', `Support tickets ${tickets.filter(item => !['RESOLVED', 'CLOSED'].includes(item.status)).length ? `(${tickets.filter(item => !['RESOLVED', 'CLOSED'].includes(item.status)).length})` : ''}`],
     ['users', 'Users'],
     ['invitations', 'Invitations'],
     ['developers', 'Developers'],
@@ -222,6 +291,45 @@ export default function DevDashboard({ user, onLogout }) {
             <div className="dev-security-note"><div className="dev-lock">✓</div><div><strong>Developer-only console</strong><p>Normal registration cannot create developer accounts. Developer access is assigned by the backend and protected by the DEV role.</p></div></div>
           </section>
         </div>}
+
+
+        {tab === 'applications' && <section className="dev-panel">
+          <div className="dev-panel-head"><div><span className="dev-eyebrow">Approval queue</span><h2>Church applications</h2><p>New churches remain pending until a developer reviews them. Approval creates a church workspace and a time-limited activation link.</p></div><span className="dev-live">{applications.filter(item => item.status === 'PENDING' || item.status === 'NEEDS_INFO').length} awaiting review</span></div>
+          {activationLink && <div className="dev-activation-link"><strong>One-time activation link</strong><p>Share this link privately with the applicant. It expires in 72 hours and can be used once.</p><input readOnly value={activationLink} aria-label="Church administrator activation link" /><button type="button" className="dev-primary" onClick={() => navigator.clipboard?.writeText(activationLink)}>Copy activation link</button></div>}
+          <div className="dev-application-grid">
+            {applications.map(item => <article className="dev-application-card" key={item.id}>
+              <div className="dev-panel-head"><div><span className="dev-eyebrow">Application #{item.id}</span><h3>{item.churchName}</h3></div><span className={item.status === 'ACTIVATED' ? 'dev-status ok' : item.status === 'REJECTED' ? 'dev-status off' : 'dev-status'}>{item.status.replaceAll('_', ' ')}</span></div>
+              <div className="dev-application-details"><span><b>Applicant</b>{item.applicantName}</span><span><b>Email</b>{item.applicantEmail}</span><span><b>Denomination</b>{item.denomination || '—'}</span><span><b>Location</b>{item.address || '—'}</span><span><b>Phone</b>{item.phone || '—'}</span><span><b>Submitted</b>{date(item.createdAt)}</span></div>
+              {item.reviewNote && <p className="dev-application-note"><b>Review note:</b> {item.reviewNote}</p>}
+              {(item.status === 'PENDING' || item.status === 'NEEDS_INFO') && <>
+                <label className="dev-review-note">Review note / reason<textarea value={applicationNotes[item.id] || ''} onChange={e => setApplicationNotes(current => ({ ...current, [item.id]: e.target.value }))} placeholder="Optional note; required for rejection or more information." rows="2" /></label>
+                <div className="dev-actions"><button type="button" className="dev-primary" onClick={() => reviewApplication(item.id, 'APPROVE')}>Approve</button><button type="button" className="dev-secondary" onClick={() => reviewApplication(item.id, 'NEEDS_INFO')}>Request information</button><button type="button" className="dev-danger" onClick={() => reviewApplication(item.id, 'REJECT')}>Reject</button></div>
+              </>}
+            </article>)}
+          </div>
+          {!applications.length && <div className="dev-empty">No church applications yet.</div>}
+        </section>}
+
+        {tab === 'support' && <section className="dev-panel">
+          <div className="dev-panel-head"><div><span className="dev-eyebrow">Customer support</span><h2>Support desk</h2><p>Review church issues, reply to administrators, and track resolution.</p></div><span className="dev-live">{tickets.length} total tickets</span></div>
+          <div className="dev-ticket-layout">
+            <div className="dev-ticket-list">
+              {tickets.map(ticket => <button type="button" key={ticket.id} className={selectedTicket?.id === ticket.id ? 'dev-ticket-item active' : 'dev-ticket-item'} onClick={() => openTicket(ticket)}>
+                <strong>#{ticket.id} · {ticket.title}</strong><span>{ticket.church?.name || 'Church'} · {ticket.createdBy?.email || 'Unknown requester'}</span><small>{ticket.status.replaceAll('_', ' ')} · {date(ticket.updatedAt)}</small>
+              </button>)}
+              {!tickets.length && <div className="dev-empty">No support tickets yet.</div>}
+            </div>
+            <div className="dev-ticket-detail">
+              {!selectedTicket ? <div className="dev-empty">Choose a ticket to inspect its conversation.</div> : <>
+                <div className="dev-panel-head"><div><span className="dev-eyebrow">Ticket #{selectedTicket.id}</span><h3>{selectedTicket.title}</h3><p>{selectedTicket.church?.name || 'Church'} · {selectedTicket.category}</p></div></div>
+                <p>{selectedTicket.description}</p>
+                <label className="dev-review-note">Status<select value={selectedTicket.status} onChange={e => setTicketStatus(selectedTicket, e.target.value)}>{['OPEN','IN_PROGRESS','WAITING_FOR_CHURCH','RESOLVED','CLOSED'].map(status => <option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></label>
+                <div className="dev-ticket-messages">{ticketMessages.map(message => <article key={message.id} className={message.internal ? 'dev-ticket-message internal' : 'dev-ticket-message'}><div><strong>{message.author?.name || 'User'}</strong><small>{date(message.createdAt)}{message.internal ? ' · Internal note' : ''}</small></div><p>{message.body}</p></article>)}{!ticketMessages.length && <div className="dev-empty">No replies yet.</div>}</div>
+                <form className="dev-ticket-reply" onSubmit={sendTicketReply}><label>Reply<textarea rows="3" value={ticketReply} onChange={e => setTicketReply(e.target.value)} placeholder="Write a helpful response…" required /></label><label className="dev-checkbox"><input type="checkbox" checked={ticketInternal} onChange={e => setTicketInternal(e.target.checked)} /> Internal developer note (not visible to the church)</label><button className="dev-primary" disabled={!ticketReply.trim()}>Send reply</button></form>
+              </>}
+            </div>
+          </div>
+        </section>}
 
         {tab === 'users' && <section className="dev-panel">
           <div className="dev-panel-head"><div><span className="dev-eyebrow">Database truth</span><h2>All platform accounts</h2><p>Every account below is read directly from the User table. No placeholder counts.</p></div><span className="dev-live">Database source</span></div>
