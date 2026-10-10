@@ -201,6 +201,7 @@ export const api = {
   updateStaffStatus: (staffId, isActive) => apiRequest(`/api/admin/staff/${staffId}/status`, { method: 'PATCH', body: JSON.stringify({ isActive }) }),
   deleteStaff: staffId => apiRequest(`/api/admin/staff/${staffId}`, { method: 'DELETE' }),
   reportingCurrent: () => apiRequest('/api/reporting/current'),
+  reportingYears: () => apiRequest('/api/reporting/years'),
   reportingMonths: year => apiRequest('/api/reporting/months?year=' + encodeURIComponent(year)),
   reportingMonth: id => apiRequest('/api/reporting/months/' + id),
   createReportingWeek: payload => apiRequest('/api/reporting/weeks', { method: 'POST', body: JSON.stringify(payload) }),
