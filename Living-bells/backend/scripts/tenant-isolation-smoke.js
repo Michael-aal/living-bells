@@ -12,6 +12,14 @@ let activityA
 let activityB
 let ticketA
 let ticketB
+let attendanceRecordA
+let attendanceRecordB
+let monthA
+let monthB
+let optionA
+let optionB
+let reportA
+let reportB
 
 try {
   churchA = await prisma.church.create({ data: { name: 'Tenant test A ' + suffix } })
@@ -48,6 +56,16 @@ try {
   const visibleTicketsA = await runAs(churchA.id, () => prisma.supportTicket.findMany())
   assert.deepEqual(visibleTicketsA.map(item => item.id), [ticketA.id], 'church A must only list its own support tickets')
 
+  const sharedDate = new Date('2026-02-01T00:00:00.000Z')
+  attendanceRecordA = await runAs(churchA.id, () => prisma.attendanceRecord.create({ data: { serviceDate: sharedDate } }))
+  attendanceRecordB = await runAs(churchB.id, () => prisma.attendanceRecord.create({ data: { serviceDate: sharedDate } }))
+  monthA = await runAs(churchA.id, () => prisma.reportingMonth.create({ data: { year: 2026, month: 2 } }))
+  monthB = await runAs(churchB.id, () => prisma.reportingMonth.create({ data: { year: 2026, month: 2 } }))
+  optionA = await runAs(churchA.id, () => prisma.configOption.create({ data: { kind: 'SMOKE_TEST', name: 'Shared option' } }))
+  optionB = await runAs(churchB.id, () => prisma.configOption.create({ data: { kind: 'SMOKE_TEST', name: 'Shared option' } }))
+  reportA = await runAs(churchA.id, () => prisma.weeklyReport.create({ data: { reportDate: sharedDate, numerical: {}, spiritual: {}, income: {}, expenditure: {}, totalIncome: 0, totalExpenditure: 0, balance: 0, clientRequestId: 'shared-' + suffix } }))
+  reportB = await runAs(churchB.id, () => prisma.weeklyReport.create({ data: { reportDate: sharedDate, numerical: {}, spiritual: {}, income: {}, expenditure: {}, totalIncome: 0, totalExpenditure: 0, balance: 0, clientRequestId: 'shared-' + suffix } }))
+
   const unchangedForeignActivity = await prisma.activity.findUnique({ where: { id: activityB.id } })
   assert.equal(unchangedForeignActivity.name, 'B activity', 'cross-tenant update must not alter church B data')
 
@@ -55,6 +73,14 @@ try {
 } finally {
   const ticketIds = [ticketA?.id, ticketB?.id].filter(Boolean)
   if (ticketIds.length) await prisma.supportTicket.deleteMany({ where: { id: { in: ticketIds } } })
+  const reportIds = [reportA?.id, reportB?.id].filter(Boolean)
+  if (reportIds.length) await prisma.weeklyReport.deleteMany({ where: { id: { in: reportIds } } })
+  const attendanceRecordIds = [attendanceRecordA?.id, attendanceRecordB?.id].filter(Boolean)
+  if (attendanceRecordIds.length) await prisma.attendanceRecord.deleteMany({ where: { id: { in: attendanceRecordIds } } })
+  const monthIds = [monthA?.id, monthB?.id].filter(Boolean)
+  if (monthIds.length) await prisma.reportingMonth.deleteMany({ where: { id: { in: monthIds } } })
+  const optionIds = [optionA?.id, optionB?.id].filter(Boolean)
+  if (optionIds.length) await prisma.configOption.deleteMany({ where: { id: { in: optionIds } } })
   const activityIds = [activityA?.id, activityB?.id].filter(Boolean)
   if (activityIds.length) await prisma.activity.deleteMany({ where: { id: { in: activityIds } } })
   const userIds = [userA?.id, userB?.id].filter(Boolean)
