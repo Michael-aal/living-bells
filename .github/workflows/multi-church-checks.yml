@@ -53,13 +53,20 @@ jobs:
       DIRECT_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: Living-bells/backend/package-lock.json
       - run: npm ci
-      - run: npx prisma migrate deploy
+      - name: Build a disposable database from the current main schema
+        run: |
+          git show origin/main:Living-bells/backend/prisma/schema.prisma > /tmp/living-bells-baseline.prisma
+          npx prisma db push --schema=/tmp/living-bells-baseline.prisma --skip-generate
+      - name: Apply only the new expand-and-backfill migration
+        run: npx prisma db execute --schema=prisma/schema.prisma --file=prisma/migrations/20261010170000_multi_church_foundation/migration.sql
       - run: npx prisma generate
       - run: node scripts/tenant-isolation-smoke.js
 
