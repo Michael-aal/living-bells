@@ -15,6 +15,7 @@ const DEV_RECOVERY_ENCRYPTION_KEY = crypto.createHash('sha256').update(String(pr
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim()
 const RESEND_FROM_EMAIL = String(process.env.RESEND_FROM_EMAIL || '').trim()
 const APP_BASE_URL = String(process.env.APP_BASE_URL || 'https://living-bells.vercel.app').replace(/\/$/, '')
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER_SERVICE_ID)
 
 function escapeEmailHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])
@@ -1390,7 +1391,7 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
     if (application.status !== 'PENDING' && application.status !== 'NEEDS_INFO') return res.status(409).json({ message: 'This application has already been decided.' })
     if (action === 'NEEDS_INFO' && !note) return res.status(400).json({ message: 'Add a note describing the information required.' })
     if (action === 'REJECT' && !note) return res.status(400).json({ message: 'A rejection reason is required.' })
-    if (action === 'APPROVE' && process.env.NODE_ENV === 'production' && (!RESEND_API_KEY || !RESEND_FROM_EMAIL)) return res.status(503).json({ message: 'Email delivery must be configured before approving applications. Set RESEND_API_KEY and RESEND_FROM_EMAIL on the backend.' })
+    if (action === 'APPROVE' && IS_PRODUCTION && (!RESEND_API_KEY || !RESEND_FROM_EMAIL)) return res.status(503).json({ message: 'Email delivery must be configured before approving applications. Set RESEND_API_KEY and RESEND_FROM_EMAIL on the backend.' })
 
     let activationLink = null
     let activationEmailSent = false
@@ -1418,7 +1419,7 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
         return next
       })
       updated = result
-      const generatedLink = `${APP_BASE_URL}/?churchActivation=${encodeURIComponent(rawToken)}`
+      const generatedLink = `${APP_BASE_URL}/#churchActivation=${encodeURIComponent(rawToken)}`
       try {
         activationEmailSent = await sendPlatformEmail({
           to: application.applicantEmail,
@@ -1430,7 +1431,7 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
         else if (!activationEmailSent) activationLink = null
       } catch {
         activationEmailSent = false
-        activationLink = process.env.NODE_ENV === 'production' ? null : generatedLink
+        activationLink = IS_PRODUCTION ? null : generatedLink
       }
     } else {
       updated = await prisma.churchApplication.update({
@@ -1448,7 +1449,7 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
           : `<p>We need more information about your application for <strong>${escapeEmailHtml(application.churchName)}</strong>.</p><p>Please reply to this email with: ${escapeEmailHtml(note)}</p>`,
       }).catch(() => false)
     }
-    const emailDeliveryFailed = action === 'APPROVE' && process.env.NODE_ENV === 'production' && !activationEmailSent
+    const emailDeliveryFailed = action === 'APPROVE' && IS_PRODUCTION && !activationEmailSent
     res.json({
       application: updated,
       activationLink,
@@ -1479,7 +1480,7 @@ app.post('/api/dev/church-applications/:id/resend-activation', requireDevReady, 
       data: { activationTokenHash: tokenHash, activationExpiresAt: expiresAt },
     })
     if (updated.count !== 1) return res.status(409).json({ message: 'The application changed while the activation email was being prepared.' })
-    const link = `${APP_BASE_URL}/?churchActivation=${encodeURIComponent(rawToken)}`
+    const link = `${APP_BASE_URL}/#churchActivation=${encodeURIComponent(rawToken)}`
     try {
       await sendPlatformEmail({
         to: application.applicantEmail,
