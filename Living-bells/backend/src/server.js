@@ -4,6 +4,7 @@ import cors from 'cors'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { prisma } from './db.js'
 
 const app = express()
@@ -11,6 +12,49 @@ const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
 const DEV_RECOVERY_SECRET = String(process.env.DEV_ADMIN_RECOVERY_SECRET || '').trim()
 const DEV_RECOVERY_ENCRYPTION_KEY = crypto.createHash('sha256').update(String(process.env.DEV_RECOVERY_ENCRYPTION_KEY || JWT_SECRET)).digest()
+const tenantContext = new AsyncLocalStorage()
+const TENANT_MODELS = new Set(['Activity', 'Attendance', 'Expense', 'SundayReview', 'AttendanceRecord', 'AttendanceEntry', 'FinancialRecord', 'WeeklyReport', 'ReportingMonth', 'ReportingWeek', 'ConfigOption', 'StaffInvitation'])
+
+function addChurchToData(data, churchId) {
+  if (Array.isArray(data)) return data.map(item => addChurchToData(item, churchId))
+  if (!data || typeof data !== 'object') return data
+  const result = { ...data }
+  if ('create' in result) result.create = addChurchToData(result.create, churchId)
+  if ('createMany' in result) result.createMany = addChurchToData(result.createMany, churchId)
+  if ('update' in result && typeof result.update === 'object') result.update = addChurchToData(result.update, churchId)
+  if ('upsert' in result && typeof result.upsert === 'object') result.upsert = addChurchToData(result.upsert, churchId)
+  if ('data' in result && typeof result.data === 'object') result.data = addChurchToData(result.data, churchId)
+  result.churchId = churchId
+  return result
+}
+
+prisma.$use(async (params, next) => {
+  const context = tenantContext.getStore()
+  if (!context?.churchId || context.role === 'DEV' || !TENANT_MODELS.has(params.model)) return next(params)
+  const churchId = context.churchId
+  const scopedActions = new Set(['findUnique', 'findUniqueOrThrow', 'findFirst', 'findFirstOrThrow', 'findMany', 'count', 'aggregate', 'groupBy', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert'])
+  if (scopedActions.has(params.action)) {
+    params.args ||= {}
+    params.args.where = { ...(params.args.where || {}), churchId }
+  }
+  if (params.action === 'create') {
+    params.args ||= {}
+    params.args.data = addChurchToData(params.args.data, churchId)
+  }
+  if (params.action === 'createMany') {
+    params.args ||= {}
+    params.args.data = addChurchToData(params.args.data, churchId)
+  }
+  if (params.action === 'upsert') {
+    params.args ||= {}
+    params.args.create = addChurchToData(params.args.create, churchId)
+    if (params.args.update) params.args.update = addChurchToData(params.args.update, churchId)
+  }
+  if (['update', 'updateMany'].includes(params.action) && params.args?.data) {
+    params.args.data = addChurchToData(params.args.data, churchId)
+  }
+  return next(params)
+})
 
 function generateRecoveryKey() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -70,12 +114,21 @@ function signToken(user) {
   return jwt.sign({ sub: user.id, role: user.role, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })
 }
 
-function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   const header = req.headers.authorization
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null
   if (!token) return res.status(401).json({ message: 'Authentication required' })
-  try { req.user = jwt.verify(token, JWT_SECRET); next() }
-  catch { return res.status(401).json({ message: 'Invalid or expired token' }) }
+  try {
+    const claims = jwt.verify(token, JWT_SECRET)
+    const user = await prisma.user.findUnique({ where: { id: Number(claims.sub) }, select: { id: true, name: true, email: true, role: true, churchId: true, isActive: true } })
+    if (!user || !user.isActive) return res.status(401).json({ message: 'Account is inactive or no longer exists' })
+    if (user.role !== 'DEV' && !user.churchId) return res.status(403).json({ message: 'This account is not assigned to a church. Contact support.' })
+    req.user = { ...claims, sub: user.id, name: user.name, email: user.email, role: user.role, churchId: user.churchId }
+    tenantContext.run({ churchId: user.churchId, role: user.role }, next)
+  } catch (error) {
+    if (error?.name === 'JsonWebTokenError' || error?.name === 'TokenExpiredError') return res.status(401).json({ message: 'Invalid or expired token' })
+    next(error)
+  }
 }
 
 function requireAdmin(req, res, next) {
@@ -168,7 +221,8 @@ app.post('/api/auth/register', async (req, res, next) => {
 
     if (!password) return res.status(400).json({ message: 'Password is required' })
     if (String(password).length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' })
-    if (!['STAFF', 'ADMIN'].includes(normalizedRole)) return res.status(400).json({ message: 'Role must be STAFF or ADMIN' })
+    if (normalizedRole === 'ADMIN') return res.status(403).json({ message: 'Administrator accounts require an approved church application. Submit an application instead.' })
+    if (normalizedRole !== 'STAFF') return res.status(400).json({ message: 'Only invited STAFF accounts can register here' })
 
     let registrationName = String(name || '').trim()
     let registrationEmail = String(email || '').trim().toLowerCase()
@@ -203,7 +257,8 @@ app.post('/api/auth/register', async (req, res, next) => {
         passwordHash,
         role: normalizedRole,
         department: normalizedRole === 'STAFF' ? invitation.department : null,
-        position: normalizedRole === 'STAFF' ? invitation.position : null,
+        position: invitation.position,
+        churchId: invitation.churchId,
         emailVerifiedAt: new Date(),
       },
     })
@@ -1128,7 +1183,7 @@ app.post('/api/admin/staff/invitations', requireAdmin, async (req, res, next) =>
     await prisma.staffInvitation.updateMany({ where: { email, usedAt: null }, data: { expiresAt: new Date() } })
 
     const invitation = await prisma.staffInvitation.create({
-      data: { name, email, department, position, codeHash, invitedById: currentUserId(req), expiresAt },
+      data: { name, email, department, position, codeHash, invitedById: currentUserId(req), churchId: req.user.churchId, expiresAt },
     })
 
     res.status(201).json({
