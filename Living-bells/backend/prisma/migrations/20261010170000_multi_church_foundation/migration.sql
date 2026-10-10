@@ -126,7 +126,7 @@ ALTER TABLE "ChurchApplication" ADD CONSTRAINT "ChurchApplication_reviewedById_f
 
 CREATE TABLE "SupportTicket" (
   "id" SERIAL NOT NULL,
-  "churchId" INTEGER,
+  "churchId" INTEGER NOT NULL,
   "createdById" INTEGER NOT NULL,
   "title" TEXT NOT NULL,
   "category" TEXT NOT NULL,
@@ -139,7 +139,7 @@ CREATE TABLE "SupportTicket" (
 );
 CREATE INDEX "SupportTicket_churchId_status_updatedAt_idx" ON "SupportTicket"("churchId", "status", "updatedAt");
 CREATE INDEX "SupportTicket_createdById_createdAt_idx" ON "SupportTicket"("createdById", "createdAt");
-ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 CREATE TABLE "SupportTicketMessage" (
