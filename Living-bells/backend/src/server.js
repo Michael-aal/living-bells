@@ -1561,8 +1561,8 @@ app.post('/api/support/tickets/:id/messages', async (req, res, next) => {
     const ticket = await prisma.supportTicket.findFirst({ where: req.user.role === 'DEV' ? { id } : { id, churchId: req.user.churchId } })
     if (!ticket) return res.status(404).json({ message: 'Support ticket not found.' })
     const message = await prisma.supportTicketMessage.create({ data: { ticketId: id, authorId: currentUserId(req), body, internal } })
-    await prisma.supportTicket.update({ where: { id }, data: { status: req.user.role === 'DEV' ? 'WAITING_FOR_CHURCH' : 'IN_PROGRESS' } })
-    if (req.user.role === 'DEV') {
+    if (!internal) await prisma.supportTicket.update({ where: { id }, data: { status: req.user.role === 'DEV' ? 'WAITING_FOR_CHURCH' : 'IN_PROGRESS' } })
+    if (req.user.role === 'DEV' && !internal) {
       await prisma.notification.create({ data: { userId: ticket.createdById, type: 'SUPPORT_REPLY', title: 'Support replied to your ticket', message: 'A developer replied to your ticket: ' + ticket.title, metadata: { ticketId: id } } })
       const requester = await prisma.user.findUnique({ where: { id: ticket.createdById }, select: { email: true, name: true } })
       if (requester?.email) await sendPlatformEmail({
