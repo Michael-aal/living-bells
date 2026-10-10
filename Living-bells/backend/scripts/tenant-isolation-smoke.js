@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { prisma, tenantContext } from '../src/db.js'
 
-const runAs = (churchId, callback) => tenantContext.run({ churchId, role: 'ADMIN' }, callback)
+const runAs = (churchId, callback) => tenantContext.run({ churchId, role: 'ADMIN' }, async () => await callback())
 const suffix = randomUUID()
 let churchA
 let churchB
