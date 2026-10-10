@@ -72,6 +72,7 @@ export default function Auth({ onAuthenticated, onBack }) {
         setNotice(result.message || 'Account activated. You can now sign in.')
         setError('')
         setForm(current => ({ ...current, password: '', confirmPassword: '' }))
+        window.history.replaceState({}, '', window.location.pathname)
         setMode('login')
         return
       }
