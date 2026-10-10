@@ -10,15 +10,18 @@ const tenantModels = new Set([
   'SupportTicket',
 ])
 
-function addChurchToData(data, churchId) {
-  if (Array.isArray(data)) return data.map(item => addChurchToData(item, churchId))
-  if (!data || typeof data !== 'object') return data
+function addChurchRelation(data, churchId) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data
   const result = { ...data }
-  for (const key of ['create', 'createMany', 'update', 'upsert', 'data']) {
-    if (result[key] && typeof result[key] === 'object') result[key] = addChurchToData(result[key], churchId)
-  }
-  result.churchId = churchId
+  delete result.churchId
+  result.church = { connect: { id: churchId } }
   return result
+}
+
+function addChurchScalar(data, churchId) {
+  if (Array.isArray(data)) return data.map(item => addChurchScalar(item, churchId))
+  if (!data || typeof data !== 'object') return data
+  return { ...data, churchId }
 }
 
 const basePrisma = new PrismaClient()
@@ -39,14 +42,14 @@ export const prisma = basePrisma.$extends({
           'delete', 'deleteMany', 'upsert',
         ])
         if (scopedOperations.has(operation)) scoped.where = { ...(scoped.where || {}), churchId }
-        if (operation === 'create') scoped.data = addChurchToData(scoped.data, churchId)
-        if (operation === 'createMany') scoped.data = addChurchToData(scoped.data, churchId)
+        if (operation === 'create') scoped.data = addChurchRelation(scoped.data, churchId)
+        if (operation === 'createMany') scoped.data = addChurchScalar(scoped.data, churchId)
         if (operation === 'upsert') {
-          scoped.create = addChurchToData(scoped.create, churchId)
-          if (scoped.update) scoped.update = addChurchToData(scoped.update, churchId)
+          scoped.create = addChurchRelation(scoped.create, churchId)
+          if (scoped.update) scoped.update = addChurchRelation(scoped.update, churchId)
         }
         if ((operation === 'update' || operation === 'updateMany') && scoped.data) {
-          scoped.data = addChurchToData(scoped.data, churchId)
+          scoped.data = addChurchScalar(scoped.data, churchId)
         }
         return query(scoped)
       },
