@@ -382,7 +382,7 @@ app.post('/api/church-applications', async (req, res, next) => {
       data: { churchName, applicantName, applicantEmail, denomination, address, phone },
       select: { id: true, churchName: true, applicantName: true, applicantEmail: true, status: true, createdAt: true },
     })
-    const developers = await prisma.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true } })
+    const developers = await prisma.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true, email: true } })
     if (developers.length) await prisma.notification.createMany({
       data: developers.map(user => ({
         userId: user.id,
@@ -392,6 +392,20 @@ app.post('/api/church-applications', async (req, res, next) => {
         metadata: { applicationId: application.id, action: 'review-church-application' },
       })),
     })
+    await Promise.allSettled([
+      ...developers.map(user => sendPlatformEmail({
+        to: user.email,
+        subject: 'New Living Bells church application',
+        text: `${churchName} submitted an application. Sign in to the Living Bells Developer Console to review application #${application.id}.`,
+        html: `<p><strong>${escapeEmailHtml(churchName)}</strong> submitted a church application.</p><p>Sign in to the Living Bells Developer Console to review application #${application.id}.</p>`,
+      })),
+      sendPlatformEmail({
+        to: applicantEmail,
+        subject: 'Living Bells received your church application',
+        text: `Hello ${applicantName}, we received the application for ${churchName}. It is pending developer review; no administrator account is active yet.`,
+        html: `<p>Hello ${escapeEmailHtml(applicantName)},</p><p>We received the application for <strong>${escapeEmailHtml(churchName)}</strong>. It is pending developer review; no administrator account is active yet.</p>`,
+      }),
+    ])
     res.status(201).json({ message: 'Application submitted. It will remain pending until the Living Bells developer team reviews it.', application })
   } catch (error) { next(error) }
 })
@@ -1376,6 +1390,7 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
     if (application.status !== 'PENDING' && application.status !== 'NEEDS_INFO') return res.status(409).json({ message: 'This application has already been decided.' })
     if (action === 'NEEDS_INFO' && !note) return res.status(400).json({ message: 'Add a note describing the information required.' })
     if (action === 'REJECT' && !note) return res.status(400).json({ message: 'A rejection reason is required.' })
+    if (action === 'APPROVE' && process.env.NODE_ENV === 'production' && (!RESEND_API_KEY || !RESEND_FROM_EMAIL)) return res.status(503).json({ message: 'Email delivery must be configured before approving applications. Set RESEND_API_KEY and RESEND_FROM_EMAIL on the backend.' })
 
     let activationLink = null
     let updated
@@ -1383,8 +1398,7 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
       const rawToken = crypto.randomBytes(32).toString('base64url')
       const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
       const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
-      const origin = String(process.env.APP_BASE_URL || 'https://living-bells.vercel.app').replace(/\/$/, '')
-      const result = await prisma.$transaction(async tx => {
+            const result = await prisma.$transaction(async tx => {
         const church = await tx.church.create({
           data: { name: application.churchName, denomination: application.denomination, address: application.address, contactEmail: application.applicantEmail, phone: application.phone },
         })
@@ -1403,14 +1417,45 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
         return next
       })
       updated = result
-      activationLink = `${origin}/?churchActivation=${encodeURIComponent(rawToken)}`
+      const generatedLink = `${APP_BASE_URL}/?churchActivation=${encodeURIComponent(rawToken)}`
+      try {
+        const sent = await sendPlatformEmail({
+          to: application.applicantEmail,
+          subject: `Activate ${application.churchName} on Living Bells`,
+          text: `Your church application was approved. Open this one-time link within 72 hours to verify this email address and set the church administrator password: ${generatedLink}`,
+          html: `<p>Your church application was approved.</p><p><a href="${generatedLink}">Activate your church administrator account</a></p><p>This one-time link expires in 72 hours. Use it to verify this email address and set your password.</p>`,
+        })
+        if (!sent && process.env.NODE_ENV !== 'production') activationLink = generatedLink
+        else if (!sent) activationLink = null
+      } catch {
+        activationLink = process.env.NODE_ENV === 'production' ? null : generatedLink
+      }
     } else {
       updated = await prisma.churchApplication.update({
         where: { id },
         data: { status: action === 'REJECT' ? 'REJECTED' : 'NEEDS_INFO', reviewNote: note, reviewedById: currentUserId(req), reviewedAt: new Date(), activationTokenHash: null, activationExpiresAt: null },
       })
     }
-    res.json({ application: updated, activationLink, activationExpiresAt: updated.activationExpiresAt, message: action === 'APPROVE' ? 'Application approved. Share the one-time activation link securely with the applicant; it expires in 72 hours.' : action === 'REJECT' ? 'Application rejected.' : 'More information requested.' })
+    if (action !== 'APPROVE') {
+      await sendPlatformEmail({
+        to: application.applicantEmail,
+        subject: action === 'REJECT' ? 'Update on your Living Bells church application' : 'More information needed for your Living Bells application',
+        text: action === 'REJECT' ? `Your application for ${application.churchName} was not approved. Review note: ${note}` : `We need more information about your application for ${application.churchName}. Please reply to this email with: ${note}`,
+        html: action === 'REJECT'
+          ? `<p>Your application for <strong>${escapeEmailHtml(application.churchName)}</strong> was not approved.</p><p>Review note: ${escapeEmailHtml(note)}</p>`
+          : `<p>We need more information about your application for <strong>${escapeEmailHtml(application.churchName)}</strong>.</p><p>Please reply to this email with: ${escapeEmailHtml(note)}</p>`,
+      }).catch(() => false)
+    }
+    const emailDeliveryFailed = action === 'APPROVE' && process.env.NODE_ENV === 'production' && !activationLink && !RESEND_API_KEY
+    res.json({
+      application: updated,
+      activationLink,
+      activationExpiresAt: updated.activationExpiresAt,
+      emailDeliveryFailed,
+      message: action === 'APPROVE'
+        ? activationLink ? 'Application approved. Share the one-time activation link securely with the applicant; it expires in 72 hours.' : 'Application approved. An activation email was sent or is ready to be retried from the developer console.'
+        : action === 'REJECT' ? 'Application rejected.' : 'More information requested.',
+    })
   } catch (error) {
     if (error?.code === 'APPLICATION_ALREADY_REVIEWED') return res.status(409).json({ message: error.message })
     next(error)
