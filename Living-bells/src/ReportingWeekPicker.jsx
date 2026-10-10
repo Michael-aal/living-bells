@@ -52,6 +52,12 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
 
   const selectedDateObj = new Date(selectedDate + 'T12:00:00Z')
   const selectedYear = selectedDateObj.getUTCFullYear()
+  const selectedMonthNumber = selectedDateObj.getUTCMonth() + 1
+  const selectedDayNumber = selectedDateObj.getUTCDate()
+  const currentDate = dateKey()
+  const currentYear = Number(currentDate.slice(0, 4))
+  const currentMonth = Number(currentDate.slice(5, 7))
+  const [navigationYear, setNavigationYear] = useState(selectedYear)
   const [months, setMonths] = useState([])
   const [loading, setLoading] = useState(false)
   const [openWeekId, setOpenWeekId] = useState(null)
@@ -90,6 +96,10 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
     }
   }, [selectedYear, selectedDateObj.getUTCMonth()])
 
+  useEffect(() => {
+    setNavigationYear(selectedYear)
+  }, [selectedYear])
+
   const allWeeks = useMemo(
     () =>
       months.flatMap(month =>
@@ -99,6 +109,14 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
         }))
       ),
     [months]
+  )
+
+  const selectedMonthWeeks = useMemo(
+    () => allWeeks.filter(week =>
+      Number(week.month.year) === selectedYear &&
+      Number(week.month.month) === selectedMonthNumber
+    ),
+    [allWeeks, selectedYear, selectedMonthNumber]
   )
 
   const containingWeek = useMemo(
@@ -123,21 +141,37 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
     )
   }, [allWeeks])
 
-  const activeWeek = containingWeek || currentWeek
+  // When the selected date is not covered, show the selected month's saved
+  // weeks so staff can navigate to a configured historical reporting period.
+  const activeWeek =
+    containingWeek ||
+    (selectedYear === currentYear && selectedMonthNumber === currentMonth ? currentWeek : null) ||
+    selectedMonthWeeks[0] ||
+    null
 
   const visibleWeeks = useMemo(() => {
-    if (!activeWeek) return []
-
-    return (activeWeek.month.weeks || [])
+    const sourceWeeks = activeWeek?.month?.weeks || selectedMonthWeeks
+    return sourceWeeks
       .map(week => ({
         ...week,
-        month: activeWeek.month,
+        month: activeWeek?.month || months.find(month =>
+          Number(month.year) === selectedYear &&
+          Number(month.month) === selectedMonthNumber
+        ),
       }))
-      .sort(
-        (a, b) =>
-          Number(a.weekNumber) - Number(b.weekNumber)
-      )
-  }, [activeWeek])
+      .filter(week => week.month)
+      .sort((a, b) => Number(a.weekNumber) - Number(b.weekNumber))
+  }, [activeWeek, selectedMonthWeeks, months, selectedYear, selectedMonthNumber])
+
+  function navigateToPeriod(yearValue, monthValue) {
+    const year = Number(yearValue)
+    const month = Number(monthValue)
+    if (!Number.isInteger(year) || year < 1 || year > 9999 ||
+        !Number.isInteger(month) || month < 1 || month > 12) return
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+    const day = Math.min(selectedDayNumber, lastDay)
+    onDateChange(`${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
+  }
 
   useEffect(() => {
     if (activeWeek) setOpenWeekId(activeWeek.id)
@@ -164,21 +198,54 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
     )
   }
 
-  if (!activeWeek) {
-    return (
-      <div className="reporting-week-picker">
-        <small className="reporting-week-empty">
-          No saved reporting week covers this date.
-        </small>
-      </div>
-    )
-  }
-
   return (
     <div
       className="reporting-week-picker"
       aria-label="Saved reporting weeks"
     >
+      <div className="reporting-period-navigation">
+        <label>
+          <span>Reporting year</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={navigationYear}
+            onChange={event => setNavigationYear(event.target.value)}
+            aria-label="Choose reporting year"
+          />
+        </label>
+        <label>
+          <span>Month</span>
+          <select
+            value={selectedMonthNumber}
+            onChange={event => navigateToPeriod(selectedYear, event.target.value)}
+            aria-label="Choose reporting month"
+          >
+            {Array.from({ length: 12 }, (_, index) => index + 1).map(month => (
+              <option key={month} value={month}>
+                {new Date(Date.UTC(2000, month - 1, 1)).toLocaleDateString('en-NG', { month: 'long', timeZone: 'UTC' })}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!Number.isInteger(Number(navigationYear)) || Number(navigationYear) < 1 || Number(navigationYear) > 9999}
+          onClick={() => navigateToPeriod(navigationYear, selectedMonthNumber)}
+        >
+          Go to year
+        </button>
+      </div>
+
+      {!containingWeek && (
+        <small className="reporting-week-empty">
+          This date is not inside a saved reporting week. Choose a saved week below, or select another date.
+        </small>
+      )}
+
+      {activeWeek && (
+      <>
       <div className="reporting-week-heading">
         <div>
           <span className="eyebrow">Reporting calendar</span>
@@ -264,6 +331,14 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
             </button>
           ))}
         </div>
+      )}
+      </>
+      )}
+
+      {!activeWeek && (
+        <small className="reporting-week-empty">
+          No reporting weeks are saved for this month yet.
+        </small>
       )}
     </div>
   )
