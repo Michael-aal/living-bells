@@ -1541,6 +1541,7 @@ app.post('/api/support/tickets', requireChurchAdmin, async (req, res, next) => {
 
 app.get('/api/support/tickets/:id/messages', async (req, res, next) => {
   try {
+    if (!['DEV', 'ADMIN'].includes(req.user.role)) return res.status(403).json({ message: 'Church administrator access is required.' })
     const id = Number(req.params.id)
     const where = req.user.role === 'DEV' ? { id } : { id, churchId: req.user.churchId }
     const ticket = await prisma.supportTicket.findFirst({ where })
