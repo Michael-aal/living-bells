@@ -113,6 +113,10 @@ function currentUserId(req) {
   return Number(req.user?.sub)
 }
 
+function ownRecordFilter(req) {
+  return req.user?.role === 'STAFF' ? { recordedById: currentUserId(req) } : undefined
+}
+
 app.get('/api/auth/staff-invitation', async (req, res, next) => {
   try {
     const code = String(req.query.code || '').trim().toUpperCase()
@@ -349,7 +353,7 @@ app.post('/api/church-applications', async (req, res, next) => {
       return res.status(400).json({ message: 'Church name, applicant name and a valid contact email are required.' })
     }
     const recent = await prisma.churchApplication.findFirst({
-      where: { applicantEmail, status: { in: ['PENDING', 'NEEDS_INFO', 'APPROVED'] } },
+      where: { applicantEmail, status: { in: ['PENDING', 'NEEDS_INFO', 'APPROVED', 'ACTIVATED'] } },
       orderBy: { createdAt: 'desc' },
       select: { id: true, status: true, createdAt: true },
     })
@@ -1356,10 +1360,16 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
         const church = await tx.church.create({
           data: { name: application.churchName, denomination: application.denomination, address: application.address, contactEmail: application.applicantEmail, phone: application.phone },
         })
-        const next = await tx.churchApplication.update({
-          where: { id },
+        const claimed = await tx.churchApplication.updateMany({
+          where: { id, status: { in: ['PENDING', 'NEEDS_INFO'] } },
           data: { status: 'APPROVED', reviewNote: note, reviewedById: currentUserId(req), reviewedAt: new Date(), churchId: church.id, activationTokenHash: tokenHash, activationExpiresAt: expiresAt },
         })
+        if (claimed.count !== 1) {
+          const conflict = new Error('This application has already been reviewed.')
+          conflict.code = 'APPLICATION_ALREADY_REVIEWED'
+          throw conflict
+        }
+        const next = await tx.churchApplication.findUnique({ where: { id } })
         const applicant = await tx.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true } })
         if (applicant.length) await tx.notification.createMany({ data: applicant.map(user => ({ userId: user.id, type: 'CHURCH_APPLICATION', title: 'Church application approved', message: `${application.churchName} was approved and is awaiting administrator activation.`, metadata: { applicationId: id } })) })
         return next
@@ -1373,7 +1383,10 @@ app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, 
       })
     }
     res.json({ application: updated, activationLink, activationExpiresAt: updated.activationExpiresAt, message: action === 'APPROVE' ? 'Application approved. Share the one-time activation link securely with the applicant; it expires in 72 hours.' : action === 'REJECT' ? 'Application rejected.' : 'More information requested.' })
-  } catch (error) { next(error) }
+  } catch (error) {
+    if (error?.code === 'APPLICATION_ALREADY_REVIEWED') return res.status(409).json({ message: error.message })
+    next(error)
+  }
 })
 
 function requireChurchAdmin(req, res, next) {
