@@ -1476,7 +1476,7 @@ app.post('/api/dev/church-applications/:id/resend-activation', requireDevReady, 
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
     const updated = await prisma.churchApplication.updateMany({
-      where: { id, status: 'APPROVED', activatedAt: null },
+      where: { id, status: 'APPROVED', activatedAt: null, activationTokenHash: application.activationTokenHash },
       data: { activationTokenHash: tokenHash, activationExpiresAt: expiresAt },
     })
     if (updated.count !== 1) return res.status(409).json({ message: 'The application changed while the activation email was being prepared.' })
