@@ -34,12 +34,12 @@ try {
   activityA = await runAs(churchA.id, () => prisma.activity.create({ data: { name: 'A activity', date: new Date('2026-01-04T00:00:00.000Z') } }))
   activityB = await runAs(churchB.id, () => prisma.activity.create({ data: { name: 'B activity', date: new Date('2026-01-11T00:00:00.000Z') } }))
 
-  ticketA = await prisma.supportTicket.create({
-    data: { churchId: churchA.id, createdById: userA.id, title: 'Tenant A ticket', category: 'BUG', description: 'Tenant isolation smoke test ticket A' },
-  })
-  ticketB = await prisma.supportTicket.create({
-    data: { churchId: churchB.id, createdById: userB.id, title: 'Tenant B ticket', category: 'BUG', description: 'Tenant isolation smoke test ticket B' },
-  })
+  ticketA = await runAs(churchA.id, () => prisma.supportTicket.create({
+    data: { createdBy: { connect: { id: userA.id } }, title: 'Tenant A ticket', category: 'BUG', description: 'Tenant isolation smoke test ticket A' },
+  }))
+  ticketB = await runAs(churchB.id, () => prisma.supportTicket.create({
+    data: { createdBy: { connect: { id: userB.id } }, title: 'Tenant B ticket', category: 'BUG', description: 'Tenant isolation smoke test ticket B' },
+  }))
 
   const visibleActivitiesA = await runAs(churchA.id, () => prisma.activity.findMany())
   assert.deepEqual(visibleActivitiesA.map(item => item.id), [activityA.id], 'church A must only list its own activities')
