@@ -148,6 +148,7 @@ export const api = {
   activateChurchApplication: payload => apiRequest('/api/church-applications/activate', { method: 'POST', body: JSON.stringify(payload) }),
   churchApplications: () => apiRequest('/api/dev/church-applications'),
   reviewChurchApplication: (id, payload) => apiRequest('/api/dev/church-applications/' + id, { method: 'PATCH', body: JSON.stringify(payload) }),
+  resendChurchActivation: id => apiRequest('/api/dev/church-applications/' + id + '/resend-activation', { method: 'POST', body: JSON.stringify({}) }),
   supportTickets: () => apiRequest('/api/support/tickets'),
   createSupportTicket: payload => apiRequest('/api/support/tickets', { method: 'POST', body: JSON.stringify(payload) }),
   supportTicketMessages: id => apiRequest('/api/support/tickets/' + id + '/messages'),
