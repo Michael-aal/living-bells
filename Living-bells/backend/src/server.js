@@ -802,7 +802,7 @@ app.put('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
     if(error)return res.status(400).json({message:error})
     const start=normalizeDay(req.body.startDate), end=normalizeDay(req.body.endDate)
     const monthRecord=await prisma.reportingMonth.upsert({
-      where:{year_month:{year,month}},
+      where:{churchId_year_month:{churchId:Number(req.user.churchId),year,month}},
       update:{},
       create:{year,month,createdById:currentUserId(req)}
     })
@@ -845,7 +845,7 @@ app.post('/api/reporting/weeks', requireAdmin, async (req,res,next)=>{
     if(error)return res.status(400).json({message:error})
     const start=normalizeDay(req.body.startDate), end=normalizeDay(req.body.endDate)
     const monthRecord=await prisma.reportingMonth.upsert({
-      where:{year_month:{year,month}},
+      where:{churchId_year_month:{churchId:Number(req.user.churchId),year,month}},
       update:{},
       create:{year,month,createdById:currentUserId(req)}
     })
