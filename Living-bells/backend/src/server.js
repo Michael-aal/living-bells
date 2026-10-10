@@ -13,7 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
 const DEV_RECOVERY_SECRET = String(process.env.DEV_ADMIN_RECOVERY_SECRET || '').trim()
 const DEV_RECOVERY_ENCRYPTION_KEY = crypto.createHash('sha256').update(String(process.env.DEV_RECOVERY_ENCRYPTION_KEY || JWT_SECRET)).digest()
 const tenantContext = new AsyncLocalStorage()
-const TENANT_MODELS = new Set(['Activity', 'Attendance', 'Expense', 'SundayReview', 'AttendanceRecord', 'AttendanceEntry', 'FinancialRecord', 'WeeklyReport', 'ReportingMonth', 'ReportingWeek', 'ConfigOption', 'StaffInvitation'])
+const TENANT_MODELS = new Set(['Activity', 'Attendance', 'Expense', 'SundayReview', 'AttendanceRecord', 'AttendanceEntry', 'FinancialRecord', 'WeeklyReport', 'ReportingMonth', 'ReportingWeek', 'ConfigOption', 'StaffInvitation', 'SupportTicket'])
 
 function addChurchToData(data, churchId) {
   if (Array.isArray(data)) return data.map(item => addChurchToData(item, churchId))
@@ -379,6 +379,73 @@ app.patch('/api/auth/me', authenticate, async (req, res, next) => {
     if (error?.code === 'P2025') return res.status(404).json({ message: 'User account not found' })
     next(error)
   }
+})
+
+
+app.post('/api/church-applications', async (req, res, next) => {
+  try {
+    const churchName = String(req.body?.churchName || '').trim()
+    const applicantName = String(req.body?.applicantName || '').trim()
+    const applicantEmail = String(req.body?.applicantEmail || '').trim().toLowerCase()
+    const denomination = String(req.body?.denomination || '').trim() || null
+    const address = String(req.body?.address || '').trim() || null
+    const phone = String(req.body?.phone || '').trim() || null
+    if (churchName.length < 2 || applicantName.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applicantEmail)) {
+      return res.status(400).json({ message: 'Church name, applicant name and a valid contact email are required.' })
+    }
+    const recent = await prisma.churchApplication.findFirst({
+      where: { applicantEmail, status: { in: ['PENDING', 'NEEDS_INFO', 'APPROVED'] } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, status: true, createdAt: true },
+    })
+    if (recent) return res.status(409).json({ message: 'An application for this email is already being reviewed or awaiting activation.', application: recent })
+    const application = await prisma.churchApplication.create({
+      data: { churchName, applicantName, applicantEmail, denomination, address, phone },
+      select: { id: true, churchName: true, applicantName: true, applicantEmail: true, status: true, createdAt: true },
+    })
+    const developers = await prisma.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true } })
+    if (developers.length) await prisma.notification.createMany({
+      data: developers.map(user => ({
+        userId: user.id,
+        type: 'CHURCH_APPLICATION',
+        title: 'New church application',
+        message: `${churchName} submitted a church registration application.`,
+        metadata: { applicationId: application.id, action: 'review-church-application' },
+      })),
+    })
+    res.status(201).json({ message: 'Application submitted. It will remain pending until the Living Bells developer team reviews it.', application })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/church-applications/activate', async (req, res, next) => {
+  try {
+    const token = String(req.body?.token || '').trim()
+    const password = String(req.body?.password || '')
+    if (!token || password.length < 8) return res.status(400).json({ message: 'A valid activation link and password of at least 8 characters are required.' })
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+    const application = await prisma.churchApplication.findFirst({
+      where: { activationTokenHash: tokenHash, status: 'APPROVED', activationExpiresAt: { gt: new Date() }, activatedAt: null },
+    })
+    if (!application || !application.churchId) return res.status(400).json({ message: 'This activation link is invalid, expired or already used. Contact Living Bells support.' })
+    if (await prisma.user.findUnique({ where: { email: application.applicantEmail }, select: { id: true } })) {
+      return res.status(409).json({ message: 'An account already exists for this email. Contact support to resolve the application.' })
+    }
+    const passwordHash = await bcrypt.hash(password, 12)
+    const result = await prisma.$transaction(async tx => {
+      const user = await tx.user.create({
+        data: { name: application.applicantName, email: application.applicantEmail, passwordHash, role: 'ADMIN', churchId: application.churchId, emailVerifiedAt: new Date() },
+      })
+      await tx.churchApplication.update({
+        where: { id: application.id },
+        data: { status: 'ACTIVATED', activatedAt: new Date(), activationTokenHash: null, activationExpiresAt: null },
+      })
+      return user
+    })
+    res.status(201).json({
+      message: 'Church administrator account activated. You can now sign in.',
+      user: { id: result.id, name: result.name, email: result.email, role: result.role, churchId: result.churchId, emailVerified: true },
+    })
+  } catch (error) { next(error) }
 })
 
 app.use('/api', authenticate)
@@ -1294,6 +1361,141 @@ app.post('/api/admin/staff/:staffId/reviews', requireAdmin, async (req, res, nex
       include: { staff: { select: { id: true, name: true, email: true } }, admin: { select: { id: true, name: true, email: true } } },
     })
     res.status(201).json(review)
+  } catch (error) { next(error) }
+})
+
+
+app.get('/api/dev/church-applications', requireDevReady, async (_req, res, next) => {
+  try {
+    const applications = await prisma.churchApplication.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { church: { select: { id: true, name: true } }, reviewedBy: { select: { id: true, name: true, email: true } } },
+    })
+    res.set('Cache-Control', 'no-store')
+    res.json(applications)
+  } catch (error) { next(error) }
+})
+
+app.patch('/api/dev/church-applications/:id', requireDevReady, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const action = String(req.body?.action || '').toUpperCase()
+    const note = String(req.body?.note || '').trim() || null
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid application id.' })
+    if (!['APPROVE', 'REJECT', 'NEEDS_INFO'].includes(action)) return res.status(400).json({ message: 'Action must be APPROVE, REJECT or NEEDS_INFO.' })
+    const application = await prisma.churchApplication.findUnique({ where: { id } })
+    if (!application) return res.status(404).json({ message: 'Application not found.' })
+    if (application.status !== 'PENDING' && application.status !== 'NEEDS_INFO') return res.status(409).json({ message: 'This application has already been decided.' })
+    if (action === 'NEEDS_INFO' && !note) return res.status(400).json({ message: 'Add a note describing the information required.' })
+    if (action === 'REJECT' && !note) return res.status(400).json({ message: 'A rejection reason is required.' })
+
+    let activationLink = null
+    let updated
+    if (action === 'APPROVE') {
+      const rawToken = crypto.randomBytes(32).toString('base64url')
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
+      const origin = String(process.env.APP_BASE_URL || 'https://living-bells.vercel.app').replace(/\/$/, '')
+      const result = await prisma.$transaction(async tx => {
+        const church = await tx.church.create({
+          data: { name: application.churchName, denomination: application.denomination, address: application.address, contactEmail: application.applicantEmail, phone: application.phone },
+        })
+        const next = await tx.churchApplication.update({
+          where: { id },
+          data: { status: 'APPROVED', reviewNote: note, reviewedById: currentUserId(req), reviewedAt: new Date(), churchId: church.id, activationTokenHash: tokenHash, activationExpiresAt: expiresAt },
+        })
+        const applicant = await tx.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true } })
+        if (applicant.length) await tx.notification.createMany({ data: applicant.map(user => ({ userId: user.id, type: 'CHURCH_APPLICATION', title: 'Church application approved', message: `${application.churchName} was approved and is awaiting administrator activation.`, metadata: { applicationId: id } })) })
+        return next
+      })
+      updated = result
+      activationLink = `${origin}/?churchActivation=${encodeURIComponent(rawToken)}`
+    } else {
+      updated = await prisma.churchApplication.update({
+        where: { id },
+        data: { status: action === 'REJECT' ? 'REJECTED' : 'NEEDS_INFO', reviewNote: note, reviewedById: currentUserId(req), reviewedAt: new Date(), activationTokenHash: null, activationExpiresAt: null },
+      })
+    }
+    res.json({ application: updated, activationLink, activationExpiresAt: updated.activationExpiresAt, message: action === 'APPROVE' ? 'Application approved. Share the one-time activation link securely with the applicant; it expires in 72 hours.' : action === 'REJECT' ? 'Application rejected.' : 'More information requested.' })
+  } catch (error) { next(error) }
+})
+
+function requireChurchAdmin(req, res, next) {
+  if (req.user?.role !== 'ADMIN') return res.status(403).json({ message: 'Church administrator access is required.' })
+  if (!req.user?.churchId) return res.status(403).json({ message: 'This administrator is not assigned to a church.' })
+  next()
+}
+
+app.get('/api/support/tickets', async (req, res, next) => {
+  try {
+    if (req.user.role !== 'DEV' && req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Church administrator access is required.' })
+    const where = req.user.role === 'DEV' ? {} : { churchId: req.user.churchId }
+    const tickets = await prisma.supportTicket.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      include: { church: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true, email: true } }, _count: { select: { messages: true } } },
+    })
+    res.json(tickets)
+  } catch (error) { next(error) }
+})
+
+app.post('/api/support/tickets', requireChurchAdmin, async (req, res, next) => {
+  try {
+    const title = String(req.body?.title || '').trim()
+    const category = String(req.body?.category || 'BUG').trim().toUpperCase()
+    const description = String(req.body?.description || '').trim()
+    if (title.length < 4 || description.length < 10 || !['BUG', 'QUESTION', 'ACCESS', 'DATA', 'OTHER'].includes(category)) return res.status(400).json({ message: 'Provide a title, a detailed description and a valid category.' })
+    const ticket = await prisma.supportTicket.create({
+      data: { churchId: req.user.churchId, createdById: currentUserId(req), title, category, description },
+      include: { church: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true, email: true } } },
+    })
+    const developers = await prisma.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true } })
+    if (developers.length) await prisma.notification.createMany({ data: developers.map(user => ({ userId: user.id, type: 'SUPPORT_TICKET', title: 'New support ticket', message: `${ticket.church?.name || 'A church'}: ${title}`, metadata: { ticketId: ticket.id } })) })
+    res.status(201).json(ticket)
+  } catch (error) { next(error) }
+})
+
+app.get('/api/support/tickets/:id/messages', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const where = req.user.role === 'DEV' ? { id } : { id, churchId: req.user.churchId }
+    const ticket = await prisma.supportTicket.findFirst({ where })
+    if (!ticket) return res.status(404).json({ message: 'Support ticket not found.' })
+    const messages = await prisma.supportTicketMessage.findMany({
+      where: { ticketId: id, ...(req.user.role === 'DEV' ? {} : { internal: false }) },
+      include: { author: { select: { id: true, name: true, role: true } } },
+      orderBy: { createdAt: 'asc' },
+    })
+    res.json(messages)
+  } catch (error) { next(error) }
+})
+
+app.post('/api/support/tickets/:id/messages', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const body = String(req.body?.body || '').trim()
+    const internal = req.user.role === 'DEV' && req.body?.internal === true
+    if (!Number.isInteger(id) || id < 1 || body.length < 2 || body.length > 8000) return res.status(400).json({ message: 'A message between 2 and 8000 characters is required.' })
+    if (!['DEV', 'ADMIN'].includes(req.user.role)) return res.status(403).json({ message: 'Only church administrators and developers can reply.' })
+    const ticket = await prisma.supportTicket.findFirst({ where: req.user.role === 'DEV' ? { id } : { id, churchId: req.user.churchId } })
+    if (!ticket) return res.status(404).json({ message: 'Support ticket not found.' })
+    const message = await prisma.supportTicketMessage.create({ data: { ticketId: id, authorId: currentUserId(req), body, internal } })
+    await prisma.supportTicket.update({ where: { id }, data: { status: req.user.role === 'DEV' ? 'WAITING_FOR_CHURCH' : 'IN_PROGRESS' } })
+    if (req.user.role === 'DEV') await prisma.notification.create({ data: { userId: ticket.createdById, type: 'SUPPORT_REPLY', title: 'Support replied to your ticket', message: `A developer replied to “${ticket.title}”.`, metadata: { ticketId: id } } })
+    res.status(201).json(message)
+  } catch (error) { next(error) }
+})
+
+app.patch('/api/dev/support/tickets/:id', requireDevReady, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const status = String(req.body?.status || '').toUpperCase()
+    const priority = String(req.body?.priority || '').toUpperCase()
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid ticket id.' })
+    if (!['OPEN', 'IN_PROGRESS', 'WAITING_FOR_CHURCH', 'RESOLVED', 'CLOSED'].includes(status)) return res.status(400).json({ message: 'Invalid ticket status.' })
+    if (priority && !['LOW', 'NORMAL', 'HIGH', 'URGENT'].includes(priority)) return res.status(400).json({ message: 'Invalid priority.' })
+    const ticket = await prisma.supportTicket.update({ where: { id }, data: { status, ...(priority ? { priority } : {}) } })
+    res.json(ticket)
   } catch (error) { next(error) }
 })
 
