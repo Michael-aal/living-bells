@@ -54,6 +54,7 @@ export default function DevDashboard({ user, onLogout }) {
   const [applications, setApplications] = useState([])
   const [applicationNotes, setApplicationNotes] = useState({})
   const [activationLink, setActivationLink] = useState('')
+  const [activationEmailRetryId, setActivationEmailRetryId] = useState(null)
   const [tickets, setTickets] = useState([])
   const [selectedTicket, setSelectedTicket] = useState(null)
   const [ticketMessages, setTicketMessages] = useState([])
@@ -155,10 +156,23 @@ export default function DevDashboard({ user, onLogout }) {
     try {
       const result = await api.reviewChurchApplication(id, { action, note: applicationNotes[id] || '' })
       if (result.activationLink) setActivationLink(result.activationLink)
+      setActivationEmailRetryId(result.emailDeliveryFailed ? id : null)
       setNotice(result.message || 'Application updated.')
       await load()
     } catch (err) {
       setError(err.message || 'Could not review church application')
+    }
+  }
+
+  async function resendActivationEmail(id) {
+    setError('')
+    setNotice('')
+    try {
+      const result = await api.resendChurchActivation(id)
+      setActivationEmailRetryId(null)
+      setNotice(result.message || 'Activation email sent.')
+    } catch (err) {
+      setError(err.message || 'Could not resend the activation email')
     }
   }
 
@@ -296,6 +310,7 @@ export default function DevDashboard({ user, onLogout }) {
         {tab === 'applications' && <section className="dev-panel">
           <div className="dev-panel-head"><div><span className="dev-eyebrow">Approval queue</span><h2>Church applications</h2><p>New churches remain pending until a developer reviews them. Approval creates a church workspace and a time-limited activation link.</p></div><span className="dev-live">{applications.filter(item => item.status === 'PENDING' || item.status === 'NEEDS_INFO').length} awaiting review</span></div>
           {activationLink && <div className="dev-activation-link"><strong>One-time activation link</strong><p>Share this link privately with the applicant. It expires in 72 hours and can be used once.</p><input readOnly value={activationLink} aria-label="Church administrator activation link" /><button type="button" className="dev-primary" onClick={() => navigator.clipboard?.writeText(activationLink)}>Copy activation link</button></div>}
+          {activationEmailRetryId && <div className="dev-activation-link"><strong>Activation email delivery needs a retry</strong><p>The application is approved, but the email provider did not confirm delivery. The one-time link is not shown here in production.</p><button type="button" className="dev-primary" onClick={() => resendActivationEmail(activationEmailRetryId)}>Retry activation email</button></div>}
           <div className="dev-application-grid">
             {applications.map(item => <article className="dev-application-card" key={item.id}>
               <div className="dev-panel-head"><div><span className="dev-eyebrow">Application #{item.id}</span><h3>{item.churchName}</h3></div><span className={item.status === 'ACTIVATED' ? 'dev-status ok' : item.status === 'REJECTED' ? 'dev-status off' : 'dev-status'}>{item.status.replaceAll('_', ' ')}</span></div>
