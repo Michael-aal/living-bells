@@ -65,6 +65,8 @@ ALTER TABLE "AttendanceRecord" DROP CONSTRAINT IF EXISTS "AttendanceRecord_servi
 CREATE UNIQUE INDEX "AttendanceRecord_churchId_serviceDate_key" ON "AttendanceRecord"("churchId", "serviceDate");
 ALTER TABLE "WeeklyReport" DROP CONSTRAINT IF EXISTS "WeeklyReport_reportDate_key";
 CREATE UNIQUE INDEX "WeeklyReport_churchId_reportDate_key" ON "WeeklyReport"("churchId", "reportDate");
+ALTER TABLE "WeeklyReport" DROP CONSTRAINT IF EXISTS "WeeklyReport_clientRequestId_key";
+CREATE UNIQUE INDEX "WeeklyReport_churchId_clientRequestId_key" ON "WeeklyReport"("churchId", "clientRequestId");
 ALTER TABLE "ReportingMonth" DROP CONSTRAINT IF EXISTS "ReportingMonth_year_month_key";
 CREATE UNIQUE INDEX "ReportingMonth_churchId_year_month_key" ON "ReportingMonth"("churchId", "year", "month");
 ALTER TABLE "ConfigOption" DROP CONSTRAINT IF EXISTS "ConfigOption_kind_name_key";
