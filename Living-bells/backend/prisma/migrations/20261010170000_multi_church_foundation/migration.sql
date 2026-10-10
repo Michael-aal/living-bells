@@ -73,15 +73,15 @@ ALTER TABLE "ReportingWeek" ADD CONSTRAINT "ReportingWeek_churchId_fkey" FOREIGN
 ALTER TABLE "ConfigOption" ADD CONSTRAINT "ConfigOption_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "StaffInvitation" ADD CONSTRAINT "StaffInvitation_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-ALTER TABLE "AttendanceRecord" DROP CONSTRAINT IF EXISTS "AttendanceRecord_serviceDate_key";
+DROP INDEX IF EXISTS "AttendanceRecord_serviceDate_key";
 CREATE UNIQUE INDEX "AttendanceRecord_churchId_serviceDate_key" ON "AttendanceRecord"("churchId", "serviceDate");
-ALTER TABLE "WeeklyReport" DROP CONSTRAINT IF EXISTS "WeeklyReport_reportDate_key";
+DROP INDEX IF EXISTS "WeeklyReport_reportDate_key";
 CREATE UNIQUE INDEX "WeeklyReport_churchId_reportDate_key" ON "WeeklyReport"("churchId", "reportDate");
-ALTER TABLE "WeeklyReport" DROP CONSTRAINT IF EXISTS "WeeklyReport_clientRequestId_key";
+DROP INDEX IF EXISTS "WeeklyReport_clientRequestId_key";
 CREATE UNIQUE INDEX "WeeklyReport_churchId_clientRequestId_key" ON "WeeklyReport"("churchId", "clientRequestId");
-ALTER TABLE "ReportingMonth" DROP CONSTRAINT IF EXISTS "ReportingMonth_year_month_key";
+DROP INDEX IF EXISTS "ReportingMonth_year_month_key";
 CREATE UNIQUE INDEX "ReportingMonth_churchId_year_month_key" ON "ReportingMonth"("churchId", "year", "month");
-ALTER TABLE "ConfigOption" DROP CONSTRAINT IF EXISTS "ConfigOption_kind_name_key";
+DROP INDEX IF EXISTS "ConfigOption_kind_name_key";
 CREATE UNIQUE INDEX "ConfigOption_churchId_kind_name_key" ON "ConfigOption"("churchId", "kind", "name");
 
 CREATE INDEX "User_churchId_idx" ON "User"("churchId");
