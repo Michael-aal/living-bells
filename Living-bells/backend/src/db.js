@@ -10,10 +10,36 @@ const tenantModels = new Set([
   'SupportTicket',
 ])
 
-function addChurchRelation(data, churchId) {
+const relationForeignKeys = {
+  Activity: { reportingWeekId: 'reportingWeek', recordedById: 'recordedBy' },
+  Attendance: { activityId: 'activity', recordedById: 'recordedBy' },
+  Expense: { activityId: 'activity', reportingWeekId: 'reportingWeek', recordedById: 'recordedBy' },
+  SundayReview: { staffId: 'staff', adminId: 'admin' },
+  AttendanceRecord: { recordedById: 'recordedBy' },
+  AttendanceEntry: { attendanceRecordId: 'attendanceRecord' },
+  FinancialRecord: { reportingWeekId: 'reportingWeek', recordedById: 'recordedBy' },
+  WeeklyReport: { reportingWeekId: 'reportingWeek', createdById: 'createdBy' },
+  ReportingMonth: { createdById: 'createdBy' },
+  ReportingWeek: { monthId: 'month', createdById: 'createdBy' },
+  ConfigOption: { createdById: 'createdBy' },
+  StaffInvitation: { invitedById: 'invitedBy' },
+  SupportTicket: { createdById: 'createdBy' },
+}
+
+function addChurchRelation(data, churchId, model, operation) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return data
   const result = { ...data }
   delete result.churchId
+  for (const [foreignKey, relationName] of Object.entries(relationForeignKeys[model] || {})) {
+    if (!(foreignKey in result)) continue
+    const foreignId = result[foreignKey]
+    delete result[foreignKey]
+    if (foreignId == null) {
+      if (operation === 'update') result[relationName] = { disconnect: true }
+    } else {
+      result[relationName] = { connect: { id: foreignId } }
+    }
+  }
   result.church = { connect: { id: churchId } }
   return result
 }
@@ -42,11 +68,11 @@ export const prisma = basePrisma.$extends({
           'delete', 'deleteMany', 'upsert',
         ])
         if (scopedOperations.has(operation)) scoped.where = { ...(scoped.where || {}), churchId }
-        if (operation === 'create') scoped.data = addChurchRelation(scoped.data, churchId)
+        if (operation === 'create') scoped.data = addChurchRelation(scoped.data, churchId, model, 'create')
         if (operation === 'createMany') scoped.data = addChurchScalar(scoped.data, churchId)
         if (operation === 'upsert') {
-          scoped.create = addChurchRelation(scoped.create, churchId)
-          if (scoped.update) scoped.update = addChurchRelation(scoped.update, churchId)
+          scoped.create = addChurchRelation(scoped.create, churchId, model, 'create')
+          if (scoped.update) scoped.update = addChurchRelation(scoped.update, churchId, model, 'update')
         }
         if (operation === 'update' && scoped.data) scoped.data = addChurchRelation(scoped.data, churchId)
         if (operation === 'updateMany' && scoped.data) scoped.data = addChurchScalar(scoped.data, churchId)
