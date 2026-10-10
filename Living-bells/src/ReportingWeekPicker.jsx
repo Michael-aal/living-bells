@@ -53,7 +53,6 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
   const selectedDateObj = new Date(selectedDate + 'T12:00:00Z')
   const selectedYear = selectedDateObj.getUTCFullYear()
   const selectedMonthNumber = selectedDateObj.getUTCMonth() + 1
-  const selectedDayNumber = selectedDateObj.getUTCDate()
   const [configuredYears, setConfiguredYears] = useState([])
   const [months, setMonths] = useState([])
   const [loading, setLoading] = useState(false)
