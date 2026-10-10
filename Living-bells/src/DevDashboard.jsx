@@ -37,7 +37,6 @@ function Stat({ label, value, hint }) {
 export default function DevDashboard({ user, onLogout }) {
   const [tab, setTab] = useState('overview')
   const [overview, setOverview] = useState(null)
-  const [staff, setStaff] = useState([])
   const [invitations, setInvitations] = useState([])
   const [developers, setDevelopers] = useState([])
   const [directory, setDirectory] = useState([])
@@ -61,9 +60,11 @@ export default function DevDashboard({ user, onLogout }) {
   const [ticketReply, setTicketReply] = useState('')
   const [ticketInternal, setTicketInternal] = useState(false)
 
-  async function load() {
-    setLoading(true)
-    setError('')
+  async function load({ initial = false } = {}) {
+    if (!initial) {
+      setLoading(true)
+      setError('')
+    }
     try {
       const [overviewData, directoryData, invitationData, developerData, notificationData, applicationData, ticketData] = await Promise.all([
         api.devOverview(),
@@ -76,7 +77,6 @@ export default function DevDashboard({ user, onLogout }) {
       ])
       setOverview({ ...overviewData, users: directoryData?.counts || overviewData?.users || {} })
       setDirectory(directoryData?.users || [])
-      setStaff((directoryData?.users || []).filter(item => item.role === 'STAFF'))
       setInvitations(invitationData || [])
       setDevelopers(developerData || [])
       setNotifications(notificationData || [])
@@ -89,7 +89,7 @@ export default function DevDashboard({ user, onLogout }) {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { Promise.resolve().then(() => load({ initial: true })) }, [])
 
   async function loadRecoveryKey() {
     setError('')
