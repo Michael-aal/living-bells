@@ -704,7 +704,7 @@ async function validateReportingWeekRange({year,month,weekNumber,startDate,endDa
   // Week numbers are scoped to the exact year + month via the existing
   // ReportingMonth/ReportingWeek composite uniqueness constraints.
   const monthRecord=await prisma.reportingMonth.findUnique({
-    where:{year_month:{year,month}},
+    where:{churchId_year_month:{churchId:Number(req.user.churchId),year,month}},
     select:{id:true},
   })
 
@@ -953,7 +953,7 @@ app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
   res.status(201).json(reportDto(r))
  }catch(e){
   if(e?.code==='P2002'){
-   const existing=await prisma.weeklyReport.findUnique({where:{reportDate:validateWeeklyPayload(req.body).data.reportDate},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}}).catch(()=>null)
+   const existing=await prisma.weeklyReport.findFirst({where:{reportDate:validateWeeklyPayload(req.body).data.reportDate},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}}).catch(()=>null)
    if(existing){
     const submitted=validateWeeklyPayload(req.body).data
     if(sameWeeklyReport(existing,submitted))return res.status(200).json({...reportDto(existing),duplicate:true})
