@@ -1,0 +1,90 @@
+name: Multi-church upgrade checks
+
+on:
+  push:
+    branches:
+      - feat/multi-church-foundation
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Living-bells
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Living-bells/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Lint changed authentication, developer console and support UI
+        run: npx eslint src/Auth.jsx src/DevDashboard.jsx src/SupportPage.jsx
+      - name: Full repository lint diagnostic (existing baseline issues tracked separately)
+        run: npm run lint
+        continue-on-error: true
+
+  backend-migration-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: livingbells
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d livingbells"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: Living-bells/backend
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
+      DIRECT_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Living-bells/backend/package-lock.json
+      - run: npm ci
+      - name: Build a disposable database from the current main schema
+        run: |
+          git show origin/main:Living-bells/backend/prisma/schema.prisma > /tmp/living-bells-baseline.prisma
+          npx prisma db push --schema=/tmp/living-bells-baseline.prisma --skip-generate
+      - name: Apply only the new expand-and-backfill migration
+        run: npx prisma db execute --schema=prisma/schema.prisma --file=prisma/migrations/20261010170000_multi_church_foundation/migration.sql
+      - run: npx prisma generate
+      - run: node scripts/tenant-isolation-smoke.js
+
+  backend-schema:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Living-bells/backend
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
+      DIRECT_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Living-bells/backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npx prisma generate

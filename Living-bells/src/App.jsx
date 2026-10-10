@@ -5,6 +5,7 @@ import ReportsPage from './ReportsPage'
 import ReportingCalendar from './ReportingCalendar'
 import './App.css'
 import DevDashboard from './DevDashboard'
+import SupportPage from './SupportPage'
 import DevPasswordSetup from './DevPasswordSetup'
 import Auth from './Auth'
 import Landing from './Landing'
@@ -98,7 +99,7 @@ function App() {
     try { return JSON.parse(localStorage.getItem('living_bells_user') || 'null') } catch { return null }
   })
   const [page, setPage] = useState('dashboard')
-  const [showAuth, setShowAuth] = useState(false)
+  const [showAuth, setShowAuth] = useState(() => new URLSearchParams(window.location.hash.slice(1)).has('churchActivation'))
   const [reportEditDate, setReportEditDate] = useState(null)
   const [financeEditDate, setFinanceEditDate] = useState(null)
   const [reportRefresh, setReportRefresh] = useState(0)
@@ -533,7 +534,7 @@ function App() {
       <span className="label">Workspace</span>
       {[
         ['dashboard', 'Dashboard'], ['attendance', 'Attendance'],
-        ['activities', 'Activities'], ['finance', 'Finance'], ['reports', 'Reports'], ['calendar', 'Calendar'], ...(isAdmin ? [['staff', 'Staff']] : []), ['settings', 'Settings']
+        ['activities', 'Activities'], ['finance', 'Finance'], ['reports', 'Reports'], ['calendar', 'Calendar'], ...(isAdmin ? [['staff', 'Staff'], ['support', 'Support']] : []), ['settings', 'Settings']
       ].map(([id, name]) => <button key={id} className={page === id ? 'nav active' : 'nav'} onClick={() => setPage(id)}>{name}</button>)}
       <div className="side-status"><span /> <div><b>{sync}</b><small>Authenticated API</small></div></div>
     </aside>
@@ -553,6 +554,7 @@ function App() {
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={financeEditDate || reportingContext?.date} onInitialDateHandled={() => setFinanceEditDate(null)} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
         {!loading && page === 'calendar' && <ReportingCalendar user={user} current={reportingContext} />}
+        {!loading && page === 'support' && isAdmin && <SupportPage />}
         {!loading && page === 'settings' && <SettingsPage user={user} onEditProfile={() => setModal('profile')} onLogout={logout} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} onOpenRecord={openRecordFromSearch} />}
         
@@ -589,7 +591,7 @@ function App() {
       {[
         ['dashboard','⌂'], ['attendance','◉'], ['activities','▣'], ['finance','₦']
       ].map(([id, icon]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setMobileMoreOpen(false) }}><i aria-hidden="true">{icon}</i><span>{title(id)}</span></button>)}
-      <button type="button" className={mobileMoreOpen || ['reports','calendar','staff','settings'].includes(page) ? 'active' : ''} onClick={() => { setMobileMoreOpen(value => !value); setTimeout(() => mobileNavRef.current?.querySelector('.active')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 0) }} aria-expanded={mobileMoreOpen}>
+      <button type="button" className={mobileMoreOpen || ['reports','calendar','staff','support','settings'].includes(page) ? 'active' : ''} onClick={() => { setMobileMoreOpen(value => !value); setTimeout(() => mobileNavRef.current?.querySelector('.active')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 0) }} aria-expanded={mobileMoreOpen}>
         <i aria-hidden="true">•••</i><span>More</span>
       </button>
     </nav>
@@ -597,7 +599,7 @@ function App() {
       <div className="mobile-more-head"><div><b>More</b><small>Reports and settings</small></div><button type="button" onClick={() => setMobileMoreOpen(false)} aria-label="Close menu">×</button></div>
       <div className="mobile-more-grid">
         {[
-          ['reports','Reports'], ['calendar','Calendar'], ...(isAdmin ? [['staff','Staff']] : []), ['settings','Settings']
+          ['reports','Reports'], ['calendar','Calendar'], ...(isAdmin ? [['staff','Staff'], ['support','Support']] : []), ['settings','Settings']
         ].map(([id, label]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setMobileMoreOpen(false) }}><span>{label}</span><small>{id === 'calendar' ? 'Set seven-day periods' : id === 'reports' ? 'View summaries' : id === 'settings' ? 'Account and sign out' : 'Manage team'}</small></button>)}
       </div>
     </div>}
@@ -737,8 +739,8 @@ function Stat({ icon, name, value, note }) { return <div className="stat"><span 
 function Action({ icon, title, text, onClick }) { return <button type="button" className="action-card" onClick={onClick}><span className="stat-icon">{icon}</span><span><b>{title}</b><small>{text}</small></span><strong>→</strong></button> }
 function Card({ title, children }) { return <section className="card"><div className="card-head"><h2>{title}</h2></div>{children}</section> }
 function Records({ title, eyebrow, action, onAdd, onCreate, isAdmin, onPrint, children }) { return <section className="card full"><div className="card-head"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div><div className="record-actions">{!isAdmin && <button type="button" className="primary" onClick={onAdd}>{action}</button>}<details className="action-menu"><summary className="secondary">More</summary><div className="action-menu-panel">{!isAdmin && <button type="button" onClick={onCreate}>Create option</button>}{isAdmin && <button type="button" onClick={onPrint}>Print table</button>}</div></details></div></div><div className="table-wrap">{children}</div></section> }
-function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', calendar: 'Calendar', staff: 'Staff', settings: 'Settings' })[p] || 'Dashboard' }
-function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.',  })[p] }
+function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', activities: 'Activities', reports: 'Reports', calendar: 'Calendar', staff: 'Staff', support: 'Support', settings: 'Settings' })[p] || 'Dashboard' }
+function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.', support: 'Contact the Living Bells developer team and track issues.', })[p] }
 
 
 function SettingsPage({ user, onEditProfile, onLogout }) {
