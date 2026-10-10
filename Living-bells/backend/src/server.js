@@ -1590,6 +1590,7 @@ app.patch('/api/dev/support/tickets/:id', requireDevReady, async (req, res, next
 })
 
 app.use((error, _req, res, _next) => {
+  if (error?.code === 'TENANT_RELATION_FORBIDDEN') return res.status(403).json({ message: 'A related record does not belong to this church.' })
   console.error(error)
   res.status(500).json({ message: 'Internal server error' })
 })
