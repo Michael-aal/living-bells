@@ -1523,8 +1523,14 @@ app.post('/api/support/tickets', requireChurchAdmin, async (req, res, next) => {
       data: { churchId: req.user.churchId, createdById: currentUserId(req), title, category, description },
       include: { church: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true, email: true } } },
     })
-    const developers = await prisma.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true } })
-    if (developers.length) await prisma.notification.createMany({ data: developers.map(user => ({ userId: user.id, type: 'SUPPORT_TICKET', title: 'New support ticket', message: `${ticket.church?.name || 'A church'}: ${title}`, metadata: { ticketId: ticket.id } })) })
+    const developers = await prisma.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true, email: true } })
+    if (developers.length) await prisma.notification.createMany({ data: developers.map(user => ({ userId: user.id, type: 'SUPPORT_TICKET', title: 'New support ticket', message: (ticket.church?.name || 'A church') + ': ' + title, metadata: { ticketId: ticket.id } })) })
+    await Promise.allSettled(developers.map(user => sendPlatformEmail({
+      to: user.email,
+      subject: 'New Living Bells support ticket #' + ticket.id,
+      text: (ticket.church?.name || 'A church') + ' submitted support ticket #' + ticket.id + ': ' + title + '. Sign in to the Developer Console to reply.',
+      html: '<p><strong>' + escapeEmailHtml(ticket.church?.name || 'A church') + '</strong> submitted support ticket #' + ticket.id + ': <strong>' + escapeEmailHtml(title) + '</strong>.</p><p>Sign in to the Living Bells Developer Console to reply.</p>',
+    })))
     res.status(201).json(ticket)
   } catch (error) { next(error) }
 })
@@ -1555,7 +1561,16 @@ app.post('/api/support/tickets/:id/messages', async (req, res, next) => {
     if (!ticket) return res.status(404).json({ message: 'Support ticket not found.' })
     const message = await prisma.supportTicketMessage.create({ data: { ticketId: id, authorId: currentUserId(req), body, internal } })
     await prisma.supportTicket.update({ where: { id }, data: { status: req.user.role === 'DEV' ? 'WAITING_FOR_CHURCH' : 'IN_PROGRESS' } })
-    if (req.user.role === 'DEV') await prisma.notification.create({ data: { userId: ticket.createdById, type: 'SUPPORT_REPLY', title: 'Support replied to your ticket', message: `A developer replied to “${ticket.title}”.`, metadata: { ticketId: id } } })
+    if (req.user.role === 'DEV') {
+      await prisma.notification.create({ data: { userId: ticket.createdById, type: 'SUPPORT_REPLY', title: 'Support replied to your ticket', message: 'A developer replied to your ticket: ' + ticket.title, metadata: { ticketId: id } } })
+      const requester = await prisma.user.findUnique({ where: { id: ticket.createdById }, select: { email: true, name: true } })
+      if (requester?.email) await sendPlatformEmail({
+        to: requester.email,
+        subject: 'Living Bells support replied to ticket #' + id,
+        text: 'Hello ' + requester.name + ', a developer replied to your support ticket. Sign in to Living Bells to view the reply.',
+        html: '<p>Hello ' + escapeEmailHtml(requester.name) + ',</p><p>A developer replied to your support ticket <strong>' + escapeEmailHtml(ticket.title) + '</strong>.</p><p>Sign in to Living Bells to view the reply.</p>',
+      }).catch(() => false)
+    }
     res.status(201).json(message)
   } catch (error) { next(error) }
 })
