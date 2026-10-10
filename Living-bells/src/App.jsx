@@ -98,7 +98,7 @@ function App() {
     try { return JSON.parse(localStorage.getItem('living_bells_user') || 'null') } catch { return null }
   })
   const [page, setPage] = useState('dashboard')
-  const [showAuth, setShowAuth] = useState(false)
+  const [showAuth, setShowAuth] = useState(() => new URLSearchParams(window.location.search).has('churchActivation'))
   const [reportEditDate, setReportEditDate] = useState(null)
   const [financeEditDate, setFinanceEditDate] = useState(null)
   const [reportRefresh, setReportRefresh] = useState(0)
