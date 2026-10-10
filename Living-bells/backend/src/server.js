@@ -4,58 +4,13 @@ import cors from 'cors'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
-import { AsyncLocalStorage } from 'node:async_hooks'
-import { prisma } from './db.js'
+import { prisma, tenantContext } from './db.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
 const DEV_RECOVERY_SECRET = String(process.env.DEV_ADMIN_RECOVERY_SECRET || '').trim()
 const DEV_RECOVERY_ENCRYPTION_KEY = crypto.createHash('sha256').update(String(process.env.DEV_RECOVERY_ENCRYPTION_KEY || JWT_SECRET)).digest()
-const tenantContext = new AsyncLocalStorage()
-const TENANT_MODELS = new Set(['User', 'Activity', 'Attendance', 'Expense', 'SundayReview', 'AttendanceRecord', 'AttendanceEntry', 'FinancialRecord', 'WeeklyReport', 'ReportingMonth', 'ReportingWeek', 'ConfigOption', 'StaffInvitation', 'SupportTicket'])
-
-function addChurchToData(data, churchId) {
-  if (Array.isArray(data)) return data.map(item => addChurchToData(item, churchId))
-  if (!data || typeof data !== 'object') return data
-  const result = { ...data }
-  if ('create' in result) result.create = addChurchToData(result.create, churchId)
-  if ('createMany' in result) result.createMany = addChurchToData(result.createMany, churchId)
-  if ('update' in result && typeof result.update === 'object') result.update = addChurchToData(result.update, churchId)
-  if ('upsert' in result && typeof result.upsert === 'object') result.upsert = addChurchToData(result.upsert, churchId)
-  if ('data' in result && typeof result.data === 'object') result.data = addChurchToData(result.data, churchId)
-  result.churchId = churchId
-  return result
-}
-
-prisma.$use(async (params, next) => {
-  const context = tenantContext.getStore()
-  if (!context?.churchId || context.role === 'DEV' || !TENANT_MODELS.has(params.model)) return next(params)
-  const churchId = context.churchId
-  const scopedActions = new Set(['findUnique', 'findUniqueOrThrow', 'findFirst', 'findFirstOrThrow', 'findMany', 'count', 'aggregate', 'groupBy', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert'])
-  if (scopedActions.has(params.action)) {
-    params.args ||= {}
-    params.args.where = { ...(params.args.where || {}), churchId }
-  }
-  if (params.action === 'create') {
-    params.args ||= {}
-    params.args.data = addChurchToData(params.args.data, churchId)
-  }
-  if (params.action === 'createMany') {
-    params.args ||= {}
-    params.args.data = addChurchToData(params.args.data, churchId)
-  }
-  if (params.action === 'upsert') {
-    params.args ||= {}
-    params.args.create = addChurchToData(params.args.create, churchId)
-    if (params.args.update) params.args.update = addChurchToData(params.args.update, churchId)
-  }
-  if (['update', 'updateMany'].includes(params.action) && params.args?.data) {
-    params.args.data = addChurchToData(params.args.data, churchId)
-  }
-  return next(params)
-})
-
 function generateRecoveryKey() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   const bytes = crypto.randomBytes(20)
