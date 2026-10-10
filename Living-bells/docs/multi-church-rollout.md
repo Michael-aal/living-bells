@@ -31,6 +31,8 @@ The migration is expand-and-backfill:
 
 It does not truncate or delete application data. It does replace the old globally unique report-date and reporting-month/config uniqueness indexes with church-scoped indexes. Existing duplicate rows, if any, must be checked against a backup before rollout.
 
+**Existing migration-history caveat:** replaying every historical migration from an empty database currently fails earlier at `20261001170000_staff_management`, which alters `StaffInvitation` before that table exists in the historical migration order. This branch deliberately does not rewrite an already-applied historical migration. CI therefore builds a disposable database from the current main schema and applies the new migration directly, then runs the tenant-isolation smoke test. A restored staging copy of the real production database is still required before rollout.
+
 ## Release checklist
 
 - Review the draft pull request and the passing CI checks.
