@@ -175,7 +175,7 @@ app.post('/api/auth/dev-bootstrap', async (req, res, next) => {
     if (name.length < 2 || !email.includes('@') || password.length < 8) {
       return res.status(400).json({ message: 'Name, valid email and password of at least 8 characters are required' })
     }
-    if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
+    if (await tenantContext.run({ role: 'DEV' }, () => prisma.user.findUnique({ where: { email }, select: { id: true } }))) {
       return res.status(409).json({ message: 'An account with this email already exists' })
     }
 
@@ -372,6 +372,9 @@ app.post('/api/church-applications', async (req, res, next) => {
     const phone = String(req.body?.phone || '').trim() || null
     if (churchName.length < 2 || applicantName.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applicantEmail)) {
       return res.status(400).json({ message: 'Church name, applicant name and a valid contact email are required.' })
+    }
+    if (await prisma.user.findUnique({ where: { email: applicantEmail }, select: { id: true } })) {
+      return res.status(409).json({ message: 'This email already has a Living Bells account. Use an email that is not registered to another church workspace.' })
     }
     const recent = await prisma.churchApplication.findFirst({
       where: { applicantEmail, status: { in: ['PENDING', 'NEEDS_INFO', 'APPROVED', 'ACTIVATED'] } },
