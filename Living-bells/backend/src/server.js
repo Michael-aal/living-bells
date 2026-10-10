@@ -614,7 +614,7 @@ async function findReportingWeekForDate(value){
 function monthDays(year,month){
   return new Date(Date.UTC(year,month,0)).getUTCDate()
 }
-async function validateReportingWeekRange({year,month,weekNumber,startDate,endDate,excludeId=null}){
+async function validateReportingWeekRange({year,month,weekNumber,startDate,endDate,churchId,excludeId=null}){
   if(!Number.isInteger(year)) return 'A valid reporting year is required'
   if(!Number.isInteger(month)||month<1||month>12) return 'A valid reporting month is required'
   if(!Number.isInteger(weekNumber)||weekNumber<1||weekNumber>5) return 'Week must be between 1 and 5'
@@ -750,6 +750,7 @@ app.put('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
     const year=Number(req.body.year), month=Number(req.body.month), weekNumber=Number(req.body.weekNumber)
     const error=await validateReportingWeekRange({
       year,month,weekNumber,
+      churchId: Number(req.user.churchId),
       startDate:req.body.startDate,
       endDate:req.body.endDate,
       excludeId:id
@@ -796,7 +797,7 @@ app.delete('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
 app.post('/api/reporting/weeks', requireAdmin, async (req,res,next)=>{
   try{
     const year=Number(req.body.year), month=Number(req.body.month), weekNumber=Number(req.body.weekNumber)
-    const error=await validateReportingWeekRange({year,month,weekNumber,startDate:req.body.startDate,endDate:req.body.endDate})
+    const error=await validateReportingWeekRange({year,month,weekNumber,churchId:Number(req.user.churchId),startDate:req.body.startDate,endDate:req.body.endDate})
     if(error)return res.status(400).json({message:error})
     const start=normalizeDay(req.body.startDate), end=normalizeDay(req.body.endDate)
     const monthRecord=await prisma.reportingMonth.upsert({
