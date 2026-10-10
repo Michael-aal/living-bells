@@ -391,20 +391,28 @@ app.post('/api/church-applications/activate', async (req, res, next) => {
     }
     const passwordHash = await bcrypt.hash(password, 12)
     const result = await prisma.$transaction(async tx => {
-      const user = await tx.user.create({
-        data: { name: application.applicantName, email: application.applicantEmail, passwordHash, role: 'ADMIN', churchId: application.churchId, emailVerifiedAt: new Date() },
-      })
-      await tx.churchApplication.update({
-        where: { id: application.id },
+      const consumed = await tx.churchApplication.updateMany({
+        where: { id: application.id, status: 'APPROVED', activationTokenHash: tokenHash, activationExpiresAt: { gt: new Date() }, activatedAt: null },
         data: { status: 'ACTIVATED', activatedAt: new Date(), activationTokenHash: null, activationExpiresAt: null },
       })
-      return user
+      if (consumed.count !== 1) {
+        const conflict = new Error('This activation link has already been used or expired.')
+        conflict.code = 'ACTIVATION_ALREADY_USED'
+        throw conflict
+      }
+      return tx.user.create({
+        data: { name: application.applicantName, email: application.applicantEmail, passwordHash, role: 'ADMIN', churchId: application.churchId, emailVerifiedAt: new Date() },
+      })
     })
     res.status(201).json({
       message: 'Church administrator account activated. You can now sign in.',
       user: { id: result.id, name: result.name, email: result.email, role: result.role, churchId: result.churchId, emailVerified: true },
     })
-  } catch (error) { next(error) }
+  } catch (error) {
+    if (error?.code === 'ACTIVATION_ALREADY_USED') return res.status(409).json({ message: error.message })
+    if (error?.code === 'P2002') return res.status(409).json({ message: 'An account already exists for this email. Contact support to resolve the application.' })
+    next(error)
+  }
 })
 
 app.use('/api', authenticate)
