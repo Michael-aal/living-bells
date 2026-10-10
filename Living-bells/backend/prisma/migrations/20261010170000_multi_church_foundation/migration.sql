@@ -46,6 +46,18 @@ UPDATE "ReportingMonth" SET "churchId" = (SELECT "id" FROM "Church" ORDER BY "id
 UPDATE "ReportingWeek" SET "churchId" = (SELECT "id" FROM "Church" ORDER BY "id" LIMIT 1);
 UPDATE "ConfigOption" SET "churchId" = (SELECT "id" FROM "Church" ORDER BY "id" LIMIT 1);
 UPDATE "StaffInvitation" SET "churchId" = COALESCE((SELECT "churchId" FROM "User" WHERE "User"."id" = "StaffInvitation"."invitedById"), (SELECT "id" FROM "Church" ORDER BY "id" LIMIT 1));
+ALTER TABLE "Activity" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "Attendance" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "Expense" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "SundayReview" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "AttendanceRecord" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "AttendanceEntry" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "FinancialRecord" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "WeeklyReport" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "ReportingMonth" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "ReportingWeek" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "ConfigOption" ALTER COLUMN "churchId" SET NOT NULL;
+ALTER TABLE "StaffInvitation" ALTER COLUMN "churchId" SET NOT NULL;
 
 ALTER TABLE "User" ADD CONSTRAINT "User_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "Activity" ADD CONSTRAINT "Activity_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
