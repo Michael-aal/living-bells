@@ -1,0 +1,45 @@
+name: Multi-church upgrade checks
+
+on:
+  push:
+    branches:
+      - feat/multi-church-foundation
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Living-bells
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Living-bells/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  backend-schema:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Living-bells/backend
+    env:
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
+      DIRECT_URL: postgresql://test:test@127.0.0.1:5432/livingbells?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Living-bells/backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npx prisma generate
