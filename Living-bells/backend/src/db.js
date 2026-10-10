@@ -11,37 +11,61 @@ const tenantModels = new Set([
 ])
 
 const relationForeignKeys = {
-  Activity: { reportingWeekId: 'reportingWeek', recordedById: 'recordedBy' },
-  Attendance: { activityId: 'activity', recordedById: 'recordedBy' },
-  Expense: { activityId: 'activity', reportingWeekId: 'reportingWeek', recordedById: 'recordedBy' },
-  SundayReview: { staffId: 'staff', adminId: 'admin' },
-  AttendanceRecord: { recordedById: 'recordedBy' },
-  AttendanceEntry: { attendanceRecordId: 'attendanceRecord' },
-  FinancialRecord: { reportingWeekId: 'reportingWeek', recordedById: 'recordedBy' },
-  WeeklyReport: { reportingWeekId: 'reportingWeek', createdById: 'createdBy' },
-  ReportingMonth: { createdById: 'createdBy' },
-  ReportingWeek: { monthId: 'month', createdById: 'createdBy' },
-  ConfigOption: { createdById: 'createdBy' },
-  StaffInvitation: { invitedById: 'invitedBy' },
-  SupportTicket: { createdById: 'createdBy' },
+  Activity: { reportingWeekId: { relation: 'reportingWeek', model: 'ReportingWeek' }, recordedById: { relation: 'recordedBy', model: 'User' } },
+  Attendance: { activityId: { relation: 'activity', model: 'Activity' }, recordedById: { relation: 'recordedBy', model: 'User' } },
+  Expense: { activityId: { relation: 'activity', model: 'Activity' }, reportingWeekId: { relation: 'reportingWeek', model: 'ReportingWeek' }, recordedById: { relation: 'recordedBy', model: 'User' } },
+  SundayReview: { staffId: { relation: 'staff', model: 'User' }, adminId: { relation: 'admin', model: 'User' } },
+  AttendanceRecord: { recordedById: { relation: 'recordedBy', model: 'User' } },
+  AttendanceEntry: { attendanceRecordId: { relation: 'attendanceRecord', model: 'AttendanceRecord' } },
+  FinancialRecord: { reportingWeekId: { relation: 'reportingWeek', model: 'ReportingWeek' }, recordedById: { relation: 'recordedBy', model: 'User' } },
+  WeeklyReport: { reportingWeekId: { relation: 'reportingWeek', model: 'ReportingWeek' }, createdById: { relation: 'createdBy', model: 'User' } },
+  ReportingMonth: { createdById: { relation: 'createdBy', model: 'User' } },
+  ReportingWeek: { monthId: { relation: 'month', model: 'ReportingMonth' }, createdById: { relation: 'createdBy', model: 'User' } },
+  ConfigOption: { createdById: { relation: 'createdBy', model: 'User' } },
+  StaffInvitation: { invitedById: { relation: 'invitedBy', model: 'User' } },
+  SupportTicket: { createdById: { relation: 'createdBy', model: 'User' } },
 }
 
 function addChurchRelation(data, churchId, model, operation) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return data
   const result = { ...data }
   delete result.churchId
-  for (const [foreignKey, relationName] of Object.entries(relationForeignKeys[model] || {})) {
+  for (const [foreignKey, target] of Object.entries(relationForeignKeys[model] || {})) {
     if (!(foreignKey in result)) continue
     const foreignId = result[foreignKey]
     delete result[foreignKey]
     if (foreignId == null) {
-      if (operation === 'update') result[relationName] = { disconnect: true }
+      if (operation === 'update') result[target.relation] = { disconnect: true }
     } else {
-      result[relationName] = { connect: { id: foreignId } }
+      result[target.relation] = { connect: { id: foreignId } }
     }
   }
   result.church = { connect: { id: churchId } }
   return result
+}
+ 
+async function validateTenantRelations(model, data, churchId) {
+  if (Array.isArray(data)) {
+    for (const item of data) await validateTenantRelations(model, item, churchId)
+    return
+  }
+  if (!data || typeof data !== 'object') return
+  for (const [foreignKey, target] of Object.entries(relationForeignKeys[model] || {})) {
+    const relationValue = data[target.relation]
+    const foreignId = data[foreignKey] ?? relationValue?.connect?.id
+    if (foreignId == null) continue
+    const delegateName = target.model[0].toLowerCase() + target.model.slice(1)
+    const record = await basePrisma[delegateName].findFirst({
+      where: { id: Number(foreignId), churchId },
+      select: { id: true },
+    })
+    if (!record) {
+      const error = new Error('A related record does not belong to this church.')
+      error.code = 'TENANT_RELATION_FORBIDDEN'
+      error.status = 403
+      throw error
+    }
+  }
 }
 
 function addChurchScalar(data, churchId) {
@@ -68,14 +92,28 @@ export const prisma = basePrisma.$extends({
           'delete', 'deleteMany', 'upsert',
         ])
         if (scopedOperations.has(operation)) scoped.where = { ...(scoped.where || {}), churchId }
-        if (operation === 'create') scoped.data = addChurchRelation(scoped.data, churchId, model, 'create')
-        if (operation === 'createMany') scoped.data = addChurchScalar(scoped.data, churchId)
+        if (operation === 'create') {
+          scoped.data = addChurchRelation(scoped.data, churchId, model, 'create')
+          await validateTenantRelations(model, scoped.data, churchId)
+        }
+        if (operation === 'createMany') {
+          scoped.data = addChurchScalar(scoped.data, churchId)
+          await validateTenantRelations(model, scoped.data, churchId)
+        }
         if (operation === 'upsert') {
           scoped.create = addChurchRelation(scoped.create, churchId, model, 'create')
           if (scoped.update) scoped.update = addChurchRelation(scoped.update, churchId, model, 'update')
+          await validateTenantRelations(model, scoped.create, churchId)
+          await validateTenantRelations(model, scoped.update, churchId)
         }
-        if (operation === 'update' && scoped.data) scoped.data = addChurchRelation(scoped.data, churchId, model, 'update')
-        if (operation === 'updateMany' && scoped.data) scoped.data = addChurchScalar(scoped.data, churchId)
+        if (operation === 'update' && scoped.data) {
+          scoped.data = addChurchRelation(scoped.data, churchId, model, 'update')
+          await validateTenantRelations(model, scoped.data, churchId)
+        }
+        if (operation === 'updateMany' && scoped.data) {
+          scoped.data = addChurchScalar(scoped.data, churchId)
+          await validateTenantRelations(model, scoped.data, churchId)
+        }
         return query(scoped)
       },
     },
