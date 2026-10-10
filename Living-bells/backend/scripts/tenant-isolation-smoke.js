@@ -47,6 +47,12 @@ try {
   const foreignActivity = await runAs(churchA.id, () => prisma.activity.findUnique({ where: { id: activityB.id } }))
   assert.equal(foreignActivity, null, 'church A must not fetch church B activity by identifier')
 
+  await assert.rejects(
+    () => runAs(churchA.id, () => prisma.expense.create({ data: { activityId: activityB.id, description: 'foreign link attempt', category: 'TEST', amount: 1, date: new Date('2026-01-04T00:00:00.000Z') } })),
+    error => error?.code === 'TENANT_RELATION_FORBIDDEN',
+    'church A must not connect an expense to church B activity',
+  )
+
   const attemptedUpdate = await runAs(churchA.id, () => prisma.activity.updateMany({ where: { id: activityB.id }, data: { name: 'cross-tenant mutation' } }))
   assert.equal(attemptedUpdate.count, 0, 'cross-tenant update must match zero records')
 
