@@ -655,11 +655,20 @@ function normalizeDay(value){
   return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()))
 }
 function daysInclusive(start,end){return Math.round((end-start)/86400000)+1}
-async function findReportingWeekForDate(value){
+async function findReportingWeekForDate(value, churchId){
   const day=normalizeDay(value)
-  if(!day) return null
+  const ownerChurchId=Number(churchId)
+  if(!day||!Number.isInteger(ownerChurchId)||ownerChurchId<1) return null
+
+  // Resolve a date only inside its church's calendar. ReportingWeek.monthId
+  // is the canonical link to ReportingMonth (churchId + year + month).
   return prisma.reportingWeek.findFirst({
-    where:{startDate:{lte:day},endDate:{gte:day}},
+    where:{
+      churchId:ownerChurchId,
+      startDate:{lte:day},
+      endDate:{gte:day},
+      month:{churchId:ownerChurchId},
+    },
     include:{month:true},
     orderBy:{id:'desc'},
   })
@@ -769,7 +778,7 @@ function reportingMonthDto(month){
 app.get('/api/reporting/current', async (req,res,next)=>{
   try{
     const currentDate=currentChurchDate()
-    const week=await findReportingWeekForDate(currentDate)
+    const week=await findReportingWeekForDate(currentDate, Number(req.user.churchId))
     if(!week) return res.json({date:currentDate.toISOString().slice(0,10),month:null,week:null,day:currentDate.toLocaleDateString('en-NG',{weekday:'long',timeZone:'UTC'})})
     res.json({
       date:currentDate.toISOString().slice(0,10),
@@ -976,7 +985,7 @@ app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
    if(previous)return res.status(200).json({...reportDto(previous),duplicate:true,idempotent:true})
   }
 
-  const reportingWeek=await findReportingWeekForDate(d.reportDate)
+  const reportingWeek=await findReportingWeekForDate(d.reportDate, Number(req.user.churchId))
   const r=await prisma.weeklyReport.create({
    data:{...d,reportingWeekId:reportingWeek?.id||null,createdById:currentUserId(req),clientRequestId},
    include:{createdBy:{select:{id:true,name:true,email:true,role:true}}},
@@ -999,7 +1008,7 @@ app.put('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=
  try{
   const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'})
   const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
-  const reportingWeek=await findReportingWeekForDate(v.data.reportDate)
+  const reportingWeek=await findReportingWeekForDate(v.data.reportDate, Number(req.user.churchId))
   const r=await prisma.weeklyReport.update({where:{id},data:{...v.data,reportingWeekId:reportingWeek?.id||null},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
   res.json(reportDto(r))
  }catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that date'});next(e)}
@@ -1061,7 +1070,7 @@ app.post('/api/activities', requireStaff, async (req, res, next) => {
   try {
     const { name, type, date } = req.body
     const activityDate = new Date(date)
-    const reportingWeek = await findReportingWeekForDate(activityDate)
+    const reportingWeek = await findReportingWeekForDate(activityDate, Number(req.user.churchId))
     if (!name?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid name and date are required' })
     const activity = await prisma.activity.create({ data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: reportingWeek?.id || null, recordedById: currentUserId(req) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
     res.status(201).json(activity)
@@ -1082,7 +1091,7 @@ app.put('/api/activities/:id', requireStaff, async (req, res, next) => {
 
     const activity = await prisma.activity.update({
       where: { id },
-      data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: (await findReportingWeekForDate(activityDate))?.id || null },
+      data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: (await findReportingWeekForDate(activityDate, Number(req.user.churchId)))?.id || null },
       include: { recordedBy: { select: { id: true, name: true, email: true } } },
     })
     res.json(activity)
@@ -1124,7 +1133,7 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
     } else {
       const activityDate = new Date(date)
       if (!service?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid service and date are required' })
-      activity = await prisma.activity.create({ data: { name: service.trim(), type: 'service', date: activityDate, reportingWeekId: (await findReportingWeekForDate(activityDate))?.id || null, recordedById: currentUserId(req) } })
+      activity = await prisma.activity.create({ data: { name: service.trim(), type: 'service', date: activityDate, reportingWeekId: (await findReportingWeekForDate(activityDate, Number(req.user.churchId)))?.id || null, recordedById: currentUserId(req) } })
     }
 
     const value = (group, gender) => Math.max(0, Number(groups?.[group]?.[gender] || 0))
@@ -1187,7 +1196,7 @@ app.post('/api/expenses', requireStaff, async (req, res, next) => {
   try {
     const { activityId, description, title, category = 'General', amount, date } = req.body
     const expenseDate = new Date(date)
-    const reportingWeek = await findReportingWeekForDate(expenseDate)
+    const reportingWeek = await findReportingWeekForDate(expenseDate, Number(req.user.churchId))
     const numericAmount = Number(amount)
     if (!(description || title)?.trim() || !Number.isFinite(numericAmount) || numericAmount < 0 || Number.isNaN(expenseDate.getTime())) {
       return res.status(400).json({ message: 'Valid description, non-negative amount and date are required' })
@@ -1234,7 +1243,7 @@ app.post('/api/finances', requireStaff, async (req, res, next) => {
     const normalizedCategory = String(category || '').trim()
     const value = Number(amount)
     const date = new Date(recordDate)
-    const reportingWeek = await findReportingWeekForDate(date)
+    const reportingWeek = await findReportingWeekForDate(date, Number(req.user.churchId))
     if (!['INCOME', 'EXPENSE'].includes(normalizedType)) return res.status(400).json({ message: 'Type must be INCOME or EXPENSE' })
     if (!normalizedCategory) return res.status(400).json({ message: 'Category is required' })
     if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ message: 'Amount must be greater than zero' })
