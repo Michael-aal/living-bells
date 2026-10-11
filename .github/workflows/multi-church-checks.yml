@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/multi-church-foundation
+      - fix/multi-church-migration-recovery
   pull_request:
     branches:
       - main
@@ -61,9 +62,15 @@ jobs:
           cache: npm
           cache-dependency-path: Living-bells/backend/package-lock.json
       - run: npm ci
-      - name: Build a disposable database from the current main schema
+      - name: Build a disposable database from the schema before this migration
         run: |
-          git show origin/main:Living-bells/backend/prisma/schema.prisma > /tmp/living-bells-baseline.prisma
+          migration_path="Living-bells/backend/prisma/migrations/20261010170000_multi_church_foundation/migration.sql"
+          migration_commit="$(git -C "$GITHUB_WORKSPACE" log --all --full-history --format=%H -- "$migration_path" | tail -n 1)"
+          if [ -z "$migration_commit" ]; then
+            echo "Could not locate the commit that introduced the multi-church migration."
+            exit 1
+          fi
+          git -C "$GITHUB_WORKSPACE" show "${migration_commit}^:Living-bells/backend/prisma/schema.prisma" > /tmp/living-bells-baseline.prisma
           npx prisma db push --schema=/tmp/living-bells-baseline.prisma --skip-generate
       - name: Apply only the new expand-and-backfill migration
         run: npx prisma db execute --schema=prisma/schema.prisma --file=prisma/migrations/20261010170000_multi_church_foundation/migration.sql
