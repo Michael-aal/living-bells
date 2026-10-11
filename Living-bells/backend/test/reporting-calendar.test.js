@@ -42,8 +42,8 @@ test('rejects impossible dates instead of allowing JavaScript date rollover', ()
   assert.match(validateReportingWeekDates(range), /valid start and end date/)
 })
 
-test('requires the selected month and year to match the end date', () => {
-  assert.match(validateReportingWeekDates(week('2025-10-04', { year: 2026 })), /month where the reporting week ends/)
+test('does not reject a valid week because the form month/year is stale', () => {
+  assert.equal(validateReportingWeekDates(week('2025-10-04', { year: 2026, month: 11 })), null)
 })
 
 test('rejects invalid month, year, and week number values', () => {
