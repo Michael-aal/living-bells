@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import './ReportingCalendar.css'
 
-const monthName = value => new Date(Date.UTC(2026, Number(value) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', timeZone: 'UTC' })
+const monthName = value => new Date(Date.UTC(2000, Number(value) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', timeZone: 'UTC' })
 const dateLabel = value => new Date(String(value).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 
 function daysForWeek(start) {
@@ -46,6 +46,7 @@ export default function ReportingCalendar({ user, current }) {
   const currentYear = Number(current?.month?.year || new Date().getFullYear())
   const currentMonth = Number(current?.month?.month || new Date().getMonth() + 1)
   const [months, setMonths] = useState([])
+  const [availableYears, setAvailableYears] = useState([])
   const [year, setYear] = useState(currentYear)
   const [form, setForm] = useState(emptyForm(currentYear, currentMonth))
   const [editingId, setEditingId] = useState(null)
@@ -62,6 +63,8 @@ export default function ReportingCalendar({ user, current }) {
       setError('')
       const data = await api.reportingMonths(year)
       setMonths(data || [])
+      const savedYears = await api.reportingYears().catch(() => [])
+      setAvailableYears(Array.isArray(savedYears) ? savedYears : [])
       return data || []
     } catch (e) {
       setError(e.message || 'Could not load calendar')
@@ -76,7 +79,20 @@ export default function ReportingCalendar({ user, current }) {
     setForm(currentForm => {
       const next = { ...currentForm, [key]: value }
 
+      if (key === 'year' && !editingId) {
+        next.year = Number(value) || currentYear
+        // Year/month are the intended calendar destination. Clear dates from
+        // the previously selected period so saveWeek cannot silently submit
+        // the old year because it derives the payload from endDate.
+        next.startDate = ''
+        next.endDate = ''
+        setYear(Number(value) || currentYear)
+        next.weekNumber = nextWeekNumber(months, next.year, next.month)
+      }
+
       if (key === 'month' && !editingId) {
+        next.startDate = ''
+        next.endDate = ''
         next.weekNumber = nextWeekNumber(months, next.year, Number(value))
       }
 
@@ -235,7 +251,7 @@ export default function ReportingCalendar({ user, current }) {
       <div className="calendar-builder-grid">
         <label>
           <span>Year</span>
-          <input type="number" value={form.year} onChange={e => { setField('year', e.target.value); setYear(Number(e.target.value) || currentYear) }} />
+          <input type="number" value={form.year} onChange={e => setField('year', e.target.value)} />
         </label>
         <label>
           <span>Month</span>
@@ -286,7 +302,14 @@ export default function ReportingCalendar({ user, current }) {
         </div>
         <label className="year-picker">
           <span>View year</span>
-          <input type="number" value={year} onChange={e => setYear(Number(e.target.value) || currentYear)} />
+          <select
+            value={year}
+            onChange={e => setYear(Number(e.target.value) || currentYear)}
+            aria-label="View reporting calendar year"
+          >
+            {!availableYears.includes(Number(year)) && <option value={year}>{year} (no saved weeks)</option>}
+            {availableYears.map(value => <option key={value} value={value}>{value}</option>)}
+          </select>
         </label>
       </div>
 
