@@ -56,3 +56,337 @@
 @media(prefers-reduced-motion:reduce){
   .lb-site *{animation:none!important;transition:none!important}
 }
+
+
+/* Responsive layout pass: phone, tablet, laptop and wide monitors */
+.lb-site,
+.lb-site main,
+.lb-site section,
+.lb-site footer {
+  min-width: 0;
+}
+.lb-site img,
+.lb-site svg,
+.lb-site video {
+  max-width: 100%;
+}
+.lb-site p,
+.lb-site h1,
+.lb-site h2,
+.lb-site h3 {
+  overflow-wrap: break-word;
+}
+.lb-nav {
+  gap: 20px;
+}
+.lb-brand {
+  min-width: 0;
+}
+.lb-brand > span:last-child {
+  min-width: 0;
+}
+.lb-nav-links {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.lb-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(0, .92fr);
+}
+.lb-hero-copy,
+.lb-hero-art,
+.lb-welcome-grid > *,
+.lb-ministry {
+  min-width: 0;
+}
+.lb-hero-art {
+  width: 100%;
+}
+.lb-values,
+.lb-ministry-grid {
+  min-width: 0;
+}
+.lb-ministry {
+  overflow-wrap: anywhere;
+}
+.lb-footer > * {
+  min-width: 0;
+}
+.lb-footer-copy {
+  max-width: 100%;
+}
+.lb-gather p {
+  color: rgba(255,255,255,.78);
+}
+
+@media (min-width: 1440px) {
+  .lb-nav {
+    padding-inline: clamp(92px, 7vw, 150px);
+  }
+  .lb-hero {
+    padding-inline: clamp(120px, 9vw, 170px);
+    gap: clamp(64px, 7vw, 120px);
+    min-height: 650px;
+  }
+  .lb-hero-art {
+    height: clamp(445px, 35vw, 560px);
+  }
+  .lb-welcome,
+  .lb-ministries,
+  .lb-gather {
+    padding-inline: clamp(120px, 9vw, 170px);
+  }
+  .lb-footer {
+    padding-inline: clamp(92px, 7vw, 150px);
+  }
+}
+
+@media (min-width: 1900px) {
+  .lb-hero,
+  .lb-welcome,
+  .lb-ministries,
+  .lb-gather-inner {
+    max-width: 1800px;
+    margin-inline: auto;
+  }
+  .lb-nav {
+    padding-inline: max(150px, calc((100vw - 1600px) / 2));
+  }
+  .lb-footer {
+    padding-inline: max(150px, calc((100vw - 1600px) / 2));
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  .lb-nav {
+    padding-inline: 28px;
+    gap: 16px;
+  }
+  .lb-brand {
+    gap: 8px;
+  }
+  .lb-brand small {
+    font-size: 8px;
+  }
+  .lb-nav-links {
+    gap: clamp(12px, 2vw, 22px);
+  }
+  .lb-nav-links a {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .lb-nav-cta {
+    white-space: nowrap;
+  }
+  .lb-hero {
+    padding-inline: 38px;
+    gap: 30px;
+    min-height: 0;
+  }
+  .lb-hero h1 {
+    font-size: clamp(43px, 5.4vw, 64px);
+  }
+  .lb-hero-art {
+    height: clamp(330px, 42vw, 420px);
+  }
+  .lb-welcome,
+  .lb-ministries,
+  .lb-gather {
+    padding-inline: 38px;
+  }
+  .lb-ministry-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lb-ministry {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 760px) {
+  .lb-nav {
+    height: auto;
+    min-height: 62px;
+    padding: 12px 16px 0;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 12px;
+    row-gap: 10px;
+  }
+  .lb-brand {
+    flex: 1 1 auto;
+    max-width: calc(100% - 130px);
+    padding-bottom: 10px;
+  }
+  .lb-brand-mark {
+    flex: 0 0 auto;
+  }
+  .lb-nav-cta {
+    flex: 0 0 auto;
+    margin-left: auto;
+    margin-bottom: 10px;
+  }
+  .lb-nav-links {
+    display: flex;
+    order: 3;
+    flex: 0 0 calc(100% + 32px);
+    width: calc(100% + 32px);
+    margin-inline: -16px;
+    padding: 0 16px 11px;
+    gap: 22px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    border-top: 1px solid var(--lb-border);
+  }
+  .lb-nav-links::-webkit-scrollbar {
+    display: none;
+  }
+  .lb-nav-links a {
+    flex: 0 0 auto;
+    padding-top: 11px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .lb-hero {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 42px 21px 48px;
+    gap: 30px;
+  }
+  .lb-hero h1 {
+    font-size: clamp(42px, 10vw, 56px);
+    line-height: 1.06;
+  }
+  .lb-hero-actions {
+    flex-wrap: wrap;
+    gap: 12px 18px;
+  }
+  .lb-button-primary,
+  .lb-button-light {
+    max-width: 100%;
+    gap: 14px;
+  }
+  .lb-hero-art {
+    height: clamp(290px, 82vw, 370px);
+    max-width: 520px;
+  }
+  .lb-art-caption {
+    padding: 23px;
+  }
+  .lb-art-caption b {
+    font-size: clamp(21px, 6vw, 25px);
+  }
+  .lb-welcome,
+  .lb-ministries {
+    padding: 52px 21px;
+  }
+  .lb-welcome-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .lb-values {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lb-value {
+    margin: 0;
+    padding: 20px 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--lb-border);
+  }
+  .lb-value:last-child {
+    border-bottom: 0;
+  }
+  .lb-ministry-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .lb-ministry-heading > p {
+    margin: 0;
+  }
+  .lb-ministry-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .lb-ministry {
+    min-height: 0;
+    padding: 16px;
+  }
+  .lb-ministry h3 {
+    font-size: clamp(15px, 4vw, 18px);
+  }
+  .lb-gather {
+    padding: 54px 21px;
+  }
+  .lb-gather h2 {
+    font-size: clamp(50px, 13vw, 68px);
+  }
+  .lb-gather-decoration {
+    right: -150px;
+    top: -55px;
+    font-size: 300px;
+  }
+  .lb-footer {
+    padding: 24px 20px;
+    gap: 16px;
+  }
+  .lb-footer-copy {
+    flex: 0 0 100%;
+    margin: 0;
+  }
+  .lb-copyright {
+    flex: 0 0 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .lb-nav {
+    column-gap: 8px;
+  }
+  .lb-brand {
+    gap: 7px;
+    max-width: calc(100% - 112px);
+  }
+  .lb-brand strong {
+    font-size: 12px;
+  }
+  .lb-nav-cta {
+    padding: 9px 10px;
+    font-size: 9px;
+  }
+  .lb-hero {
+    padding-inline: 16px;
+  }
+  .lb-hero h1 {
+    font-size: clamp(38px, 11vw, 44px);
+  }
+  .lb-hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .lb-hero-actions > * {
+    align-self: flex-start;
+  }
+  .lb-ministry-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lb-ministry {
+    padding: 20px;
+  }
+  .lb-section-label {
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .lb-section-label span {
+    text-align: right;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lb-site,
+  .lb-site * {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
