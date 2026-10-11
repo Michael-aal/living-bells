@@ -840,3 +840,114 @@ main,
     min-width: 76px;
   }
 }
+
+
+/* Full-width responsive pass: use the available viewport without page-level overflow. */
+.content {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+.content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.dash-grid {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+.dash-grid > * {
+  min-width: 0;
+  width: 100%;
+}
+.activity-trend,
+.monthly-bars,
+.trend-controls {
+  min-width: 0;
+  max-width: 100%;
+}
+.card.full,
+.card.full > .table-wrap {
+  width: 100%;
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .content {
+    padding: clamp(20px, 2.5vw, 34px);
+  }
+}
+@media (max-width: 767px) {
+  main {
+    width: 100%;
+    max-width: 100%;
+  }
+  .content {
+    padding: 14px 10px calc(30px + env(safe-area-inset-bottom)) !important;
+  }
+  .welcome-card,
+  .dashboard-period,
+  .dash-grid,
+  .stats,
+  .quick {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .stats {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .stat {
+    width: 100%;
+  }
+  .card-head {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .trend-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .trend-controls label,
+  .trend-controls select {
+    width: 100%;
+    min-width: 0;
+  }
+  .monthly-bars {
+    gap: clamp(3px, 1.5vw, 8px);
+    padding-inline: 0;
+    overflow: hidden;
+  }
+  .monthly-bar-col {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+  .monthly-bar-col small {
+    font-size: clamp(7px, 2vw, 9px);
+  }
+  .table-wrap {
+    width: 100%;
+    max-width: 100%;
+  }
+  .modal,
+  .backdrop {
+    max-width: 100vw;
+  }
+}
+@media (max-width: 360px) {
+  .content {
+    padding-inline: 8px !important;
+  }
+  .card,
+  .stat,
+  .action-card {
+    padding: 11px !important;
+  }
+  .heading h1 {
+    font-size: 21px !important;
+  }
+  .mobile-nav {
+    left: 6px;
+    right: 6px;
+  }
+}
