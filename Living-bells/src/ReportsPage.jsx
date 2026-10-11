@@ -203,7 +203,9 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
 
   const searchDays = useMemo(() => {
     if (!searchYear || !searchMonth) return Array.from({ length: 31 }, (_, index) => index + 1)
-    const days = new Date(Number(searchYear), Number(searchMonth), 0).getDate()
+    const month = Number(searchMonth)
+    const calendarYear = month <= 6 ? Number(searchYear) + 1 : Number(searchYear)
+    const days = new Date(calendarYear, month, 0).getDate()
     return Array.from({ length: days }, (_, index) => index + 1)
   }, [searchYear, searchMonth])
 
@@ -559,11 +561,17 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           </select>
         </label>
         <label>
-          Year
-          <select value={searchYear} onChange={e => { setSearchYear(e.target.value); setSearchWeek(''); setSearchDay('') }}>
-            <option value="">Any year</option>
-            {searchYears.map(year => <option key={year} value={year}>{reportingYearLabel(year)}</option>)}
-          </select>
+          Reporting year (July–June)
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1"
+            max="9998"
+            step="1"
+            value={searchYear}
+            placeholder="Any year (e.g. 2001)"
+            onChange={e => { setSearchYear(e.target.value); setSearchWeek(''); setSearchDay('') }}
+          />
         </label>
         <label>
           Month
