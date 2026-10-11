@@ -120,3 +120,49 @@
   .week-actions { justify-content: flex-start; }
   .week-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+/* Full-width responsive reporting calendar layout. */
+.reporting-calendar,
+.calendar-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.calendar-month-list,
+.calendar-month,
+.calendar-week-list,
+.calendar-week,
+.calendar-hero,
+.calendar-current {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 767px) {
+  .calendar-page,
+  .calendar-month-list,
+  .calendar-month,
+  .calendar-hero,
+  .calendar-current,
+  .calendar-readonly {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .calendar-month-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .calendar-week summary,
+  .week-title,
+  .week-summary-actions {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .week-actions button {
+    min-height: 36px;
+  }
+  .week-days {
+    width: 100%;
+  }
+}
