@@ -696,3 +696,147 @@ main,
 .reporting-period-navigation input,.reporting-period-navigation select{width:100%;min-height:36px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--text);padding:7px 9px;font:inherit;font-size:11px}
 .reporting-period-navigation button{min-height:36px;white-space:nowrap}
 @media(max-width:480px){.reporting-period-navigation{gap:7px}.reporting-period-navigation label{min-width:calc(50% - 5px)}.reporting-period-navigation button{width:100%}}
+
+
+/* Final mobile layout pass: consistent spacing, readable sections, and tidy forms. */
+@media (max-width: 767px) {
+  .content {
+    padding: 16px 12px 30px !important;
+  }
+
+  .heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 16px !important;
+  }
+
+  .heading h1 {
+    margin-top: 3px;
+    font-size: clamp(22px, 6vw, 26px) !important;
+    line-height: 1.18 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .heading p {
+    line-height: 1.5;
+    max-width: 58ch;
+  }
+
+  .card, .stat, .action-card {
+    min-width: 0;
+    padding: 15px !important;
+    margin-inline: 0;
+  }
+
+  .card h2, .card h3 {
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
+
+  .card-subtitle, .card p {
+    line-height: 1.55;
+  }
+
+  .section-title, .card-head, .calendar-hero {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .section-title > *, .card-head > *, .calendar-hero > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .actions > * {
+    min-width: 0;
+    width: 100%;
+    white-space: normal;
+  }
+
+  .form-grid, .report-grid, .finance-columns, .balance-box {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .form-grid > *, .report-grid > *, .finance-columns > *, .balance-box > * {
+    min-width: 0;
+    width: 100%;
+  }
+
+  input, select, textarea {
+    min-width: 0;
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .mobile-nav {
+    height: calc(64px + env(safe-area-inset-bottom)) !important;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
+  }
+
+  main {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .reporting-week-picker {
+    padding: 12px;
+  }
+
+  .reporting-week-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .reporting-period-navigation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+    gap: 9px;
+  }
+
+  .reporting-period-navigation label {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .reporting-period-navigation button {
+    width: 100%;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 430px) {
+  .content {
+    padding-inline: 10px !important;
+  }
+
+  .card, .stat, .action-card {
+    padding: 12px !important;
+  }
+
+  .actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stats {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .reporting-period-navigation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-nav button {
+    flex-basis: 76px;
+    min-width: 76px;
+  }
+}
