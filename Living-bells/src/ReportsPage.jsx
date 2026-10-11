@@ -145,7 +145,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [configuredReportingYears, setConfiguredReportingYears] = useState([])
   const [calendarLoading, setCalendarLoading] = useState(false)
 
-  const canEditOperational = ['ADMIN', 'SECRETARY', 'PASTOR', 'STAFF'].includes(user?.role)
+  const canEditOperational = user?.role === 'STAFF'
 
   // Search years must come from the administrator-configured reporting calendar,
   // not from whichever records happen to exist in the database.
