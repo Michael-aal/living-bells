@@ -886,6 +886,13 @@ function normalizeReportDate(value){
   date.setUTCHours(0,0,0,0)
   return date
 }
+function hasWeeklyReportContent({ numerical = [], spiritual = {}, income = [], expenditure = [] } = {}) {
+  return (Array.isArray(numerical) && numerical.some(row => Number(row?.adult) > 0 || Number(row?.children) > 0 || Number(row?.visitor) > 0))
+    || (spiritual && typeof spiritual === 'object' && Object.values(spiritual).some(value => Number(value) > 0))
+    || (Array.isArray(income) && income.some(row => Number(row?.amount) > 0))
+    || (Array.isArray(expenditure) && expenditure.some(row => Number(row?.amount) > 0))
+}
+
 function validateWeeklyPayload(body){
   const reportDate=normalizeReportDate(body?.reportDate)
   if(!reportDate)return{error:'A valid report date is required'}
@@ -925,11 +932,9 @@ function validateWeeklyPayload(body){
   const inc=normalizeFinancialRows(income)
   const exp=normalizeFinancialRows(expenditure)
   if(!inc||!exp)return{error:'Financial amounts must be valid non-negative numbers with at most 2 decimal places and every non-zero custom row must have a name'}
-  const hasRecordedValue = n.some(row => row.adult > 0 || row.children > 0 || row.visitor > 0)
-    || Object.values(sp).some(value => value > 0)
-    || inc.some(row => row.amount > 0)
-    || exp.some(row => row.amount > 0)
-  if (!hasRecordedValue) return { error: 'This report is empty. Enter at least one attendance, spiritual-experience or financial value before saving.' }
+  if (!hasWeeklyReportContent({ numerical: n, spiritual: sp, income: inc, expenditure: exp })) {
+    return { error: 'This report is empty. Enter at least one attendance, spiritual-experience or financial value before saving.' }
+  }
   const totalIncome=inc.reduce((sum,row)=>sum+row.amount,0)
   const totalExpenditure=exp.reduce((sum,row)=>sum+row.amount,0)
   return{data:{reportDate,numerical:n,spiritual:sp,income:inc,expenditure:exp,totalIncome,totalExpenditure,balance:totalIncome-totalExpenditure}}
@@ -942,7 +947,7 @@ app.get('/api/weekly-reports',requireWeeklyReportView,async(req,res,next)=>{
   else if(/^\d{4}$/.test(year)){const y=Number(year);where.reportDate={gte:new Date(Date.UTC(y,0,1)),lt:new Date(Date.UTC(y+1,0,1))}}
   else if(search){const d=normalizeReportDate(search);if(d){const end=new Date(d);end.setUTCDate(end.getUTCDate()+1);where.reportDate={gte:d,lt:end}}}
   const rows=await prisma.weeklyReport.findMany({where,orderBy:{reportDate:'desc'},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
-  res.json(rows.map(reportDto))
+  res.json(rows.filter(hasWeeklyReportContent).map(reportDto))
  }catch(e){next(e)}
 })
 app.get('/api/weekly-reports/:id',requireWeeklyReportView,async(req,res,next)=>{
