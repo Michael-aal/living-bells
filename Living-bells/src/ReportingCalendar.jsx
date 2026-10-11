@@ -97,14 +97,26 @@ export default function ReportingCalendar({ user, current }) {
       }
 
       if (key === 'startDate' && value && !editingId) {
-        // Keep the selected reporting year/month as the destination.
-        // Choosing dates must not silently switch the calendar to another year.
+        // A reporting period belongs to the month and year in which it ends.
         next.endDate = addDays(value, 6)
+        const endYear = Number(next.endDate.slice(0, 4))
+        const endMonth = Number(next.endDate.slice(5, 7))
+        next.year = endYear
+        next.month = endMonth
+        setYear(endYear)
+        next.weekNumber = nextWeekNumber(months, endYear, endMonth)
       }
 
       if (key === 'endDate' && value) {
-        // The selected year/month stays authoritative; validation reports mismatches.
+        // Keep the reporting month/year aligned with the week end date,
+        // including when the range crosses December into January.
         next.endDate = value
+        const endYear = Number(value.slice(0, 4))
+        const endMonth = Number(value.slice(5, 7))
+        next.year = endYear
+        next.month = endMonth
+        setYear(endYear)
+        if (!editingId) next.weekNumber = nextWeekNumber(months, endYear, endMonth)
       }
 
       return next
@@ -141,8 +153,8 @@ export default function ReportingCalendar({ user, current }) {
       const end = new Date(String(form.endDate).slice(0, 10) + 'T12:00:00Z')
       if (Number.isNaN(end.getTime())) throw new Error('A valid end date is required')
 
-      // The selected reporting year/month are the intended destination.
-      // Backend validation rejects mismatches instead of silently switching periods.
+      // The reporting month and year are derived from the week end date.
+      // Mirror the backend rule here so the form stays aligned before submission.
       const payload = {
         year: Number(form.year),
         month: Number(form.month),
