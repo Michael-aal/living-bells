@@ -127,9 +127,47 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [searchDay, setSearchDay] = useState('')
   const [searchPeriod, setSearchPeriod] = useState(null)
   const [reportingMonths, setReportingMonths] = useState([])
+  const [configuredReportingYears, setConfiguredReportingYears] = useState([])
   const [calendarLoading, setCalendarLoading] = useState(false)
 
   const canEditOperational = ['ADMIN', 'SECRETARY', 'PASTOR', 'STAFF'].includes(user?.role)
+
+  // Search years must come from the administrator-configured reporting calendar,
+  // not from whichever records happen to exist in the database.
+  useEffect(() => {
+    let cancelled = false
+    async function loadConfiguredReportingYears() {
+      try {
+        const calendarYears = await api.reportingYears()
+        const validCalendarYears = Array.isArray(calendarYears)
+          ? [...new Set(calendarYears.map(Number).filter(year => Number.isInteger(year) && year > 0))]
+          : []
+        const monthGroups = await Promise.all(
+          validCalendarYears.map(async calendarYear => ({
+            calendarYear,
+            months: await api.reportingMonths(calendarYear).catch(() => []),
+          }))
+        )
+        const fiscalYears = new Set()
+        monthGroups.forEach(({ calendarYear, months }) => {
+          if (!Array.isArray(months)) return
+          months.forEach(month => {
+            if (!Array.isArray(month.weeks) || month.weeks.length === 0) return
+            const monthNumber = Number(month.month)
+            if (!Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) return
+            fiscalYears.add(monthNumber <= 6 ? calendarYear - 1 : calendarYear)
+          })
+        })
+        if (!cancelled) {
+          setConfiguredReportingYears([...fiscalYears].sort((a, b) => b - a))
+        }
+      } catch {
+        if (!cancelled) setConfiguredReportingYears([])
+      }
+    }
+    loadConfiguredReportingYears()
+    return () => { cancelled = true }
+  }, [refreshKey])
 
   useEffect(() => {
     let cancelled = false
@@ -156,17 +194,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     return () => { cancelled = true }
   }, [refreshKey])
 
-  const searchYears = useMemo(() => {
-    const years = new Set()
-    const addReportingYear = value => {
-      const date = parseDate(value)
-      if (date) years.add(date.getMonth() >= 6 ? date.getFullYear() : date.getFullYear() - 1)
-    }
-    reports.forEach(item => addReportingYear(item.reportDate))
-    attendance.forEach(item => addReportingYear(item.activity?.date || item.date || item.recordDate))
-    activities.forEach(item => addReportingYear(item.date))
-    return Array.from(years).sort((a, b) => b - a)
-  }, [reports, attendance, activities])
+  const searchYears = configuredReportingYears
 
   useEffect(() => {
     let cancelled = false
@@ -562,16 +590,15 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         </label>
         <label>
           Reporting year (July–June)
-          <input
-            type="number"
-            inputMode="numeric"
-            min="1"
-            max="9998"
-            step="1"
+          <select
             value={searchYear}
-            placeholder="Any year (e.g. 2001)"
-            onChange={e => { setSearchYear(e.target.value); setSearchWeek(''); setSearchDay('') }}
-          />
+            onChange={e => { setSearchYear(e.target.value); setSearchMonth(''); setSearchWeek(''); setSearchDay('') }}
+            disabled={calendarLoading}
+            aria-label="Choose an administrator-configured reporting year"
+          >
+            <option value="">Any year</option>
+            {searchYears.map(year => <option key={year} value={year}>{reportingYearLabel(year)}</option>)}
+          </select>
         </label>
         <label>
           Month
