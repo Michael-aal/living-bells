@@ -977,6 +977,7 @@ app.post('/api/weekly-reports',requireWeeklyReportCreate,async(req,res,next)=>{
   }
 
   const reportingWeek=await findReportingWeekForDate(d.reportDate, Number(req.user.churchId))
+  if(!reportingWeek)return res.status(400).json({message:'This date is not included in a configured reporting week. Ask an administrator to update Calendar settings.'})
   const r=await prisma.weeklyReport.create({
    data:{...d,reportingWeekId:reportingWeek?.id||null,createdById:currentUserId(req),clientRequestId},
    include:{createdBy:{select:{id:true,name:true,email:true,role:true}}},
@@ -1000,6 +1001,7 @@ app.put('/api/weekly-reports/:id',requireWeeklyReportCreate,async(req,res,next)=
   const id=Number(req.params.id);if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid report id'})
   const v=validateWeeklyPayload(req.body);if(v.error)return res.status(400).json({message:v.error})
   const reportingWeek=await findReportingWeekForDate(v.data.reportDate, Number(req.user.churchId))
+  if(!reportingWeek)return res.status(400).json({message:'This date is not included in a configured reporting week. Ask an administrator to update Calendar settings.'})
   const r=await prisma.weeklyReport.update({where:{id},data:{...v.data,reportingWeekId:reportingWeek?.id||null},include:{createdBy:{select:{id:true,name:true,email:true,role:true}}}})
   res.json(reportDto(r))
  }catch(e){if(e?.code==='P2025')return res.status(404).json({message:'Weekly report not found'});if(e?.code==='P2002')return res.status(409).json({message:'A weekly report already exists for that date'});next(e)}
@@ -1063,7 +1065,8 @@ app.post('/api/activities', requireStaff, async (req, res, next) => {
     const activityDate = new Date(date)
     const reportingWeek = await findReportingWeekForDate(activityDate, Number(req.user.churchId))
     if (!name?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid name and date are required' })
-    const activity = await prisma.activity.create({ data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: reportingWeek?.id || null, recordedById: currentUserId(req) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
+    if (!reportingWeek) return res.status(400).json({ message: 'This date is not included in a configured reporting week. Ask an administrator to update Calendar settings.' })
+    const activity = await prisma.activity.create({ data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: reportingWeek.id, recordedById: currentUserId(req) }, include: { recordedBy: { select: { id: true, name: true, email: true } } } })
     res.status(201).json(activity)
   } catch (error) { next(error) }
 })
@@ -1079,10 +1082,12 @@ app.put('/api/activities/:id', requireStaff, async (req, res, next) => {
     const existing = await prisma.activity.findUnique({ where: { id } })
     if (!existing) return res.status(404).json({ message: 'Activity not found' })
     if (existing.recordedById !== currentUserId(req)) return res.status(403).json({ message: 'You can only edit your own activities' })
+    const reportingWeek = await findReportingWeekForDate(activityDate, Number(req.user.churchId))
+    if (!reportingWeek) return res.status(400).json({ message: 'This date is not included in a configured reporting week. Ask an administrator to update Calendar settings.' })
 
     const activity = await prisma.activity.update({
       where: { id },
-      data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: (await findReportingWeekForDate(activityDate, Number(req.user.churchId)))?.id || null },
+      data: { name: name.trim(), type: type?.trim() || null, date: activityDate, reportingWeekId: reportingWeek.id },
       include: { recordedBy: { select: { id: true, name: true, email: true } } },
     })
     res.json(activity)
@@ -1121,10 +1126,13 @@ app.post('/api/attendance', requireStaff, async (req, res, next) => {
       activity = await prisma.activity.findUnique({ where: { id } })
       if (!activity) return res.status(404).json({ message: 'Activity not found' })
       if (activity.recordedById !== currentUserId(req)) return res.status(403).json({ message: 'You can only record attendance for your own activities' })
+      if (!await findReportingWeekForDate(activity.date, Number(req.user.churchId))) return res.status(400).json({ message: 'This date is not included in a configured reporting week. Ask an administrator to update Calendar settings.' })
     } else {
       const activityDate = new Date(date)
       if (!service?.trim() || Number.isNaN(activityDate.getTime())) return res.status(400).json({ message: 'Valid service and date are required' })
-      activity = await prisma.activity.create({ data: { name: service.trim(), type: 'service', date: activityDate, reportingWeekId: (await findReportingWeekForDate(activityDate, Number(req.user.churchId)))?.id || null, recordedById: currentUserId(req) } })
+      const reportingWeek = await findReportingWeekForDate(activityDate, Number(req.user.churchId))
+      if (!reportingWeek) return res.status(400).json({ message: 'This date is not included in a configured reporting week. Ask an administrator to update Calendar settings.' })
+      activity = await prisma.activity.create({ data: { name: service.trim(), type: 'service', date: activityDate, reportingWeekId: reportingWeek.id, recordedById: currentUserId(req) } })
     }
 
     const value = (group, gender) => Math.max(0, Number(groups?.[group]?.[gender] || 0))
@@ -1192,6 +1200,7 @@ app.post('/api/expenses', requireStaff, async (req, res, next) => {
     if (!(description || title)?.trim() || !Number.isFinite(numericAmount) || numericAmount < 0 || Number.isNaN(expenseDate.getTime())) {
       return res.status(400).json({ message: 'Valid description, non-negative amount and date are required' })
     }
+    if (!reportingWeek) return res.status(400).json({ message: 'This date is not included in a configured reporting week. Ask an administrator to update Calendar settings.' })
     const linkedActivityId = activityId ? Number(activityId) : null
     if (linkedActivityId !== null) {
       if (!Number.isInteger(linkedActivityId) || linkedActivityId <= 0) return res.status(400).json({ message: 'Invalid activity id' })
@@ -1239,8 +1248,9 @@ app.post('/api/finances', requireStaff, async (req, res, next) => {
     if (!normalizedCategory) return res.status(400).json({ message: 'Category is required' })
     if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ message: 'Amount must be greater than zero' })
     if (Number.isNaN(date.getTime())) return res.status(400).json({ message: 'A valid transaction date is required' })
+    if (!reportingWeek) return res.status(400).json({ message: 'This date is not included in a configured reporting week. Ask an administrator to update Calendar settings.' })
     const record = await prisma.financialRecord.create({
-      data: { type: normalizedType, category: normalizedCategory, amount: value, description: String(description || '').trim() || null, recordDate: date, reportingWeekId: reportingWeek?.id || null, recordedById: Number(req.user.sub) },
+      data: { type: normalizedType, category: normalizedCategory, amount: value, description: String(description || '').trim() || null, recordDate: date, reportingWeekId: reportingWeek.id, recordedById: Number(req.user.sub) },
       include: { recordedBy: { select: { id: true, name: true, email: true } } },
     })
     res.status(201).json(record)
