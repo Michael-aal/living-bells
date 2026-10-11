@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 import { prisma, tenantContext } from './db.js'
-import { validateReportingWeekDates } from './reporting-calendar.js'
+import { reportingPeriodFromEndDate, validateReportingWeekDates } from './reporting-calendar.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
@@ -680,10 +680,15 @@ function monthDays(year,month){
   return new Date(Date.UTC(year,month,0)).getUTCDate()
 }
 async function validateReportingWeekRange({year,month,weekNumber,startDate,endDate,churchId,excludeId=null}){
-  const dateError=validateReportingWeekDates({year,month,weekNumber,startDate,endDate})
-  if(dateError) return dateError
-
   const start=normalizeDay(startDate), end=normalizeDay(endDate)
+  // The week belongs to the reporting month in which it ends. Derive that
+  // owner from the dates on the server instead of trusting a potentially stale
+  // month/year value from the form.
+  const ownerPeriod=reportingPeriodFromEndDate(end)
+  const ownerYear=ownerPeriod?.year ?? year
+  const ownerMonth=ownerPeriod?.month ?? month
+  const dateError=validateReportingWeekDates({year:ownerYear,month:ownerMonth,weekNumber,startDate,endDate})
+  if(dateError) return dateError
 
   // Validate against the actual date range instead of loading a month first.
   // This makes the calendar explicitly date-driven and prevents a historical
@@ -812,7 +817,11 @@ app.put('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
     if(!Number.isInteger(id)||id<1)return res.status(400).json({message:'Invalid reporting week id'})
     const existing=await prisma.reportingWeek.findUnique({where:{id}})
     if(!existing)return res.status(404).json({message:'Reporting week not found'})
-    const year=Number(req.body.year), month=Number(req.body.month), weekNumber=Number(req.body.weekNumber)
+    const end=normalizeDay(req.body.endDate)
+    const period=reportingPeriodFromEndDate(end)
+    const year=period?.year ?? Number(req.body.year)
+    const month=period?.month ?? Number(req.body.month)
+    const weekNumber=Number(req.body.weekNumber)
     const error=await validateReportingWeekRange({
       year,month,weekNumber,
       churchId: Number(req.user.churchId),
@@ -821,7 +830,7 @@ app.put('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
       excludeId:id
     })
     if(error)return res.status(400).json({message:error})
-    const start=normalizeDay(req.body.startDate), end=normalizeDay(req.body.endDate)
+    const start=normalizeDay(req.body.startDate)
     const monthRecord=await prisma.reportingMonth.upsert({
       where:{churchId_year_month:{churchId:Number(req.user.churchId),year,month}},
       update:{},
@@ -861,10 +870,14 @@ app.delete('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
 
 app.post('/api/reporting/weeks', requireAdmin, async (req,res,next)=>{
   try{
-    const year=Number(req.body.year), month=Number(req.body.month), weekNumber=Number(req.body.weekNumber)
+    const end=normalizeDay(req.body.endDate)
+    const period=reportingPeriodFromEndDate(end)
+    const year=period?.year ?? Number(req.body.year)
+    const month=period?.month ?? Number(req.body.month)
+    const weekNumber=Number(req.body.weekNumber)
     const error=await validateReportingWeekRange({year,month,weekNumber,churchId:Number(req.user.churchId),startDate:req.body.startDate,endDate:req.body.endDate})
     if(error)return res.status(400).json({message:error})
-    const start=normalizeDay(req.body.startDate), end=normalizeDay(req.body.endDate)
+    const start=normalizeDay(req.body.startDate)
     const monthRecord=await prisma.reportingMonth.upsert({
       where:{churchId_year_month:{churchId:Number(req.user.churchId),year,month}},
       update:{},

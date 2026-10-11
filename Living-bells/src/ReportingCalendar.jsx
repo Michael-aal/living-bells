@@ -153,11 +153,10 @@ export default function ReportingCalendar({ user, current }) {
       const end = new Date(String(form.endDate).slice(0, 10) + 'T12:00:00Z')
       if (Number.isNaN(end.getTime())) throw new Error('A valid end date is required')
 
-      // The reporting month and year are derived from the week end date.
-      // Mirror the backend rule here so the form stays aligned before submission.
+      // Derive reporting month/year from the week end date on both client and server.
       const payload = {
-        year: Number(form.year),
-        month: Number(form.month),
+        year: end.getUTCFullYear(),
+        month: end.getUTCMonth() + 1,
         weekNumber: Number(form.weekNumber),
         startDate: form.startDate,
         endDate: form.endDate,

@@ -19,6 +19,13 @@ function toUtcDay(value) {
   return date
 }
 
+// Reporting periods are derived from the week end date, never from today's date.
+export function reportingPeriodFromEndDate(value) {
+  const end = toUtcDay(value)
+  if (!end) return null
+  return { year: end.getUTCFullYear(), month: end.getUTCMonth() + 1 }
+}
+
 export function validateReportingWeekDates({ year, month, weekNumber, startDate, endDate }) {
   if (!Number.isInteger(year) || year < 1 || year > 9999) return 'A valid reporting year is required'
   if (!Number.isInteger(month) || month < 1 || month > 12) return 'A valid reporting month is required'
@@ -29,9 +36,9 @@ export function validateReportingWeekDates({ year, month, weekNumber, startDate,
   if (!start || !end) return 'A valid start and end date are required'
   if (end.getTime() - start.getTime() !== 6 * 86400000) return 'A reporting week must contain exactly 7 days'
 
-  if (end.getUTCFullYear() !== year || end.getUTCMonth() + 1 !== month) {
-    return 'The reporting month must match the month where the reporting week ends'
-  }
+  // The API resolves the reporting month/year from the end date. Do not
+  // reject a valid seven-day range because the form's selected month/year is
+  // stale while the admin changes dates across a month or year boundary.
 
   return null
 }

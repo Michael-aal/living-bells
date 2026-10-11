@@ -35,6 +35,20 @@ function daysForWeek(week) {
   }).filter(day => day.date <= end)
 }
 
+// Pick a date inside a week that keeps the selector on the week owner's
+// month/year. A week that starts in the previous month belongs to its end month.
+function dateForWeekSelection(week) {
+  const start = String(week?.startDate || '').slice(0, 10)
+  const end = String(week?.endDate || '').slice(0, 10)
+  const owner = week?.month
+  if (!start || !end || !owner) return start || end
+  const startYear = Number(start.slice(0, 4))
+  const startMonth = Number(start.slice(5, 7))
+  return startYear === Number(owner.year) && startMonth === Number(owner.month)
+    ? start
+    : end
+}
+
 function monthLabel(month) {
   return new Date(
     Date.UTC(Number(month.year), Number(month.month) - 1, 1)
@@ -166,7 +180,7 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
         .filter(month => (month.weeks || []).length > 0)
       const firstWeek = availableMonths[0]?.weeks?.[0]
       if (!firstWeek) return
-      onDateChange(String(firstWeek.startDate).slice(0, 10))
+      onDateChange(dateForWeekSelection({ ...firstWeek, month: availableMonths[0] }))
     } catch {
       // Keep the current date if the configured calendar cannot be loaded.
     } finally {
@@ -177,7 +191,7 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
   function navigateToMonth(monthValue) {
     const month = configuredMonths.find(item => Number(item.month) === Number(monthValue))
     const firstWeek = month?.weeks?.[0]
-    if (firstWeek) onDateChange(String(firstWeek.startDate).slice(0, 10))
+    if (firstWeek) onDateChange(dateForWeekSelection({ ...firstWeek, month }))
   }
 
   useEffect(() => {
@@ -300,9 +314,7 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
                 setOpenWeekId(week.id)
 
                 if (!selected) {
-                  onDateChange(
-                    String(week.startDate).slice(0, 10)
-                  )
+                  onDateChange(dateForWeekSelection(week))
                 }
               }}
             >
