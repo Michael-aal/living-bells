@@ -62,6 +62,8 @@ jobs:
           cache: npm
           cache-dependency-path: Living-bells/backend/package-lock.json
       - run: npm ci
+      - name: Validate guarded production migration recovery script
+        run: node --check scripts/recover-failed-migration.js
       - name: Build a disposable database from the schema before this migration
         run: |
           migration_path="Living-bells/backend/prisma/migrations/20261010170000_multi_church_foundation/migration.sql"
