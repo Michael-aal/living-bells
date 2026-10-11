@@ -178,9 +178,18 @@ export default function ReportingWeekPicker({ date, onDateChange }) {
       const yearMonths = await api.reportingMonths(year)
       const availableMonths = (Array.isArray(yearMonths) ? yearMonths : [])
         .filter(month => (month.weeks || []).length > 0)
-      const firstWeek = availableMonths[0]?.weeks?.[0]
-      if (!firstWeek) return
-      onDateChange(dateForWeekSelection({ ...firstWeek, month: availableMonths[0] }))
+      // Keep the user's current month and week number when switching years.
+      // This makes the selected year drive the actual week/date, rather than
+      // unexpectedly jumping to the first week of the year.
+      const targetMonth =
+        availableMonths.find(month => Number(month.month) === selectedMonthNumber) ||
+        availableMonths[0]
+      const currentWeekNumber = Number(containingWeek?.weekNumber)
+      const targetWeek =
+        targetMonth?.weeks?.find(week => Number(week.weekNumber) === currentWeekNumber) ||
+        targetMonth?.weeks?.[0]
+      if (!targetMonth || !targetWeek) return
+      onDateChange(dateForWeekSelection({ ...targetWeek, month: targetMonth }))
     } catch {
       // Keep the current date if the configured calendar cannot be loaded.
     } finally {
