@@ -38,13 +38,6 @@ function roundAverage(value) {
   return Number.isInteger(value) ? value : Number(value.toFixed(2))
 }
 
-function weekOfMonth(value) {
-  const date = parseDate(value)
-  if (!date) return 0
-  const first = new Date(date.getFullYear(), date.getMonth(), 1)
-  return Math.floor((date.getDate() + first.getDay() - 1) / 7) + 1
-}
-
 function startOfWeek(value) {
   const date = parseDate(value) || new Date()
   const start = new Date(date)
@@ -487,8 +480,6 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         total: row.adults + row.children + row.visitors,
       }))
 
-    const adultTotal = rows.reduce((sum, row) => sum + row.averageAdult, 0)
-    const childrenTotal = rows.reduce((sum, row) => sum + row.averageChildren, 0)
     const overallTotal = Array.from(categoryMap.values()).reduce((sum, row) => sum + row.adults + row.children + row.visitors, 0)
 
     return {
