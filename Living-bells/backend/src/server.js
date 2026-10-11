@@ -690,6 +690,7 @@ async function validateReportingWeekRange({year,month,weekNumber,startDate,endDa
   // week from being compared with a week from another year.
   const overlappingWeek=await prisma.reportingWeek.findFirst({
     where:{
+      churchId:Number(churchId),
       ...(excludeId ? {id:{not:excludeId}} : {}),
       startDate:{lte:end},
       endDate:{gte:start},
@@ -712,7 +713,7 @@ async function validateReportingWeekRange({year,month,weekNumber,startDate,endDa
   // Week numbers are scoped to the exact year + month via the existing
   // ReportingMonth/ReportingWeek composite uniqueness constraints.
   const monthRecord=await prisma.reportingMonth.findUnique({
-    where:{churchId_year_month:{churchId:Number(req.user.churchId),year,month}},
+    where:{churchId_year_month:{churchId:Number(churchId),year,month}},
     select:{id:true},
   })
 
