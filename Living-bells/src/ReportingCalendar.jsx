@@ -63,6 +63,8 @@ export default function ReportingCalendar({ user, current }) {
       setError('')
       const data = await api.reportingMonths(year)
       setMonths(data || [])
+      const savedYears = await api.reportingYears().catch(() => [])
+      setAvailableYears(Array.isArray(savedYears) ? savedYears : [])
       return data || []
     } catch (e) {
       setError(e.message || 'Could not load calendar')
@@ -72,18 +74,6 @@ export default function ReportingCalendar({ user, current }) {
   }
 
   useEffect(() => { load() }, [year])
-
-  useEffect(() => {
-    let active = true
-    api.reportingYears()
-      .then(values => {
-        if (active) setAvailableYears(Array.isArray(values) ? values : [])
-      })
-      .catch(() => {
-        if (active) setAvailableYears([])
-      })
-    return () => { active = false }
-  }, [months.length])
 
   function setField(key, value) {
     setForm(currentForm => {
