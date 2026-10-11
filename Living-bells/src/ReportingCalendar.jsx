@@ -46,6 +46,7 @@ export default function ReportingCalendar({ user, current }) {
   const currentYear = Number(current?.month?.year || new Date().getFullYear())
   const currentMonth = Number(current?.month?.month || new Date().getMonth() + 1)
   const [months, setMonths] = useState([])
+  const [availableYears, setAvailableYears] = useState([])
   const [year, setYear] = useState(currentYear)
   const [form, setForm] = useState(emptyForm(currentYear, currentMonth))
   const [editingId, setEditingId] = useState(null)
@@ -71,6 +72,18 @@ export default function ReportingCalendar({ user, current }) {
   }
 
   useEffect(() => { load() }, [year])
+
+  useEffect(() => {
+    let active = true
+    api.reportingYears()
+      .then(values => {
+        if (active) setAvailableYears(Array.isArray(values) ? values : [])
+      })
+      .catch(() => {
+        if (active) setAvailableYears([])
+      })
+    return () => { active = false }
+  }, [months.length])
 
   function setField(key, value) {
     setForm(currentForm => {
@@ -299,7 +312,14 @@ export default function ReportingCalendar({ user, current }) {
         </div>
         <label className="year-picker">
           <span>View year</span>
-          <input type="number" value={year} onChange={e => setYear(Number(e.target.value) || currentYear)} />
+          <select
+            value={year}
+            onChange={e => setYear(Number(e.target.value) || currentYear)}
+            aria-label="View reporting calendar year"
+          >
+            {!availableYears.includes(Number(year)) && <option value={year}>{year} (no saved weeks)</option>}
+            {availableYears.map(value => <option key={value} value={value}>{value}</option>)}
+          </select>
         </label>
       </div>
 
