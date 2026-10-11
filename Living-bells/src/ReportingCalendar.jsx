@@ -97,24 +97,17 @@ export default function ReportingCalendar({ user, current }) {
       }
 
       if (key === 'startDate' && value && !editingId) {
+        // Keep the selected reporting year/month as the destination.
+        // Choosing dates must not silently switch the calendar to the
+        // current year or another year when the range crosses a boundary.
         next.endDate = addDays(value, 6)
-        const end = new Date(next.endDate + 'T12:00:00Z')
-        next.year = end.getUTCFullYear()
-        next.month = end.getUTCMonth() + 1
-        next.weekNumber = nextWeekNumber(months, next.year, next.month)
-        setYear(end.getUTCFullYear())
       }
 
       if (key === 'endDate' && value) {
-        const end = new Date(value + 'T12:00:00Z')
-        if (!Number.isNaN(end.getTime())) {
-          next.year = end.getUTCFullYear()
-          next.month = end.getUTCMonth() + 1
-          if (!editingId) {
-            next.weekNumber = nextWeekNumber(months, next.year, next.month)
-          }
-          setYear(end.getUTCFullYear())
-        }
+        // Do not derive the selected reporting year/month from the date
+        // input. The selected destination stays authoritative; save-time
+        // validation reports a mismatch instead of changing the selection.
+        next.endDate = value
       }
 
       return next
@@ -148,15 +141,14 @@ export default function ReportingCalendar({ user, current }) {
       setNotice('')
       setHighlightedWeekId(null)
 
-      // The ending date is the source of truth for the reporting
-      // year/month. This prevents a stale year selector from accidentally
-      // submitting a historical week against the current calendar.
       const end = new Date(String(form.endDate).slice(0, 10) + 'T12:00:00Z')
       if (Number.isNaN(end.getTime())) throw new Error('A valid end date is required')
 
+      // The year/month selected in the form are the intended destination.
+      // The backend validates that the end date belongs to that period.
       const payload = {
-        year: end.getUTCFullYear(),
-        month: end.getUTCMonth() + 1,
+        year: Number(form.year),
+        month: Number(form.month),
         weekNumber: Number(form.weekNumber),
         startDate: form.startDate,
         endDate: form.endDate,
