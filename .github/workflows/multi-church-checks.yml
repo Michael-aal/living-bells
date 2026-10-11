@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/multi-church-foundation
+      - fix/multi-church-migration-recovery
   pull_request:
     branches:
       - main
