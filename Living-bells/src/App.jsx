@@ -496,6 +496,13 @@ function App() {
     const date = String(result?.date || '').slice(0, 10)
     if (!date) return
     if (result.type === 'Activities') {
+      if (result.recordKind === 'activity') {
+        const record = activities.find(item => String(item.id) === String(result.recordId))
+        if (record) openActivityEditor(record)
+        else setSync('That activity record is no longer available')
+        setPage('activities')
+        return
+      }
       setReportEditDate(date)
       setPage('activities')
       return

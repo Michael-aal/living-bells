@@ -127,9 +127,47 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const [searchDay, setSearchDay] = useState('')
   const [searchPeriod, setSearchPeriod] = useState(null)
   const [reportingMonths, setReportingMonths] = useState([])
+  const [configuredReportingYears, setConfiguredReportingYears] = useState([])
   const [calendarLoading, setCalendarLoading] = useState(false)
 
   const canEditOperational = ['ADMIN', 'SECRETARY', 'PASTOR', 'STAFF'].includes(user?.role)
+
+  // Search years must come from the administrator-configured reporting calendar,
+  // not from whichever records happen to exist in the database.
+  useEffect(() => {
+    let cancelled = false
+    async function loadConfiguredReportingYears() {
+      try {
+        const calendarYears = await api.reportingYears()
+        const validCalendarYears = Array.isArray(calendarYears)
+          ? [...new Set(calendarYears.map(Number).filter(year => Number.isInteger(year) && year > 0))]
+          : []
+        const monthGroups = await Promise.all(
+          validCalendarYears.map(async calendarYear => ({
+            calendarYear,
+            months: await api.reportingMonths(calendarYear).catch(() => []),
+          }))
+        )
+        const fiscalYears = new Set()
+        monthGroups.forEach(({ calendarYear, months }) => {
+          if (!Array.isArray(months)) return
+          months.forEach(month => {
+            if (!Array.isArray(month.weeks) || month.weeks.length === 0) return
+            const monthNumber = Number(month.month)
+            if (!Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) return
+            fiscalYears.add(monthNumber <= 6 ? calendarYear - 1 : calendarYear)
+          })
+        })
+        if (!cancelled) {
+          setConfiguredReportingYears([...fiscalYears].sort((a, b) => b - a))
+        }
+      } catch {
+        if (!cancelled) setConfiguredReportingYears([])
+      }
+    }
+    loadConfiguredReportingYears()
+    return () => { cancelled = true }
+  }, [refreshKey])
 
   useEffect(() => {
     let cancelled = false
@@ -156,33 +194,21 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     return () => { cancelled = true }
   }, [refreshKey])
 
-  const searchYears = useMemo(() => {
-    const years = new Set()
-    reports.forEach(item => {
-      const date = parseDate(item.reportDate)
-      if (date) years.add(date.getFullYear())
-    })
-    attendance.forEach(item => {
-      const date = parseDate(item.activity?.date || item.date || item.recordDate)
-      if (date) years.add(date.getFullYear())
-    })
-    activities.forEach(item => {
-      const date = parseDate(item.date)
-      if (date) years.add(date.getFullYear())
-    })
-    return Array.from(years).sort((a, b) => b - a)
-  }, [reports, attendance, activities])
+  const searchYears = configuredReportingYears
 
   useEffect(() => {
     let cancelled = false
     async function loadReportingCalendar() {
-      if (!searchYear) {
+      if (!searchYear || !searchMonth) {
         setReportingMonths([])
+        setCalendarLoading(false)
         return
       }
+      const selectedMonth = Number(searchMonth)
+      const calendarYear = selectedMonth <= 6 ? Number(searchYear) + 1 : Number(searchYear)
       try {
         setCalendarLoading(true)
-        const rows = await api.reportingMonths(Number(searchYear))
+        const rows = await api.reportingMonths(calendarYear)
         if (!cancelled) setReportingMonths(Array.isArray(rows) ? rows : [])
       } catch {
         if (!cancelled) setReportingMonths([])
@@ -192,7 +218,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     }
     loadReportingCalendar()
     return () => { cancelled = true }
-  }, [searchYear])
+  }, [searchYear, searchMonth])
 
   const configuredWeeks = useMemo(() => {
     const month = Number(searchMonth)
@@ -205,7 +231,9 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
 
   const searchDays = useMemo(() => {
     if (!searchYear || !searchMonth) return Array.from({ length: 31 }, (_, index) => index + 1)
-    const days = new Date(Number(searchYear), Number(searchMonth), 0).getDate()
+    const month = Number(searchMonth)
+    const calendarYear = month <= 6 ? Number(searchYear) + 1 : Number(searchYear)
+    const days = new Date(calendarYear, month, 0).getDate()
     return Array.from({ length: days }, (_, index) => index + 1)
   }, [searchYear, searchMonth])
 
@@ -214,7 +242,10 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       const date = parseDate(dateValue)
       if (!date) return false
       if (searchType && type !== searchType) return false
-      if (searchYear && date.getFullYear() !== Number(searchYear)) return false
+      if (searchYear) {
+        const reportingYear = date.getMonth() >= 6 ? date.getFullYear() : date.getFullYear() - 1
+        if (reportingYear !== Number(searchYear)) return false
+      }
       if (searchMonth && date.getMonth() + 1 !== Number(searchMonth)) return false
       if (searchDay && date.getDate() !== Number(searchDay)) return false
       if (searchWeek) {
@@ -236,6 +267,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           type: 'Finance',
           date,
           recordId: report.id,
+          recordKind: 'weekly-report',
           title: 'Finance record',
           detail: `${incomeNames.length} income categories · ${expenditureNames.length} expenditure categories · ${money(report.totalIncome || 0)} in · ${money(report.totalExpenditure || 0)} out`,
         })
@@ -245,8 +277,23 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           type: 'Activities',
           date,
           recordId: report.id,
+          recordKind: 'weekly-report',
           title: 'Weekly activities',
           detail: activityNames.length ? activityNames.join(' · ') : 'No activity rows saved',
+        })
+      }
+    })
+
+    activities.forEach(item => {
+      const date = item.date
+      if (matches(date, 'Activities')) {
+        results.push({
+          type: 'Activities',
+          date,
+          recordId: item.id,
+          recordKind: 'activity',
+          title: item.name || 'Activity record',
+          detail: `${item.type || 'Activity'} · ${item.recordedBy?.name || 'Recorded activity'}`,
         })
       }
     })
@@ -259,6 +306,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           type: 'Attendance',
           date,
           recordId: item.id,
+          recordKind: 'attendance',
           title: service,
           detail: `${formatNumber(attendanceTotalFor(item))} total attendance`,
         })
@@ -266,7 +314,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     })
 
     return results.sort((a, b) => keyOf(b.date).localeCompare(keyOf(a.date)))
-  }, [reports, attendance, searchType, searchYear, searchMonth, searchWeek, searchDay, configuredWeeks])
+  }, [reports, activities, attendance, searchType, searchYear, searchMonth, searchWeek, searchDay, configuredWeeks])
 
   const clearSearch = () => {
     setSearchPeriod(null)
@@ -280,6 +328,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const openSearchPeriod = result => {
     const year = Number(searchYear || parseDate(result.date)?.getFullYear())
     const month = Number(searchMonth)
+    const calendarYear = searchYear && month && month <= 6 ? year + 1 : year
     let start
     let end
     let label
@@ -295,17 +344,17 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       label = `Week ${configuredWeek.weekNumber} · ${displayDate(start)} – ${displayDate(configuredWeek.endDate)}`
       selectedAnchor = keyOf(configuredWeek.startDate)
     } else if (searchDay && searchMonth && year) {
-      start = new Date(year, month - 1, Number(searchDay), 0, 0, 0, 0)
-      end = new Date(year, month - 1, Number(searchDay), 23, 59, 59, 999)
+      start = new Date(calendarYear, month - 1, Number(searchDay), 0, 0, 0, 0)
+      end = new Date(calendarYear, month - 1, Number(searchDay), 23, 59, 59, 999)
       label = start.toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' })
       selectedMode = 'week'
-      selectedAnchor = `${year}-${pad(month)}-${pad(Number(searchDay))}`
+      selectedAnchor = `${calendarYear}-${pad(month)}-${pad(Number(searchDay))}`
     } else if (searchMonth && year) {
-      start = new Date(year, month - 1, 1)
-      end = new Date(year, month, 0, 23, 59, 59, 999)
+      start = new Date(calendarYear, month - 1, 1)
+      end = new Date(calendarYear, month, 0, 23, 59, 59, 999)
       label = start.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
       selectedMode = 'month'
-      selectedAnchor = `${year}-${pad(month)}-01`
+      selectedAnchor = `${calendarYear}-${pad(month)}-01`
     } else if (searchYear) {
       start = reportingYearStart(year)
       end = reportingYearEnd(year)
@@ -529,7 +578,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         {(searchType || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Reset filters</button>}
       </div>
 
-      <form className="record-search-filters" onSubmit={e => e.preventDefault()}>
+      <form className="record-search-filters" onSubmit={e => { e.preventDefault(); if (searchResults[0]) openSearchPeriod(searchResults[0]) }}>
         <label className="record-search-primary-filter">
           <span>Record type</span>
           <select value={searchType} onChange={e => setSearchType(e.target.value)} aria-label="Choose record type">
@@ -540,10 +589,15 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           </select>
         </label>
         <label>
-          Year
-          <select value={searchYear} onChange={e => { setSearchYear(e.target.value); setSearchWeek(''); setSearchDay('') }}>
+          Reporting year (July–June)
+          <select
+            value={searchYear}
+            onChange={e => { setSearchYear(e.target.value); setSearchMonth(''); setSearchWeek(''); setSearchDay('') }}
+            disabled={calendarLoading}
+            aria-label="Choose an administrator-configured reporting year"
+          >
             <option value="">Any year</option>
-            {searchYears.map(year => <option key={year} value={year}>{year}</option>)}
+            {searchYears.map(year => <option key={year} value={year}>{reportingYearLabel(year)}</option>)}
           </select>
         </label>
         <label>
@@ -619,7 +673,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
-    {!loading && searchPeriod && selectedReports.length === 0 && selectedAttendance.length === 0 && <div className="record-search-empty"><strong>No records found for {searchPeriod.label}.</strong><span>There is no saved data in this period to calculate an average from.</span></div>}
+    {!loading && searchPeriod && selectedReports.length === 0 && selectedAttendance.length === 0 && selectedActivities.length === 0 && <div className="record-search-empty"><strong>No records found for {searchPeriod.label}.</strong><span>There is no saved data in this period to calculate an average from.</span></div>}
     {loading ? <section className="card full"><p>Loading reports…</p></section> : <>
       <ReportSection title="Attendance" eyebrow="Attendance summary" description="Attendance is shown as the saved total for the selected period, without age or gender breakdowns." action={canEditOperational ? () => onEditAttendance?.() : null}>
         <div className="finance-total-grid">
