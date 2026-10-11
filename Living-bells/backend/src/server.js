@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 import { prisma, tenantContext } from './db.js'
-import { validateReportingWeekDates } from './reporting-calendar.js'
+import { reportingPeriodFromEndDate, validateReportingWeekDates } from './reporting-calendar.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
@@ -684,8 +684,9 @@ async function validateReportingWeekRange({year,month,weekNumber,startDate,endDa
   // The week belongs to the reporting month in which it ends. Derive that
   // owner from the dates on the server instead of trusting a potentially stale
   // month/year value from the form.
-  const ownerYear=end && !Number.isNaN(end.getTime()) ? end.getUTCFullYear() : year
-  const ownerMonth=end && !Number.isNaN(end.getTime()) ? end.getUTCMonth()+1 : month
+  const ownerPeriod=reportingPeriodFromEndDate(end)
+  const ownerYear=ownerPeriod?.year ?? year
+  const ownerMonth=ownerPeriod?.month ?? month
   const dateError=validateReportingWeekDates({year:ownerYear,month:ownerMonth,weekNumber,startDate,endDate})
   if(dateError) return dateError
 
@@ -817,8 +818,9 @@ app.put('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
     const existing=await prisma.reportingWeek.findUnique({where:{id}})
     if(!existing)return res.status(404).json({message:'Reporting week not found'})
     const end=normalizeDay(req.body.endDate)
-    const year=end && !Number.isNaN(end.getTime()) ? end.getUTCFullYear() : Number(req.body.year)
-    const month=end && !Number.isNaN(end.getTime()) ? end.getUTCMonth()+1 : Number(req.body.month)
+    const period=reportingPeriodFromEndDate(end)
+    const year=period?.year ?? Number(req.body.year)
+    const month=period?.month ?? Number(req.body.month)
     const weekNumber=Number(req.body.weekNumber)
     const error=await validateReportingWeekRange({
       year,month,weekNumber,
@@ -869,8 +871,9 @@ app.delete('/api/reporting/weeks/:id', requireAdmin, async (req,res,next)=>{
 app.post('/api/reporting/weeks', requireAdmin, async (req,res,next)=>{
   try{
     const end=normalizeDay(req.body.endDate)
-    const year=end && !Number.isNaN(end.getTime()) ? end.getUTCFullYear() : Number(req.body.year)
-    const month=end && !Number.isNaN(end.getTime()) ? end.getUTCMonth()+1 : Number(req.body.month)
+    const period=reportingPeriodFromEndDate(end)
+    const year=period?.year ?? Number(req.body.year)
+    const month=period?.month ?? Number(req.body.month)
     const weekNumber=Number(req.body.weekNumber)
     const error=await validateReportingWeekRange({year,month,weekNumber,churchId:Number(req.user.churchId),startDate:req.body.startDate,endDate:req.body.endDate})
     if(error)return res.status(400).json({message:error})
