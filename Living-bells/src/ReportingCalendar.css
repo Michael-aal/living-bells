@@ -85,3 +85,38 @@
   .week-days{grid-template-columns:1fr}
   .week-day{border-right:0}
 }
+
+
+/* Reporting calendar: stack sections cleanly on phones and keep controls readable. */
+@media (max-width: 767px) {
+  .calendar-page { gap: 12px; }
+  .calendar-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .calendar-hero-copy { max-width: none; min-width: 0; }
+  .calendar-current { min-width: 0; width: 100%; padding: 14px; }
+  .calendar-builder-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+  .calendar-builder-grid label { min-width: 0; }
+  .calendar-builder-grid label input,
+  .calendar-builder-grid label select { min-width: 0; width: 100%; }
+  .calendar-builder-action { grid-column: 1 / -1; }
+  .calendar-rule { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .section-title { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+  .year-picker { width: 100%; }
+  .year-picker select, .year-picker input { width: 100%; min-height: 42px; }
+  .calendar-month { padding: 13px; }
+  .calendar-week summary { align-items: flex-start; padding: 12px; }
+  .week-summary-actions { align-items: flex-end; flex-direction: column; gap: 7px; }
+  .week-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .week-day { min-width: 0; padding: 8px 4px; }
+  .week-title small { overflow-wrap: anywhere; line-height: 1.4; }
+}
+
+@media (max-width: 430px) {
+  .calendar-builder-grid { grid-template-columns: minmax(0, 1fr); }
+  .calendar-builder-action { grid-column: auto; }
+  .calendar-month-head { align-items: flex-start; }
+  .calendar-week summary { flex-direction: column; gap: 10px; }
+  .week-summary-actions { width: 100%; align-items: flex-start; }
+  .week-actions { justify-content: flex-start; }
+  .week-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
