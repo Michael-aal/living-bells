@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateReportingWeekDates } from '../src/reporting-calendar.js'
+import { reportingPeriodFromEndDate, validateReportingWeekDates } from '../src/reporting-calendar.js'
 
 function week(startDate, overrides = {}) {
   const start = new Date(startDate + 'T12:00:00Z')
@@ -15,6 +15,13 @@ function week(startDate, overrides = {}) {
     ...overrides,
   }
 }
+
+test('keeps October 2025 separate from October 2026 regardless of the current year', () => {
+  assert.deepEqual(reportingPeriodFromEndDate('2025-10-10'), { year: 2025, month: 10 })
+  assert.deepEqual(reportingPeriodFromEndDate('2026-10-10'), { year: 2026, month: 10 })
+  assert.deepEqual(reportingPeriodFromEndDate('1995-10-10'), { year: 1995, month: 10 })
+  assert.equal(reportingPeriodFromEndDate('not-a-date'), null)
+})
 
 test('accepts historical, current, and future years without a hardcoded year', () => {
   for (const start of ['2001-10-04', '2025-10-04', '2026-10-04', '2030-10-04', '2099-10-04']) {
