@@ -648,6 +648,17 @@ app.get('/api/reporting/current', async (req,res,next)=>{
     })
   }catch(e){next(e)}
 })
+app.get('/api/reporting/years', async (req,res,next)=>{
+  try{
+    const rows=await prisma.reportingMonth.findMany({
+      where:{weeks:{some:{}}},
+      select:{year:true},
+      distinct:['year'],
+      orderBy:{year:'desc'}
+    })
+    res.json(rows.map(row=>row.year))
+  }catch(e){next(e)}
+})
 app.get('/api/reporting/months', async (req,res,next)=>{
   try{
     const year=Number(req.query.year||currentChurchDate().getUTCFullYear())
