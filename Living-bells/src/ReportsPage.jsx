@@ -38,13 +38,6 @@ function roundAverage(value) {
   return Number.isInteger(value) ? value : Number(value.toFixed(2))
 }
 
-function weekOfMonth(value) {
-  const date = parseDate(value)
-  if (!date) return 0
-  const first = new Date(date.getFullYear(), date.getMonth(), 1)
-  return Math.floor((date.getDate() + first.getDay() - 1) / 7) + 1
-}
-
 function startOfWeek(value) {
   const date = parseDate(value) || new Date()
   const start = new Date(date)
@@ -74,6 +67,15 @@ function reportingYearEnd(year) {
   return new Date(Number(year) + 1, 5, 30, 23, 59, 59, 999)
 }
 
+function reportingYearForDate(value) {
+  const date = value instanceof Date ? value : parseDate(value)
+  if (!date) {
+    const now = new Date()
+    return now.getFullYear() - (now.getMonth() < 6 ? 1 : 0)
+  }
+  return date.getMonth() >= 6 ? date.getFullYear() : date.getFullYear() - 1
+}
+
 function reportingYearLabel(year) {
   return `${Number(year)}/${String(Number(year) + 1).slice(-2)}`
 }
@@ -86,7 +88,7 @@ function periodLabel(mode, anchor) {
     const date = parseDate(anchor)
     return date.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
   }
-  return `Reporting year ${reportingYearLabel(parseDate(anchor)?.getFullYear() || new Date().getFullYear())}`
+  return `Reporting year ${reportingYearLabel(reportingYearForDate(anchor))}`
 }
 
 function rowsFromJson(value) {
@@ -98,6 +100,19 @@ function numberFromRow(row, keys) {
     if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== '') return Number(row[key]) || 0
   }
   return 0
+}
+
+function isMeaningfulWeeklyReport(report) {
+  const numerical = rowsFromJson(report?.numerical)
+  const spiritual = report?.spiritual && typeof report.spiritual === 'object' ? Object.values(report.spiritual) : []
+  const income = rowsFromJson(report?.income)
+  const expenditure = rowsFromJson(report?.expenditure)
+  return numerical.some(row => Number(row?.adult) > 0 || Number(row?.children) > 0 || Number(row?.visitor) > 0)
+    || spiritual.some(value => Number(value) > 0)
+    || income.some(row => Number(row?.amount) > 0)
+    || expenditure.some(row => Number(row?.amount) > 0)
+    || Number(report?.totalIncome) > 0
+    || Number(report?.totalExpenditure) > 0
 }
 
 export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinance, onEditActivity, onEditAttendance, onOpenRecord }) {
@@ -181,7 +196,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
           api.attendance(),
         ])
         if (cancelled) return
-        setReports(weekly || [])
+        setReports((weekly || []).filter(isMeaningfulWeeklyReport))
         setActivities(activityRows || [])
         setAttendance(attendanceRows || [])
       } catch (e) {
@@ -393,7 +408,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       start: new Date(selected.getFullYear(), selected.getMonth(), 1, 0, 0, 0, 0),
       end: new Date(selected.getFullYear(), selected.getMonth() + 1, 0, 23, 59, 59, 999),
     }
-    const reportingYear = selected.getFullYear()
+    const reportingYear = reportingYearForDate(selected)
     return {
       start: reportingYearStart(reportingYear),
       end: reportingYearEnd(reportingYear),
@@ -465,8 +480,6 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         total: row.adults + row.children + row.visitors,
       }))
 
-    const adultTotal = rows.reduce((sum, row) => sum + row.averageAdult, 0)
-    const childrenTotal = rows.reduce((sum, row) => sum + row.averageChildren, 0)
     const overallTotal = Array.from(categoryMap.values()).reduce((sum, row) => sum + row.adults + row.children + row.visitors, 0)
 
     return {
