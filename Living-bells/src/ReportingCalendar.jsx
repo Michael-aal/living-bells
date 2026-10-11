@@ -76,7 +76,20 @@ export default function ReportingCalendar({ user, current }) {
     setForm(currentForm => {
       const next = { ...currentForm, [key]: value }
 
+      if (key === 'year' && !editingId) {
+        next.year = Number(value) || currentYear
+        // Year/month are the intended calendar destination. Clear dates from
+        // the previously selected period so saveWeek cannot silently submit
+        // the old year because it derives the payload from endDate.
+        next.startDate = ''
+        next.endDate = ''
+        setYear(Number(value) || currentYear)
+        next.weekNumber = nextWeekNumber(months, next.year, next.month)
+      }
+
       if (key === 'month' && !editingId) {
+        next.startDate = ''
+        next.endDate = ''
         next.weekNumber = nextWeekNumber(months, next.year, Number(value))
       }
 
@@ -235,7 +248,7 @@ export default function ReportingCalendar({ user, current }) {
       <div className="calendar-builder-grid">
         <label>
           <span>Year</span>
-          <input type="number" value={form.year} onChange={e => { setField('year', e.target.value); setYear(Number(e.target.value) || currentYear) }} />
+          <input type="number" value={form.year} onChange={e => setField('year', e.target.value)} />
         </label>
         <label>
           <span>Month</span>
