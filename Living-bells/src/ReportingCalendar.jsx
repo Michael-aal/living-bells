@@ -155,9 +155,11 @@ export default function ReportingCalendar({ user, current }) {
 
       // The reporting month and year are derived from the week end date.
       // Mirror the backend rule here so the form stays aligned before submission.
+      // Derive the reporting owner from the end date. This mirrors the
+      // backend and avoids stale year/month form state causing false errors.
       const payload = {
-        year: Number(form.year),
-        month: Number(form.month),
+        year: end.getUTCFullYear(),
+        month: end.getUTCMonth() + 1,
         weekNumber: Number(form.weekNumber),
         startDate: form.startDate,
         endDate: form.endDate,
