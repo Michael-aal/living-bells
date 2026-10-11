@@ -298,9 +298,10 @@ function App() {
     }
   }
 
-  async function deleteAttendanceRecord(id) { if(!id||!window.confirm('Delete this attendance record? This cannot be undone.')) return; try { await api.deleteAttendance(id); setAttendance(current=>current.filter(r=>r.id!==id)); setSync('Backend connected'); } catch(error){setSync(error.message||'Could not delete attendance record')} }
+  async function deleteAttendanceRecord(id) { if(user.role !== 'STAFF'||!id||!window.confirm('Delete this attendance record? This cannot be undone.')) return; try { await api.deleteAttendance(id); setAttendance(current=>current.filter(r=>r.id!==id)); setSync('Backend connected'); } catch(error){setSync(error.message||'Could not delete attendance record')} }
 
   async function addAttendance(payload) {
+    if (user.role !== 'STAFF') return false
     if (user.demo) {
       const total = Object.values(payload.groups || {}).reduce((sum, group) => sum + Number(group.male || 0) + Number(group.female || 0), 0)
       const demoRecord = {
@@ -334,6 +335,7 @@ function App() {
   }
 
   async function addActivity(payload) {
+    if (user.role !== 'STAFF') return false
     if (user.demo) {
       const demoRecord = { ...payload, id: `demo-activity-${Date.now()}` }
       setActivities(current => [demoRecord, ...current])
@@ -357,6 +359,7 @@ function App() {
   }
 
   async function updateActivity(payload) {
+    if (user.role !== 'STAFF') return false
     if (!payload?.id) return addActivity(payload)
     if (user.demo) {
       setActivities(current => current.map(item => item.id === payload.id ? { ...item, ...payload } : item))
@@ -463,6 +466,7 @@ function App() {
       return
     }
     if (result.type === 'Attendance') {
+      if (isAdmin) { setPage('attendance'); return }
       const record = attendance.find(item => String(item.id) === String(result.recordId))
       if (record) {
         setPage('attendance')
@@ -472,10 +476,12 @@ function App() {
   }
 
   function openActivityEditor(record) {
+    if (isAdmin) { setReportEditDate(String(record?.date || '').slice(0, 10) || null); setPage('activities'); return }
     setModal({ type: 'activity-edit', record })
   }
 
   function openAttendanceEditor(record) {
+    if (isAdmin) { setPage('attendance'); return }
     setModal({ type: 'attendance-edit', record })
   }
 
@@ -506,7 +512,7 @@ function App() {
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
         {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={attendance} expenses={visibleExpenses} activities={visibleActivities} weeklyReports={weeklyReports} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
-        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} onCreate={async () => { const name = window.prompt('New attendance option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: 'ATTENDANCE', name: name.trim() }); setAttendanceOptions(current => [...current.filter(x => x.name !== created.name), created]); setSync(created.offline ? 'Attendance option saved offline' : 'Backend connected') } catch (error) { setSync(error.message || 'Could not create attendance option') } }} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}<th>Action</th></tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}<td><button type="button" className="danger-button" onClick={()=>deleteAttendanceRecord(r.id)}>Delete</button></td></tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
+        {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} onCreate={async () => { const name = window.prompt('New attendance option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: 'ATTENDANCE', name: name.trim() }); setAttendanceOptions(current => [...current.filter(x => x.name !== created.name), created]); setSync(created.offline ? 'Attendance option saved offline' : 'Backend connected') } catch (error) { setSync(error.message || 'Could not create attendance option') } }} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}{!isAdmin && <th>Action</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}{!isAdmin && <td><button type="button" className="danger-button" onClick={()=>deleteAttendanceRecord(r.id)}>Delete</button></td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={financeEditDate || reportingContext?.date} onInitialDateHandled={() => setFinanceEditDate(null)} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
@@ -519,9 +525,9 @@ function App() {
     </main>
 
     {modal === 'profile' && <ProfileForm user={user} close={() => setModal(null)} save={saveProfile} />}
-    {modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} recordingDate={reportingContext?.date} options={attendanceOptions} />}
-    {modal?.type === 'attendance-edit' && <AttendanceForm initial={modal.record} close={() => setModal(null)} save={saveAttendanceEdit} />}
-    {modal === 'finance' && <FinanceForm close={() => setModal(null)} save={async payload => {
+    {!isAdmin && modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} recordingDate={reportingContext?.date} options={attendanceOptions} />}
+    {!isAdmin && modal?.type === 'attendance-edit' && <AttendanceForm initial={modal.record} close={() => setModal(null)} save={saveAttendanceEdit} />}
+    {!isAdmin && modal === 'finance' && <FinanceForm close={() => setModal(null)} save={async payload => {
       if (user.demo) {
         setFinances(current => [{ id: `demo-finance-${Date.now()}`, ...payload, amount: Number(payload.amount), date: formatDate(payload.recordDate) }, ...current])
         setModal(null)
@@ -543,7 +549,7 @@ function App() {
     {modal === 'invite-staff' && <InviteStaffForm close={() => setModal(null)} onSaved={async invitation => { setStaffInvitations(current => [invitation, ...current]); setStaffCount(current => ({ ...current, pending: current.pending + 1, total: current.total + 1 })); setModal({ type: 'staff-code', invitation }) }} />}
     {modal?.type === 'staff-code' && <StaffCodeModal invitation={modal.invitation} close={() => setModal(null)} />}
     {modal === 'review' && selectedStaff && <ReviewForm staff={selectedStaff} close={() => setModal(null)} save={saveReview} />}
-    {modal?.type === 'activity-edit' && <ActivityForm initial={modal.record} close={() => setModal(null)} save={updateActivity} />}
+    {!isAdmin && modal?.type === 'activity-edit' && <ActivityForm initial={modal.record} close={() => setModal(null)} save={updateActivity} />}
     <nav ref={node => { mobileNavRef.current = node }} className="mobile-nav" aria-label="Mobile navigation">
       {[
         ['dashboard','⌂'], ['attendance','◉'], ['activities','▣'], ['finance','₦']
@@ -567,7 +573,7 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
   const [duration, setDuration] = useState('weekly')
   const todayValue = reportingContext?.date || new Date().toISOString().slice(0, 10)
   const today = new Date(todayValue + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-  const monthLabel = reportingContext?.month ? new Date(Date.UTC(2026, Number(reportingContext.month.month) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null
+  const monthLabel = reportingContext?.month ? new Date(Date.UTC(Number(reportingContext.month.year), Number(reportingContext.month.month) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : null
 
   const range = useMemo(() => periodRange(duration, new Date()), [duration])
   const periodAttendance = useMemo(
@@ -622,7 +628,7 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
       <span className="eyebrow">Living Bells</span>
       <h2>Good day, {user?.name || 'there'}</h2>
       <p className="welcome-date">{today}</p>
-      <h3>What would you like to record?</h3>
+      <h3>{isAdmin ? 'What would you like to review?' : 'What would you like to record?'}</h3>
       <div className="welcome-actions">
         <button type="button" onClick={() => go('attendance')}>Attendance</button>
         <button type="button" onClick={() => go('finance')}>Finance</button>
