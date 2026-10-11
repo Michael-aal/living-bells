@@ -8,7 +8,10 @@ import { prisma, tenantContext } from './db.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production'
+if ((process.env.NODE_ENV === 'production' || process.env.RENDER_SERVICE_ID) && !String(process.env.JWT_SECRET || '').trim()) {
+  throw new Error('JWT_SECRET must be configured in production before the server can start')
+}
+const JWT_SECRET = String(process.env.JWT_SECRET || 'local-development-only-not-for-production')
 const DEV_RECOVERY_SECRET = String(process.env.DEV_ADMIN_RECOVERY_SECRET || '').trim()
 const DEV_RECOVERY_ENCRYPTION_KEY = crypto.createHash('sha256').update(String(process.env.DEV_RECOVERY_ENCRYPTION_KEY || JWT_SECRET)).digest()
 
@@ -922,6 +925,11 @@ function validateWeeklyPayload(body){
   const inc=normalizeFinancialRows(income)
   const exp=normalizeFinancialRows(expenditure)
   if(!inc||!exp)return{error:'Financial amounts must be valid non-negative numbers with at most 2 decimal places and every non-zero custom row must have a name'}
+  const hasRecordedValue = n.some(row => row.adult > 0 || row.children > 0 || row.visitor > 0)
+    || Object.values(sp).some(value => value > 0)
+    || inc.some(row => row.amount > 0)
+    || exp.some(row => row.amount > 0)
+  if (!hasRecordedValue) return { error: 'This report is empty. Enter at least one attendance, spiritual-experience or financial value before saving.' }
   const totalIncome=inc.reduce((sum,row)=>sum+row.amount,0)
   const totalExpenditure=exp.reduce((sum,row)=>sum+row.amount,0)
   return{data:{reportDate,numerical:n,spiritual:sp,income:inc,expenditure:exp,totalIncome,totalExpenditure,balance:totalIncome-totalExpenditure}}
@@ -1611,9 +1619,13 @@ app.use((error, _req, res, _next) => {
 })
 
 async function ensureDevAdmin() {
-  const email = String(process.env.DEV_ADMIN_EMAIL || 'livingbells@gmail.com').trim().toLowerCase()
-  const password = String(process.env.DEV_ADMIN_PASSWORD || 'Living Bells')
+  const email = String(process.env.DEV_ADMIN_EMAIL || '').trim().toLowerCase()
+  const password = String(process.env.DEV_ADMIN_PASSWORD || '')
   const name = String(process.env.DEV_ADMIN_NAME || 'Living Bells Developer').trim()
+  if (!email || !password) {
+    console.log('Developer account initialization skipped: configure DEV_ADMIN_EMAIL and DEV_ADMIN_PASSWORD to seed this account.')
+    return
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
