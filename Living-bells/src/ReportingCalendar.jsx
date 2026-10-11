@@ -96,7 +96,7 @@ export default function ReportingCalendar({ user, current }) {
         next.weekNumber = nextWeekNumber(months, next.year, Number(value))
       }
 
-      if (key === 'startDate' && value && !editingId) {
+      if (key === 'startDate' && value) {
         // A reporting period belongs to the month and year in which it ends.
         next.endDate = addDays(value, 6)
         const endYear = Number(next.endDate.slice(0, 4))
@@ -104,7 +104,7 @@ export default function ReportingCalendar({ user, current }) {
         next.year = endYear
         next.month = endMonth
         setYear(endYear)
-        next.weekNumber = nextWeekNumber(months, endYear, endMonth)
+        if (!editingId) next.weekNumber = nextWeekNumber(months, endYear, endMonth)
       }
 
       if (key === 'endDate' && value) {
