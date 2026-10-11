@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 import { prisma, tenantContext } from './db.js'
+import { validateReportingWeekDates } from './reporting-calendar.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
@@ -652,7 +653,10 @@ function currentChurchDate(){
 function normalizeDay(value){
   const d=new Date(value)
   if(Number.isNaN(d.getTime())) return null
-  return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()))
+  const normalized=new Date(0)
+  normalized.setUTCHours(0,0,0,0)
+  normalized.setUTCFullYear(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())
+  return normalized
 }
 function daysInclusive(start,end){return Math.round((end-start)/86400000)+1}
 async function findReportingWeekForDate(value, churchId){
@@ -677,22 +681,10 @@ function monthDays(year,month){
   return new Date(Date.UTC(year,month,0)).getUTCDate()
 }
 async function validateReportingWeekRange({year,month,weekNumber,startDate,endDate,churchId,excludeId=null}){
-  if(!Number.isInteger(year)) return 'A valid reporting year is required'
-  if(!Number.isInteger(month)||month<1||month>12) return 'A valid reporting month is required'
-  if(!Number.isInteger(weekNumber)||weekNumber<1||weekNumber>5) return 'Week must be between 1 and 5'
+  const dateError=validateReportingWeekDates({year,month,weekNumber,startDate,endDate})
+  if(dateError) return dateError
 
   const start=normalizeDay(startDate), end=normalizeDay(endDate)
-  if(!start||!end) return 'A valid start and end date are required'
-  if(daysInclusive(start,end)!==7) return 'A reporting week must contain exactly 7 days'
-
-  // A week belongs to the calendar month where its seven-day period ends.
-  // The year is part of the calendar identity, so 2022 and 2026 are
-  // completely independent reporting calendars.
-  const expectedYear=end.getUTCFullYear()
-  const expectedMonth=end.getUTCMonth()+1
-  if(expectedYear!==year||expectedMonth!==month){
-    return 'The reporting month must match the month where the reporting week ends'
-  }
 
   // Validate against the actual date range instead of loading a month first.
   // This makes the calendar explicitly date-driven and prevents a historical
