@@ -10,7 +10,6 @@ function openDb() {
       if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id' })
       if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' })
 
-      feat/offline-authentication
       if (!db.objectStoreNames.contains('auth')) db.createObjectStore('auth', { keyPath: 'email' })
 
       if (!db.objectStoreNames.contains('credentials')) db.createObjectStore('credentials', { keyPath: 'email' })
