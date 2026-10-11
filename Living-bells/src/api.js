@@ -144,6 +144,16 @@ export async function syncOfflineQueue() {
 }
 
 export const api = {
+  applyForChurch: payload => apiRequest('/api/church-applications', { method: 'POST', body: JSON.stringify(payload) }),
+  activateChurchApplication: payload => apiRequest('/api/church-applications/activate', { method: 'POST', body: JSON.stringify(payload) }),
+  churchApplications: () => apiRequest('/api/dev/church-applications'),
+  reviewChurchApplication: (id, payload) => apiRequest('/api/dev/church-applications/' + id, { method: 'PATCH', body: JSON.stringify(payload) }),
+  resendChurchActivation: id => apiRequest('/api/dev/church-applications/' + id + '/resend-activation', { method: 'POST', body: JSON.stringify({}) }),
+  supportTickets: () => apiRequest('/api/support/tickets'),
+  createSupportTicket: payload => apiRequest('/api/support/tickets', { method: 'POST', body: JSON.stringify(payload) }),
+  supportTicketMessages: id => apiRequest('/api/support/tickets/' + id + '/messages'),
+  addSupportTicketMessage: (id, payload) => apiRequest('/api/support/tickets/' + id + '/messages', { method: 'POST', body: JSON.stringify(payload) }),
+  updateSupportTicket: (id, payload) => apiRequest('/api/dev/support/tickets/' + id, { method: 'PATCH', body: JSON.stringify(payload) }),
   register: async payload => {
     const result = await apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) })
     if (result.user?.role !== 'DEV') await saveOfflineIdentity(result.user, payload.password).catch(() => {})
