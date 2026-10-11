@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import './ReportingCalendar.css'
 
-const monthName = value => new Date(Date.UTC(2026, Number(value) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', timeZone: 'UTC' })
+const monthName = value => new Date(Date.UTC(2000, Number(value) - 1, 1)).toLocaleDateString('en-NG', { month: 'long', timeZone: 'UTC' })
 const dateLabel = value => new Date(String(value).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 
 function daysForWeek(start) {
