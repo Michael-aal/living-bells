@@ -658,7 +658,6 @@ function normalizeDay(value){
   normalized.setUTCFullYear(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())
   return normalized
 }
-function daysInclusive(start,end){return Math.round((end-start)/86400000)+1}
 async function findReportingWeekForDate(value, churchId){
   const day=normalizeDay(value)
   const ownerChurchId=Number(churchId)
