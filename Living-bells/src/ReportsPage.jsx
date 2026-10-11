@@ -298,6 +298,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
   const openSearchPeriod = result => {
     const year = Number(searchYear || parseDate(result.date)?.getFullYear())
     const month = Number(searchMonth)
+    const calendarYear = searchYear && month && month <= 6 ? year + 1 : year
     let start
     let end
     let label
@@ -313,17 +314,17 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
       label = `Week ${configuredWeek.weekNumber} · ${displayDate(start)} – ${displayDate(configuredWeek.endDate)}`
       selectedAnchor = keyOf(configuredWeek.startDate)
     } else if (searchDay && searchMonth && year) {
-      start = new Date(year, month - 1, Number(searchDay), 0, 0, 0, 0)
-      end = new Date(year, month - 1, Number(searchDay), 23, 59, 59, 999)
+      start = new Date(calendarYear, month - 1, Number(searchDay), 0, 0, 0, 0)
+      end = new Date(calendarYear, month - 1, Number(searchDay), 23, 59, 59, 999)
       label = start.toLocaleDateString('en-NG', { day: '2-digit', month: 'long', year: 'numeric' })
       selectedMode = 'week'
-      selectedAnchor = `${year}-${pad(month)}-${pad(Number(searchDay))}`
+      selectedAnchor = `${calendarYear}-${pad(month)}-${pad(Number(searchDay))}`
     } else if (searchMonth && year) {
-      start = new Date(year, month - 1, 1)
-      end = new Date(year, month, 0, 23, 59, 59, 999)
+      start = new Date(calendarYear, month - 1, 1)
+      end = new Date(calendarYear, month, 0, 23, 59, 59, 999)
       label = start.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
       selectedMode = 'month'
-      selectedAnchor = `${year}-${pad(month)}-01`
+      selectedAnchor = `${calendarYear}-${pad(month)}-01`
     } else if (searchYear) {
       start = reportingYearStart(year)
       end = reportingYearEnd(year)
@@ -547,7 +548,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
         {(searchType || searchYear || searchMonth || searchWeek || searchDay) && <button className="secondary small-button" type="button" onClick={clearSearch}>Reset filters</button>}
       </div>
 
-      <form className="record-search-filters" onSubmit={e => e.preventDefault()}>
+      <form className="record-search-filters" onSubmit={e => { e.preventDefault(); if (searchResults[0]) openSearchPeriod(searchResults[0]) }}>
         <label className="record-search-primary-filter">
           <span>Record type</span>
           <select value={searchType} onChange={e => setSearchType(e.target.value)} aria-label="Choose record type">
@@ -637,7 +638,7 @@ export default function ReportsPage({ user, refreshKey = 0, onEdit, onEditFinanc
     </section>
 
     {error && <div className="toast toast-error" role="alert">{error}</div>}
-    {!loading && searchPeriod && selectedReports.length === 0 && selectedAttendance.length === 0 && <div className="record-search-empty"><strong>No records found for {searchPeriod.label}.</strong><span>There is no saved data in this period to calculate an average from.</span></div>}
+    {!loading && searchPeriod && selectedReports.length === 0 && selectedAttendance.length === 0 && selectedActivities.length === 0 && <div className="record-search-empty"><strong>No records found for {searchPeriod.label}.</strong><span>There is no saved data in this period to calculate an average from.</span></div>}
     {loading ? <section className="card full"><p>Loading reports…</p></section> : <>
       <ReportSection title="Attendance" eyebrow="Attendance summary" description="Attendance is shown as the saved total for the selected period, without age or gender breakdowns." action={canEditOperational ? () => onEditAttendance?.() : null}>
         <div className="finance-total-grid">
