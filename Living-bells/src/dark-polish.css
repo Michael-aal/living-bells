@@ -177,7 +177,7 @@
 :root[data-theme="dark"] .week-actions button:hover {
   background: #302447;
   border-color: #7c5ba8;
-  color: #fff;
+  color: #e7def7;
 }
 :root[data-theme="dark"] .primary,
 :root[data-theme="dark"] .btn-primary,
@@ -186,7 +186,7 @@
 :root[data-theme="dark"] .support-primary,
 :root[data-theme="dark"] .dev-primary {
   background: #7c3aed;
-  color: #fff;
+  color: #e7def7;
   border-color: transparent;
 }
 :root[data-theme="dark"] button:disabled {
@@ -237,7 +237,7 @@
 }
 :root[data-theme="dark"] .toast {
   background: #302447;
-  color: #fff;
+  color: #e7def7;
   border-color: #594276;
 }
 :root[data-theme="dark"] .backdrop {
@@ -448,7 +448,7 @@
 }
 :root[data-theme="dark"] .reports-page .report-period-tabs button.active {
   background: #302447;
-  color: #fff;
+  color: #e7def7;
   box-shadow: none;
 }
 :root[data-theme="dark"] .reports-page .summary-total td {
@@ -605,3 +605,98 @@
     border-radius: 18px;
   }
 }
+
+
+/* Final premium dark-mode guardrails: no white surfaces and no pure-white accents.
+   This layer is dark-theme-only; light mode and application behavior remain unchanged. */
+:root[data-theme="dark"] {
+  --lb-dark-canvas: #100e17;
+  --lb-dark-surface: #191622;
+  --lb-dark-raised: #211c2c;
+  --lb-dark-hover: #292137;
+  --lb-dark-border: #373044;
+  --lb-dark-text: #e7def7;
+  --lb-dark-muted: #b7afc6;
+  --lb-dark-accent: #a78bfa;
+  --lb-dark-accent-surface: #302447;
+  --lb-dark-danger-surface: #3a202b;
+  --lb-dark-success-surface: #18382c;
+}
+
+/* Keep common browser and feature-level surfaces dark, including less common states. */
+:root[data-theme="dark"] :is(
+  .auth-shell, .dev-setup-shell, .shell, .dev-console, .content,
+  .card, .stat, .welcome-card, .review-card, .finance-table,
+  .auth-card, .dev-setup-card, .modal, .profile-dropdown,
+  .dev-header, .dev-panel, .dev-stat, .dev-tabs, .dev-application-card,
+  .support-card, .support-intro, .support-ticket, .support-message,
+  .calendar-current, .calendar-month, .calendar-week, .calendar-empty,
+  .calendar-rule, .calendar-builder, .calendar-readonly,
+  .record-search-card, .record-search-result, .record-search-empty,
+  .lb-nav, .lb-site .lb-card, .lb-ministry, .lb-value,
+  .lb-welcome-grid > div, .lb-footer, .lb-gather
+) {
+  background-color: var(--lb-dark-surface);
+  color: var(--lb-dark-text);
+  border-color: var(--lb-dark-border);
+}
+
+/* Dark-theme text uses soft lavender rather than pure white. */
+:root[data-theme="dark"] :is(
+  h1, h2, h3, h4, h5, h6, p, label, th, td, strong, b, em,
+  .primary, .btn-primary, .save-button, .auth-submit,
+  .support-primary, .dev-primary, .toast
+) {
+  text-decoration-color: currentColor;
+}
+
+:root[data-theme="dark"] :is(
+  .primary, .btn-primary, .save-button, .auth-submit,
+  .support-primary, .dev-primary, .toast,
+  .theme-toggle:hover, .secondary:hover, .profile-dropdown button:hover,
+  .record-actions button:hover, .week-actions button:hover
+) {
+  color: var(--lb-dark-text);
+}
+
+/* Inputs, menus and browser-rendered selection surfaces must not flash white. */
+:root[data-theme="dark"] :is(input, select, textarea, option, optgroup) {
+  background-color: var(--lb-dark-canvas);
+  color: var(--lb-dark-text);
+  border-color: #494055;
+}
+
+:root[data-theme="dark"] ::selection {
+  background: #594276;
+  color: #f0e9ff;
+}
+
+:root[data-theme="dark"] :is(
+  .dropdown, .menu, .popover, .tooltip, .notification-menu,
+  .profile-dropdown, .mobile-more-panel, .mobile-nav,
+  [role="dialog"], [role="menu"], [role="listbox"]
+) {
+  background-color: var(--lb-dark-raised);
+  color: var(--lb-dark-text);
+  border-color: var(--lb-dark-border);
+}
+
+/* Preserve visible focus and semantic status while keeping the palette restrained. */
+:root[data-theme="dark"] :is(a, button, input, select, textarea, summary):focus-visible {
+  outline-color: #c4b5fd;
+}
+
+:root[data-theme="dark"] :is(.error, .auth-error, .weekly-error, .dev-error, .toast-error) {
+  background-color: var(--lb-dark-danger-surface);
+  border-color: #6b3345;
+  color: #ffd3df;
+}
+
+:root[data-theme="dark"] :is(.success, .dev-health, .calendar-alert.success, .dev-status.ok) {
+  background-color: var(--lb-dark-success-surface);
+  border-color: #285841;
+  color: #a7f3c7;
+}
+
+/* Pure white is deliberately avoided; contrast comes from tonal separation,
+   typography, and purple accents rather than large bright surfaces. */
