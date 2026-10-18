@@ -278,8 +278,8 @@ function App() {
   if (!user) return showAuth
     ? <Auth theme={theme} onToggleTheme={toggleTheme} initialMode={authMode} onAuthenticated={setUser} onBack={() => { setShowAuth(false); setAuthMode('login') }} />
     : <Landing theme={theme} onToggleTheme={toggleTheme} onSignIn={() => { setAuthMode('login'); setShowAuth(true) }} onRegister={() => { setAuthMode('apply'); setShowAuth(true) }} />
-  if (user.role === 'DEV' && user.mustChangePassword) return <DevPasswordSetup user={user} onCompleted={setUser} onLogout={logout} />
-  if (user.role === 'DEV') return <DevDashboard user={user} onLogout={logout} />
+  if (user.role === 'DEV' && user.mustChangePassword) return <DevPasswordSetup user={user} theme={theme} onToggleTheme={toggleTheme} onCompleted={setUser} onLogout={logout} />
+  if (user.role === 'DEV') return <DevDashboard user={user} theme={theme} onToggleTheme={toggleTheme} onLogout={logout} />
 
   function logout() {
     localStorage.removeItem('living_bells_token')
