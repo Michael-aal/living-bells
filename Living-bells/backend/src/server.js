@@ -88,7 +88,7 @@ async function createDevRecoveryNotification(userId) {
 }
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 
 function signToken(user) {
   return jwt.sign({ sub: user.id, role: user.role, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })
@@ -330,6 +330,43 @@ app.post('/api/auth/dev-recover', async (req, res, next) => {
     const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, mustChangePassword: false, isActive: true } })
     res.json({ message: 'Developer password reset successfully', token: signToken(updated), user: { id: updated.id, name: updated.name, email: updated.email, role: updated.role, emailVerified: true, mustChangePassword: false } })
   } catch (error) { next(error) }
+})
+
+
+app.get('/api/church/profile', authenticate, async (req, res, next) => {
+  try {
+    if (!req.user.churchId) return res.status(403).json({ message: 'This account is not assigned to a church.' })
+    const church = await prisma.church.findUnique({
+      where: { id: Number(req.user.churchId) },
+      select: { id: true, name: true, logoDataUrl: true, denomination: true, address: true, contactEmail: true, phone: true },
+    })
+    if (!church) return res.status(404).json({ message: 'Church profile not found.' })
+    res.json(church)
+  } catch (error) { next(error) }
+})
+
+app.patch('/api/church/profile', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'Only your church administrator can update the church profile.' })
+    if (!req.user.churchId) return res.status(403).json({ message: 'This account is not assigned to a church.' })
+    const name = String(req.body?.name ?? '').trim()
+    const logoDataUrl = req.body?.logoDataUrl
+    if (name.length < 2 || name.length > 120) return res.status(400).json({ message: 'Church name must be between 2 and 120 characters.' })
+    if (logoDataUrl !== undefined && logoDataUrl !== null && logoDataUrl !== '') {
+      if (typeof logoDataUrl !== 'string' || logoDataUrl.length > 700000 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(logoDataUrl)) {
+        return res.status(400).json({ message: 'Upload a PNG, JPG or WebP logo smaller than 500 KB.' })
+      }
+    }
+    const church = await prisma.church.update({
+      where: { id: Number(req.user.churchId) },
+      data: { name, ...(logoDataUrl !== undefined ? { logoDataUrl: logoDataUrl || null } : {}) },
+      select: { id: true, name: true, logoDataUrl: true, denomination: true, address: true, contactEmail: true, phone: true },
+    })
+    res.json(church)
+  } catch (error) {
+    if (error?.code === 'P2025') return res.status(404).json({ message: 'Church profile not found.' })
+    next(error)
+  }
 })
 
 app.get('/api/auth/me', authenticate, async (req, res, next) => {
