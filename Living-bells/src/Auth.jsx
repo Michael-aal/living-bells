@@ -121,7 +121,7 @@ export default function Auth({ onAuthenticated, onBack, initialMode = 'login', t
   const isActivation = mode === 'activate'
   const isStaffRegistration = mode === 'register' && form.role === 'STAFF'
 
-  return <main className="auth-shell">
+  return <main className="auth-shell"><button type="button" className="theme-toggle auth-theme-toggle" onClick={onToggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span></button>
     <section className="auth-card">
       {onBack && <button type="button" className="auth-back" onClick={onBack}>← Back to website</button>}
       <div className="auth-brand"><span>L</span><div><b>Living Bells</b><small>Church operations</small></div></div>
