@@ -16,10 +16,6 @@ const ministries = [
 export default function Landing({ onRegister, theme = 'light', onToggleTheme = () => {} }) {
   return <div className="lb-site">
     <header className="lb-nav">
-      <a className="lb-brand" href="#home" aria-label="Living Bells home">
-        <span className="lb-brand-mark">L</span>
-        <span><strong>Living Bells</strong><small>Foursquare Gospel Church · The Bells</small></span>
-      </a>
       <nav className="lb-nav-links" aria-label="Main navigation">
         <a href="#welcome">Our church</a><a href="#ministries">Ministries</a><a href="#gather">Get connected</a>
       </nav>
@@ -68,8 +64,8 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
     </main>
 
     <footer className="lb-footer">
-      <a className="lb-brand" href="#home"><span className="lb-brand-mark">L</span><span><strong>Living Bells</strong><small>Foursquare Gospel Church · The Bells</small></span></a>
-      <span className="lb-footer-copy">Growing in faith. Living in love. Serving with purpose.</span>
+      <a className="lb-brand lb-footer-brand" href="#home" aria-label="Living Bells platform home"><span className="lb-brand-mark">L</span><span><strong>Living Bells™</strong><small>Church management platform</small></span></a>
+      <span className="lb-footer-copy">Foursquare Gospel Church, The Bells — growing in faith, living in love, serving with purpose.</span>
       <button className="lb-footer-portal" onClick={onRegister}><i className="fa-solid fa-user-plus" aria-hidden="true"></i> Register your church</button>
       <span className="lb-copyright">© {new Date().getFullYear()} The Bells</span>
     </footer>

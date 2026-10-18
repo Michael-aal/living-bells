@@ -425,3 +425,171 @@
 .lb-nav-actions { display:flex; align-items:center; gap:10px; }
 .landing-theme-toggle { border-radius:99px; min-height:38px; padding:9px 12px; }
 @media(max-width:620px) { .lb-nav-actions { gap:7px; } .landing-theme-toggle { min-height:36px; padding:8px 10px; } }
+
+
+/* Dark-mode-only polish inspired by modern Dribbble SaaS navigation and footers.
+   Every rule is scoped to the dark theme so light mode remains unchanged. */
+:root[data-theme="dark"] .lb-nav {
+  position: sticky;
+  top: 0;
+  min-height: 76px;
+  height: auto;
+  padding-block: 12px;
+  background: rgba(15, 13, 22, .88);
+  border-bottom: 1px solid rgba(167, 139, 250, .16);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .18);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+:root[data-theme="dark"] .lb-brand-mark {
+  background: linear-gradient(145deg, #a78bfa, #6d28d9);
+  color: #fff;
+  box-shadow: 0 7px 22px rgba(124, 58, 237, .3);
+}
+:root[data-theme="dark"] .lb-brand strong { color: #f7f3ff; }
+:root[data-theme="dark"] .lb-nav-links {
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid #30283d;
+  border-radius: 999px;
+  background: rgba(30, 25, 40, .72);
+}
+:root[data-theme="dark"] .lb-nav-links a {
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: #c3bbd2;
+  transition: color .2s ease, background .2s ease;
+}
+:root[data-theme="dark"] .lb-nav-links a:hover,
+:root[data-theme="dark"] .lb-nav-links a:focus-visible {
+  color: #fff;
+  background: #302447;
+  outline: none;
+}
+:root[data-theme="dark"] .lb-nav-actions { gap: 12px; }
+:root[data-theme="dark"] .landing-theme-toggle {
+  border: 1px solid #393244;
+  background: #1b1824;
+  color: #e8ddff;
+}
+:root[data-theme="dark"] .landing-theme-toggle:hover {
+  background: #302447;
+  border-color: #655080;
+}
+:root[data-theme="dark"] .lb-nav-cta {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  border: 1px solid #8b5cf6;
+  color: #fff !important;
+  box-shadow: 0 7px 22px rgba(109, 40, 217, .25);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+:root[data-theme="dark"] .lb-nav-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(109, 40, 217, .36);
+}
+:root[data-theme="dark"] .lb-footer {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding-top: 34px;
+  padding-bottom: 22px;
+  background: linear-gradient(180deg, #15121d 0%, #0b0a10 100%);
+  border-top: 1px solid #30283d;
+}
+:root[data-theme="dark"] .lb-footer .lb-brand-mark {
+  width: 36px;
+  height: 36px;
+  font-size: 21px;
+}
+:root[data-theme="dark"] .lb-footer-copy {
+  margin: 0;
+  max-width: 300px;
+  line-height: 1.8;
+}
+:root[data-theme="dark"] .lb-footer-portal {
+  justify-self: end;
+  padding: 11px 15px;
+  border: 1px solid #49385f;
+  border-radius: 999px;
+  background: #21172f;
+  color: #d9c9ff;
+  transition: background .2s ease, border-color .2s ease, transform .2s ease;
+}
+:root[data-theme="dark"] .lb-footer-portal:hover {
+  transform: translateY(-1px);
+  background: #302447;
+  border-color: #7652a5;
+}
+:root[data-theme="dark"] .lb-copyright {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  padding-top: 18px;
+  border-color: #30283d;
+  color: #9389a4;
+}
+:root[data-theme="dark"] .lb-nav-links a,
+:root[data-theme="dark"] .lb-nav-cta,
+:root[data-theme="dark"] .landing-theme-toggle,
+:root[data-theme="dark"] .lb-footer-portal {
+  -webkit-tap-highlight-color: transparent;
+}
+@media (max-width: 760px) {
+  :root[data-theme="dark"] .lb-nav {
+    padding: 12px 16px 0;
+    row-gap: 8px;
+  }
+  :root[data-theme="dark"] .lb-nav-links {
+    gap: 5px;
+    border: 0;
+    border-top: 1px solid #30283d;
+    border-radius: 0;
+    background: transparent;
+    padding: 0 0 10px;
+  }
+  :root[data-theme="dark"] .lb-nav-links a {
+    padding: 9px 12px;
+  }
+  :root[data-theme="dark"] .lb-footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px 12px;
+  }
+  :root[data-theme="dark"] .lb-footer-copy {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: none;
+  }
+  :root[data-theme="dark"] .lb-footer-portal {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  :root[data-theme="dark"] .lb-copyright { grid-row: 4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="dark"] .lb-nav *,
+  :root[data-theme="dark"] .lb-footer * { transition: none !important; }
+}
+
+
+/* With product branding moved to the footer, keep landing navigation balanced:
+   links sit in the visual center and actions remain aligned to the right. */
+@media (min-width: 761px) {
+  .lb-nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+  .lb-nav-links {
+    grid-column: 2;
+    justify-self: center;
+  }
+  .lb-nav-actions {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+.lb-footer-brand { flex-shrink: 0; }
+.lb-footer-brand .lb-brand-mark { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .lb-footer-brand { max-width: 100%; }
+}
