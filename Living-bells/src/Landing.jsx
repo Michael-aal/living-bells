@@ -13,7 +13,7 @@ const ministries = [
   { icon: 'fa-solid fa-hand-holding-heart', title: 'Outreach & Service', text: 'Sharing hope and serving people in our wider community.' },
 ]
 
-export default function Landing({ onRegister }) {
+export default function Landing({ onRegister, theme = 'light', onToggleTheme = () => {} }) {
   return <div className="lb-site">
     <header className="lb-nav">
       <a className="lb-brand" href="#home" aria-label="Living Bells home">
@@ -23,7 +23,7 @@ export default function Landing({ onRegister }) {
       <nav className="lb-nav-links" aria-label="Main navigation">
         <a href="#welcome">Our church</a><a href="#ministries">Ministries</a><a href="#gather">Get connected</a>
       </nav>
-      <button className="lb-nav-cta" onClick={onRegister}><i className="fa-solid fa-user-plus" aria-hidden="true"></i><span>Register</span></button>
+      <div className="lb-nav-actions"><button type="button" className="theme-toggle landing-theme-toggle" onClick={onToggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light' : 'Dark'}</span></button><button className="lb-nav-cta" onClick={onRegister}><i className="fa-solid fa-user-plus" aria-hidden="true"></i><span>Register</span></button></div>
     </header>
 
     <main id="home">
