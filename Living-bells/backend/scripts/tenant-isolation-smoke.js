@@ -11,6 +11,7 @@ let userA
 let userB
 let activityA
 let activityB
+let forgedTenantCreate
 let ticketA
 let ticketB
 let attendanceRecordA
@@ -62,6 +63,18 @@ try {
   const attemptedUpdate = await runAs(churchA.id, () => prisma.activity.updateMany({ where: { id: activityB.id }, data: { name: 'cross-tenant mutation' } }))
   assert.equal(attemptedUpdate.count, 0, 'cross-tenant update must match zero records')
 
+  // Client-supplied tenant IDs must never move or create records in another church.
+  forgedTenantCreate = await runAs(churchA.id, () => prisma.activity.create({
+    data: { name: 'A tenant override test', date: new Date('2026-01-18T00:00:00.000Z'), churchId: churchB.id },
+  }))
+  assert.equal(forgedTenantCreate.churchId, churchA.id, 'create must ignore a forged churchId and use the authenticated tenant')
+
+  const attemptedTenantTransfer = await runAs(churchA.id, () => prisma.activity.update({
+    where: { id: forgedTenantCreate.id },
+    data: { name: 'A tenant override test updated', churchId: churchB.id },
+  }))
+  assert.equal(attemptedTenantTransfer.churchId, churchA.id, 'update must not transfer a record to another church')
+
   const visibleUsersA = await runAs(churchA.id, () => prisma.user.findMany({ where: { role: 'ADMIN' } }))
   assert.deepEqual(visibleUsersA.map(item => item.id), [userA.id], 'church A admin directory must not include church B users')
 
@@ -81,7 +94,7 @@ try {
   const unchangedForeignActivity = await prisma.activity.findUnique({ where: { id: activityB.id } })
   assert.equal(unchangedForeignActivity.name, 'B activity', 'cross-tenant update must not alter church B data')
 
-  process.stdout.write('Tenant isolation smoke test passed: tenant scoping, forged tenant IDs, users, support tickets, and platform setting persistence.\n')
+  process.stdout.write('Tenant isolation smoke test passed: list, identifier lookup, cross-tenant relation rejection, forged tenant ID rejection, updates, users, support tickets, and platform setting persistence.\n')
 } finally {
   const ticketIds = [ticketA?.id, ticketB?.id].filter(Boolean)
   if (ticketIds.length) await prisma.supportTicket.deleteMany({ where: { id: { in: ticketIds } } })
@@ -93,7 +106,7 @@ try {
   if (monthIds.length) await prisma.reportingMonth.deleteMany({ where: { id: { in: monthIds } } })
   const optionIds = [optionA?.id, optionB?.id].filter(Boolean)
   if (optionIds.length) await prisma.configOption.deleteMany({ where: { id: { in: optionIds } } })
-  const activityIds = [activityA?.id, activityB?.id].filter(Boolean)
+  const activityIds = [activityA?.id, activityB?.id, forgedTenantCreate?.id].filter(Boolean)
   if (activityIds.length) await prisma.activity.deleteMany({ where: { id: { in: activityIds } } })
   const userIds = [userA?.id, userB?.id].filter(Boolean)
   if (userIds.length) await prisma.user.deleteMany({ where: { id: { in: userIds } } })
