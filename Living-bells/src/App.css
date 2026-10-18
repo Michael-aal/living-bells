@@ -756,3 +756,16 @@ main,
 .card-head { flex-wrap: wrap; }
 .table-wrap { max-width: 100%; min-width: 0; }
 .table-wrap table { min-width: 620px; }
+
+
+/* Keep the full navigation reachable on short laptop screens and avoid
+   squeezing the header search on 768–1000px wide workspaces. */
+.sidebar {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+@media (min-width: 768px) and (max-width: 1000px) {
+  header { gap: 14px; }
+  .search { width: clamp(180px, 30vw, 260px); min-width: 0; flex: 0 1 260px; }
+  .header-tools { flex: 0 0 auto; }
+}
