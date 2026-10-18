@@ -433,7 +433,7 @@ app.post('/api/church-applications', async (req, res, next) => {
         type: 'CHURCH_APPLICATION',
         title: autoApprove ? 'Church automatically approved' : 'New church application',
         message: autoApprove
-          ? `${churchName} was automatically approved. Administrator activation is ${'pending'}.`
+          ? `${churchName} was automatically approved. Administrator activation is pending.`
           : `${churchName} submitted a church registration application.`,
         metadata: { applicationId: application.id, action: 'review-church-application', autoApproved: autoApprove },
       })),
@@ -477,6 +477,7 @@ app.post('/api/church-applications', async (req, res, next) => {
           : 'Your church registration was automatically approved, but the activation email could not be sent. Please contact Living Bells support for help activating your account.',
         application: finalApplication,
         emailDeliveryFailed: !activationEmailSent,
+        activationLink: !IS_PRODUCTION && !activationEmailSent ? generatedLink : null,
       })
     }
 
