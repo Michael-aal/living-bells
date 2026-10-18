@@ -102,7 +102,7 @@
   .record-search-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .report-controls { grid-template-columns: minmax(0, 1fr); }
   .report-subtable-grid { grid-template-columns: minmax(0, 1fr); }
-  .finance-total-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .finance-total-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .record-search-filters > *, .report-controls > *, .report-subtable-grid > * { min-width: 0; }
 .report-table, .report-mini-table { max-width: 100%; min-width: 0; }
