@@ -37,6 +37,7 @@ model PlatformSetting {
 model Church {
   id                Int       @id @default(autoincrement())
   name              String
+  logoDataUrl       String?   @db.Text
   denomination      String?
   address           String?
   contactEmail      String?
