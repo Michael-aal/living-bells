@@ -116,6 +116,18 @@ function App() {
   const [staffInvitations, setStaffInvitations] = useState([])
   const [staffCount, setStaffCount] = useState({ active: 0, pending: 0, total: 0 })
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
+  const [churchProfile, setChurchProfile] = useState(null)
+
+  useEffect(() => {
+    if (!user) { setChurchProfile(null); return }
+    if (user.demo) {
+      setChurchProfile(current => current || { name: 'Demo Church', logoDataUrl: null })
+      return
+    }
+    let active = true
+    api.churchProfile().then(profile => { if (active) setChurchProfile(profile) }).catch(() => {})
+    return () => { active = false }
+  }, [user?.id, user?.demo])
 
   useEffect(() => {
     if (!user || user.demo) return
@@ -269,6 +281,24 @@ function App() {
     setStaffCount({ active: 0, pending: 0, total: 0 })
     setSelectedStaff(null)
     setReviews([])
+    setChurchProfile(null)
+  }
+
+  async function saveChurchProfile(payload) {
+    if (user?.role !== 'ADMIN') { setSync('Only the church administrator can edit church identity'); return false }
+    const name = String(payload?.name || '').trim()
+    if (name.length < 2 || name.length > 120) { setSync('Church name must be between 2 and 120 characters'); return false }
+    try {
+      setSync('Saving church profile...')
+      const updated = user.demo ? { ...churchProfile, name, logoDataUrl: payload.logoDataUrl || null } : await api.updateChurchProfile({ name, logoDataUrl: payload.logoDataUrl ?? churchProfile?.logoDataUrl ?? null })
+      setChurchProfile(updated)
+      setModal(null)
+      setSync(user.demo ? 'Demo mode' : 'Backend connected')
+      return true
+    } catch (error) {
+      setSync(error.message || 'Could not save church profile')
+      return false
+    }
   }
 
   async function saveProfile(name) {
@@ -494,7 +524,7 @@ function App() {
 
   return <div className="shell">
     <aside className="sidebar">
-      <div className="brand"><div className="logo">L</div><div><b>Living Bells</b><small>{dashboardLabel}</small></div></div>
+      <div className="brand church-brand"><div className="church-logo">{churchProfile?.logoDataUrl ? <img src={churchProfile.logoDataUrl} alt="Church logo" /> : <span>✦</span>}</div><div className="church-brand-copy"><b>{churchProfile?.name || 'Church workspace'}</b><small>{dashboardLabel}</small><span className="platform-brand"><span className="platform-brand-icon">L</span> Living Bells</span></div></div>
       <span className="label">Workspace</span>
       {[
         ['dashboard', 'Dashboard'], ['attendance', 'Attendance'],
@@ -504,7 +534,7 @@ function App() {
     </aside>
 
     <main>
-      <header><div className="mobile-brand"><div className="logo">L</div>Living Bells</div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><div className="header-tools"><div className="profile-menu"><button className="avatar" title="Open profile menu" onClick={() => setModal(modal === 'profile-menu' ? null : 'profile-menu')} aria-haspopup="menu" aria-expanded={modal === 'profile-menu'}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button>{modal === 'profile-menu' && <div className="profile-dropdown" role="menu"><div className="profile-summary"><strong>{user.name || 'User'}</strong><span>{user.email}</span><small>{user.role === 'ADMIN' ? 'Administrator' : 'Staff'}</small></div><button type="button" role="menuitem" onClick={() => setModal('profile')}>Edit profile</button><button type="button" role="menuitem" onClick={() => { setModal(null); setPage('settings') }}>Settings</button><button type="button" role="menuitem" className="profile-logout" onClick={() => { setModal(null); logout() }}>Log out</button></div>}</div></div></header>
+      <header><div className="mobile-brand"><div className="church-logo mobile-church-logo">{churchProfile?.logoDataUrl ? <img src={churchProfile.logoDataUrl} alt="Church logo" /> : <span>✦</span>}</div><div className="mobile-brand-copy"><b>{churchProfile?.name || 'Church workspace'}</b><small><span className="platform-brand-icon">L</span> Living Bells</small></div></div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><div className="header-tools"><div className="profile-menu"><button className="avatar" title="Open profile menu" onClick={() => setModal(modal === 'profile-menu' ? null : 'profile-menu')} aria-haspopup="menu" aria-expanded={modal === 'profile-menu'}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button>{modal === 'profile-menu' && <div className="profile-dropdown" role="menu"><div className="profile-summary"><strong>{user.name || 'User'}</strong><span>{user.email}</span><small>{user.role === 'ADMIN' ? 'Administrator' : 'Staff'}</small></div><button type="button" role="menuitem" onClick={() => setModal('profile')}>Edit profile</button><button type="button" role="menuitem" onClick={() => { setModal(null); setPage('settings') }}>Settings</button><button type="button" role="menuitem" className="profile-logout" onClick={() => { setModal(null); logout() }}>Log out</button></div>}</div></div></header>
       <section className="content">
         <div className="heading">
           <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard' : 'Staff dashboard') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
@@ -519,13 +549,14 @@ function App() {
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
         {!loading && page === 'calendar' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'support' && isAdmin && <SupportPage />}
-        {!loading && page === 'settings' && <SettingsPage user={user} onEditProfile={() => setModal('profile')} onLogout={logout} />}
+        {!loading && page === 'settings' && <SettingsPage user={user} churchProfile={churchProfile} onEditProfile={() => setModal('profile')} onEditChurch={() => setModal('church-profile')} onLogout={logout} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} onOpenRecord={openRecordFromSearch} />}
         
       </section>
     </main>
 
     {modal === 'profile' && <ProfileForm user={user} close={() => setModal(null)} save={saveProfile} />}
+    {modal === 'church-profile' && isAdmin && <ChurchProfileForm profile={churchProfile} close={() => setModal(null)} save={saveChurchProfile} />}
     {!isAdmin && modal === 'attendance' && <AttendanceForm close={() => setModal(null)} save={addAttendance} recordingDate={reportingContext?.date} options={attendanceOptions} />}
     {!isAdmin && modal?.type === 'attendance-edit' && <AttendanceForm initial={modal.record} close={() => setModal(null)} save={saveAttendanceEdit} />}
     {!isAdmin && modal === 'finance' && <FinanceForm close={() => setModal(null)} save={async payload => {
@@ -706,8 +737,13 @@ function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', acti
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.', support: 'Contact the Living Bells developer team and track issues.', })[p] }
 
 
-function SettingsPage({ user, onEditProfile, onLogout }) {
+function SettingsPage({ user, churchProfile, onEditProfile, onEditChurch, onLogout }) {
   return <div className="settings-layout">
+    {user.role === 'ADMIN' && <section className="card full church-settings-card">
+      <div className="card-head"><div><span className="eyebrow">Church identity</span><h2>{churchProfile?.name || 'Church profile'}</h2><p className="card-subtitle">Your church name and logo appear across your workspace. Living Bells remains the platform brand.</p></div></div>
+      <div className="church-settings-preview"><div className="church-logo settings-church-logo">{churchProfile?.logoDataUrl ? <img src={churchProfile.logoDataUrl} alt="Church logo" /> : <span>✦</span>}</div><div><b>{churchProfile?.name || 'Church workspace'}</b><small><span className="platform-brand-icon">L</span> Living Bells</small></div></div>
+      <div className="settings-actions"><button type="button" className="primary" onClick={onEditChurch}>Edit church name & logo</button></div>
+    </section>}
     <section className="card full">
       <div className="card-head">
         <div>
@@ -836,6 +872,46 @@ function StaffCodeModal({ invitation, close }) {
   </Modal>
 }
 function Modal({ title, children, close }) { return <div className="backdrop" onMouseDown={close}><div className="modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">Living Bells</span><h2>{title}</h2></div><button type="button" className="close" onClick={close}>×</button></div>{children}</div></div> }
+
+function ChurchProfileForm({ profile, close, save }) {
+  const [name, setName] = useState(profile?.name || '')
+  const [logoDataUrl, setLogoDataUrl] = useState(profile?.logoDataUrl || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  function chooseLogo(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) { setError('Choose a PNG, JPG or WebP image.'); event.target.value = ''; return }
+    if (file.size > 500 * 1024) { setError('Logo must be smaller than 500 KB.'); event.target.value = ''; return }
+    const reader = new FileReader()
+    reader.onload = () => { setLogoDataUrl(String(reader.result || '')); setError('') }
+    reader.onerror = () => setError('Could not read this image. Try another file.')
+    reader.readAsDataURL(file)
+  }
+
+  async function submit() {
+    if (saving || name.trim().length < 2 || name.trim().length > 120) return
+    setSaving(true)
+    setError('')
+    try {
+      const ok = await save({ name: name.trim(), logoDataUrl })
+      if (!ok) setError('Could not save changes. Check the workspace status message and try again.')
+    } finally { setSaving(false) }
+  }
+
+  return <Modal title="Church profile" close={close}>
+    <p className="review-intro">Set your church's identity. Living Bells stays as the small platform label.</p>
+    <div className="church-logo-upload-preview"><div className="church-logo upload-church-logo">{logoDataUrl ? <img src={logoDataUrl} alt="Selected church logo preview" /> : <span>✦</span>}</div><div><b>Church logo</b><small>PNG, JPG or WebP · up to 500 KB</small></div></div>
+    <label>Upload or replace logo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseLogo} /></label>
+    {logoDataUrl && <button type="button" className="secondary wide" onClick={() => setLogoDataUrl('')}>Remove logo</button>}
+    <label>Church name<input autoFocus maxLength="120" value={name} onChange={e => setName(e.target.value)} placeholder="Enter your church name" /></label>
+    <div className="platform-brand-note"><span className="platform-brand-icon">L</span><span><b>Living Bells</b><small>Platform brand · stays unchanged</small></span></div>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <button className="primary wide" disabled={saving || name.trim().length < 2 || name.trim().length > 120} onClick={submit}>{saving ? 'Saving…' : 'Save church profile'}</button>
+  </Modal>
+}
+
 function ProfileForm({ user, close, save }) {
   const [name, setName] = useState(user.name || '')
   const [saving, setSaving] = useState(false)
