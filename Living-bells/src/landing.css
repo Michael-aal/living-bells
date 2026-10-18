@@ -399,3 +399,29 @@
   width: 100%;
   max-width: 100%;
 }
+
+
+/* Public landing page dark theme, including the hero, ministry cards and footer. */
+:root[data-theme="dark"] .lb-site { background:radial-gradient(circle at 8% 8%,rgba(124,58,237,.12),transparent 27%),linear-gradient(180deg,#15121d 0%,#111018 44%,#171220 100%); color:#f4f0fb; }
+:root[data-theme="dark"] .lb-nav { background:rgba(27,24,36,.94); border-color:#393244; }
+:root[data-theme="dark"] .lb-nav-cta,
+:root[data-theme="dark"] .lb-button-quiet { color:#e5dcf5!important; border-color:#494055; }
+:root[data-theme="dark"] .lb-hero { background:radial-gradient(circle at 75% 25%,rgba(124,58,237,.16),transparent 30%),linear-gradient(135deg,rgba(27,24,36,.96),rgba(21,18,29,.96)); }
+:root[data-theme="dark"] .lb-welcome,
+:root[data-theme="dark"] .lb-footer { background:#111018; }
+:root[data-theme="dark"] .lb-ministries { background:#191522; }
+:root[data-theme="dark"] .lb-ministry { background:#211c2b; border-color:#393244; }
+:root[data-theme="dark"] .lb-ministry-icon { background:#302447; color:#ddd0ff; }
+:root[data-theme="dark"] .lb-nav-links a,
+:root[data-theme="dark"] .lb-hero-lead,
+:root[data-theme="dark"] .lb-welcome-grid p,
+:root[data-theme="dark"] .lb-ministry-heading>p,
+:root[data-theme="dark"] .lb-value p,
+:root[data-theme="dark"] .lb-ministry p,
+:root[data-theme="dark"] .lb-footer-copy,
+:root[data-theme="dark"] .lb-copyright { color:#b7afc4; }
+:root[data-theme="dark"] .lb-gather { background:#21172f; }
+:root[data-theme="dark"] .lb-button-light { background:#f4f0fb; color:#21172f!important; }
+.lb-nav-actions { display:flex; align-items:center; gap:10px; }
+.landing-theme-toggle { border-radius:99px; min-height:38px; padding:9px 12px; }
+@media(max-width:620px) { .lb-nav-actions { gap:7px; } .landing-theme-toggle { min-height:36px; padding:8px 10px; } }

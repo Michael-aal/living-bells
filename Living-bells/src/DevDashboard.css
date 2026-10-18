@@ -213,3 +213,24 @@
 .dev-registration-policy h3{font-size:15px;margin:5px 0}.dev-registration-policy p{font-size:11px;line-height:1.6;color:var(--lb-muted);margin:0;max-width:760px}.dev-registration-policy>small{grid-column:1/-1;color:var(--lb-muted);font-size:10px;line-height:1.5}
 .dev-policy-toggle{display:flex;align-items:center;gap:9px;padding:11px 13px;border:1px solid var(--lb-border);border-radius:11px;background:var(--lb-surface);font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}.dev-policy-toggle input{width:17px;height:17px;accent-color:var(--lb-primary)}
 @media(max-width:620px){.dev-registration-policy{grid-template-columns:1fr}.dev-registration-policy>small{grid-column:auto}.dev-policy-toggle{white-space:normal}}
+
+
+:root[data-theme="dark"] .dev-console { background:#111018; color:#f4f0fb; }
+:root[data-theme="dark"] .dev-header,
+:root[data-theme="dark"] .dev-panel,
+:root[data-theme="dark"] .dev-stat,
+:root[data-theme="dark"] .dev-tabs,
+:root[data-theme="dark"] .dev-account-summary,
+:root[data-theme="dark"] .dev-credentials,
+:root[data-theme="dark"] .dev-ticket-message,
+:root[data-theme="dark"] .dev-notification-panel { background:#1b1824; color:#f4f0fb; border-color:#393244; }
+:root[data-theme="dark"] .dev-console p,
+:root[data-theme="dark"] .dev-console small,
+:root[data-theme="dark"] .dev-console label,
+:root[data-theme="dark"] .dev-account-copy span { color:#b7afc4; }
+:root[data-theme="dark"] .dev-console input,
+:root[data-theme="dark"] .dev-console select,
+:root[data-theme="dark"] .dev-console textarea { background:#15121d; color:#f4f0fb; border-color:#494055; }
+:root[data-theme="dark"] .dev-console table th { background:#24202f; color:#e5dcf5; }
+:root[data-theme="dark"] .dev-console table td { border-color:#393244; }
+:root[data-theme="dark"] .dev-console .dev-notification { color:#f4f0fb; border-color:#393244; }

@@ -89,6 +89,22 @@ function inPeriod(value, range) {
 }
 
 function App() {
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem('living_bells_theme') === 'dark' ? 'dark' : 'light'
+      document.documentElement.dataset.theme = saved
+      return saved
+    } catch {
+      document.documentElement.dataset.theme = 'light'
+      return 'light'
+    }
+  })
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    try { localStorage.setItem('living_bells_theme', theme) } catch (error) { console.warn('Could not save theme preference', error) }
+  }, [theme])
+  const toggleTheme = () => setTheme(current => current === 'dark' ? 'light' : 'dark')
+
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('living_bells_user') || 'null') } catch { return null }
   })
@@ -260,10 +276,10 @@ function App() {
   }, [user, selectedStaff])
 
   if (!user) return showAuth
-    ? <Auth initialMode={authMode} onAuthenticated={setUser} onBack={() => { setShowAuth(false); setAuthMode('login') }} />
-    : <Landing onSignIn={() => { setAuthMode('login'); setShowAuth(true) }} onRegister={() => { setAuthMode('apply'); setShowAuth(true) }} />
-  if (user.role === 'DEV' && user.mustChangePassword) return <DevPasswordSetup user={user} onCompleted={setUser} onLogout={logout} />
-  if (user.role === 'DEV') return <DevDashboard user={user} onLogout={logout} />
+    ? <Auth theme={theme} onToggleTheme={toggleTheme} initialMode={authMode} onAuthenticated={setUser} onBack={() => { setShowAuth(false); setAuthMode('login') }} />
+    : <Landing theme={theme} onToggleTheme={toggleTheme} onSignIn={() => { setAuthMode('login'); setShowAuth(true) }} onRegister={() => { setAuthMode('apply'); setShowAuth(true) }} />
+  if (user.role === 'DEV' && user.mustChangePassword) return <DevPasswordSetup user={user} theme={theme} onToggleTheme={toggleTheme} onCompleted={setUser} onLogout={logout} />
+  if (user.role === 'DEV') return <DevDashboard user={user} theme={theme} onToggleTheme={toggleTheme} onLogout={logout} />
 
   function logout() {
     localStorage.removeItem('living_bells_token')
@@ -534,7 +550,7 @@ function App() {
     </aside>
 
     <main>
-      <header><div className="mobile-brand"><div className="church-logo mobile-church-logo">{churchProfile?.logoDataUrl ? <img src={churchProfile.logoDataUrl} alt="Church logo" /> : <span>✦</span>}</div><div className="mobile-brand-copy"><b>{churchProfile?.name || 'Church workspace'}</b><small><span className="platform-brand-icon">L</span> Living Bells</small></div></div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><div className="header-tools"><div className="profile-menu"><button className="avatar" title="Open profile menu" onClick={() => setModal(modal === 'profile-menu' ? null : 'profile-menu')} aria-haspopup="menu" aria-expanded={modal === 'profile-menu'}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button>{modal === 'profile-menu' && <div className="profile-dropdown" role="menu"><div className="profile-summary"><strong>{user.name || 'User'}</strong><span>{user.email}</span><small>{user.role === 'ADMIN' ? 'Administrator' : 'Staff'}</small></div><button type="button" role="menuitem" onClick={() => setModal('profile')}>Edit profile</button><button type="button" role="menuitem" onClick={() => { setModal(null); setPage('settings') }}>Settings</button><button type="button" role="menuitem" className="profile-logout" onClick={() => { setModal(null); logout() }}>Log out</button></div>}</div></div></header>
+      <header><div className="mobile-brand"><div className="church-logo mobile-church-logo">{churchProfile?.logoDataUrl ? <img src={churchProfile.logoDataUrl} alt="Church logo" /> : <span>✦</span>}</div><div className="mobile-brand-copy"><b>{churchProfile?.name || 'Church workspace'}</b><small><span className="platform-brand-icon">L</span> Living Bells</small></div></div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><div className="header-tools"><button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span></button><div className="profile-menu"><button className="avatar" title="Open profile menu" onClick={() => setModal(modal === 'profile-menu' ? null : 'profile-menu')} aria-haspopup="menu" aria-expanded={modal === 'profile-menu'}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button>{modal === 'profile-menu' && <div className="profile-dropdown" role="menu"><div className="profile-summary"><strong>{user.name || 'User'}</strong><span>{user.email}</span><small>{user.role === 'ADMIN' ? 'Administrator' : 'Staff'}</small></div><button type="button" role="menuitem" onClick={() => setModal('profile')}>Edit profile</button><button type="button" role="menuitem" onClick={() => { setModal(null); setPage('settings') }}>Settings</button><button type="button" role="menuitem" className="profile-logout" onClick={() => { setModal(null); logout() }}>Log out</button></div>}</div></div></header>
       <section className="content">
         <div className="heading">
           <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard' : 'Staff dashboard') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>

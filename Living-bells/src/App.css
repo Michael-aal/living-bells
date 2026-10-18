@@ -796,3 +796,105 @@ main,
 .church-settings-card{min-width:0}
 .form-error{color:#b42318;font-size:12px}
 @media(max-width:700px){.church-brand{padding-bottom:20px}.church-logo{width:36px;height:36px;flex-basis:36px}.church-brand-copy>b{font-size:13px}.mobile-brand-copy{max-width:39vw}}
+
+
+/* Site-wide dark mode: dashboard, records, tables, forms, dialogs and mobile navigation. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --lb-bg: #111018;
+  --lb-surface: #1b1824;
+  --lb-surface-soft: #24202f;
+  --lb-purple: #a78bfa;
+  --lb-purple-2: #a78bfa;
+  --lb-purple-soft: #302447;
+  --lb-text: #f4f0fb;
+  --lb-muted: #b7afc4;
+  --lb-border: #393244;
+  --lb-shadow: 0 8px 30px rgba(0,0,0,.2);
+  --lb-shadow-lg: 0 18px 50px rgba(0,0,0,.35);
+  --bg: #111018;
+  --surface: #1b1824;
+  --text: #f4f0fb;
+  --muted: #b7afc4;
+  --border: #393244;
+  --p: #a78bfa;
+  --ps: #302447;
+  --pd: #c4b5fd;
+}
+[data-theme="dark"] html,
+[data-theme="dark"] body,
+[data-theme="dark"] #root { background: #111018; color: #f4f0fb; }
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] header,
+[data-theme="dark"] .mobile-nav,
+[data-theme="dark"] .mobile-more-panel,
+[data-theme="dark"] .card,
+[data-theme="dark"] .stat,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .profile-dropdown,
+[data-theme="dark"] .review-card,
+[data-theme="dark"] .welcome-card,
+[data-theme="dark"] .balance-box > div,
+[data-theme="dark"] .finance-table,
+[data-theme="dark"] .church-logo-upload-preview,
+[data-theme="dark"] .platform-brand-note {
+  background: #1b1824;
+  color: #f4f0fb;
+  border-color: #393244;
+}
+[data-theme="dark"] main,
+[data-theme="dark"] .content,
+[data-theme="dark"] .staff-record-summary { color: #f4f0fb; }
+[data-theme="dark"] .nav { color: #c4bbd1; }
+[data-theme="dark"] .nav:hover,
+[data-theme="dark"] .nav.active,
+[data-theme="dark"] .mobile-nav button.active,
+[data-theme="dark"] .mobile-more-grid button.active { background: #302447; color: #ddd0ff; }
+[data-theme="dark"] .label,
+[data-theme="dark"] .eyebrow,
+[data-theme="dark"] .card-subtitle,
+[data-theme="dark"] .review-intro,
+[data-theme="dark"] .profile-summary span,
+[data-theme="dark"] .profile-summary small,
+[data-theme="dark"] .review-card small,
+[data-theme="dark"] .staff-profile-grid small,
+[data-theme="dark"] .staff-email { color: #b7afc4; }
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+[data-theme="dark"] .search input,
+[data-theme="dark"] .weekly-table input,
+[data-theme="dark"] .report-date input,
+[data-theme="dark"] .report-filters input,
+[data-theme="dark"] .spiritual-grid input,
+[data-theme="dark"] .money-input input {
+  background: #15121d;
+  color: #f4f0fb;
+  border-color: #494055;
+}
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: #8e849e; }
+[data-theme="dark"] option { background: #1b1824; color: #f4f0fb; }
+[data-theme="dark"] table th { background: #24202f; color: #ddd4ea; border-color: #393244; }
+[data-theme="dark"] table td,
+[data-theme="dark"] table tr,
+[data-theme="dark"] .staff-record-summary,
+[data-theme="dark"] .weekly-table td,
+[data-theme="dark"] .weekly-table th { border-color: #393244; }
+[data-theme="dark"] table tr:nth-child(even),
+[data-theme="dark"] .selected-row,
+[data-theme="dark"] .total-row td { background: #211c2b; }
+[data-theme="dark"] .secondary,
+[data-theme="dark"] .welcome-actions button,
+[data-theme="dark"] .close { background: #24202f; color: #e9e0f8; border-color: #494055; }
+[data-theme="dark"] .pill,
+[data-theme="dark"] .save-state.saved { background: #18382c; color: #9be4bd; }
+[data-theme="dark"] .save-state.unsaved { background: #402a19; color: #ffd0a1; }
+[data-theme="dark"] .weekly-error { background: #3a202b; border-color: #6b3345; color: #ffd3df; }
+[data-theme="dark"] .toast { background: #302447; color: #fff; }
+.theme-toggle { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:36px; padding:8px 11px; border:1px solid var(--lb-border,#e8e5ef); border-radius:10px; background:var(--lb-surface,#fff); color:var(--lb-text,#18181b); font-size:11px; font-weight:750; white-space:nowrap; }
+.theme-toggle span:first-child { font-size:16px; line-height:1; }
+.theme-toggle:hover { border-color:#a78bfa; }
+.header-tools { gap:10px; }
+@media(max-width:600px) { .theme-toggle { padding:8px 9px; } .theme-toggle-label { display:none; } .header-tools { gap:7px; } }
+@media print { [data-theme="dark"] body, [data-theme="dark"] #root { background:#fff!important; color:#111!important; } }
