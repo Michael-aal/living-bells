@@ -94,6 +94,7 @@ function App() {
   })
   const [page, setPage] = useState('dashboard')
   const [showAuth, setShowAuth] = useState(() => new URLSearchParams(window.location.hash.slice(1)).has('churchActivation'))
+  const [authMode, setAuthMode] = useState(() => new URLSearchParams(window.location.hash.slice(1)).has('churchActivation') ? 'activate' : 'login')
   const [reportEditDate, setReportEditDate] = useState(null)
   const [financeEditDate, setFinanceEditDate] = useState(null)
   const [reportRefresh, setReportRefresh] = useState(0)
@@ -247,8 +248,8 @@ function App() {
   }, [user, selectedStaff])
 
   if (!user) return showAuth
-    ? <Auth onAuthenticated={setUser} onBack={() => setShowAuth(false)} />
-    : <Landing onSignIn={() => setShowAuth(true)} />
+    ? <Auth initialMode={authMode} onAuthenticated={setUser} onBack={() => { setShowAuth(false); setAuthMode('login') }} />
+    : <Landing onSignIn={() => { setAuthMode('login'); setShowAuth(true) }} onRegister={() => { setAuthMode('apply'); setShowAuth(true) }} />
   if (user.role === 'DEV' && user.mustChangePassword) return <DevPasswordSetup user={user} onCompleted={setUser} onLogout={logout} />
   if (user.role === 'DEV') return <DevDashboard user={user} onLogout={logout} />
 

@@ -13,7 +13,7 @@ const ministries = [
   { icon: 'fa-solid fa-hand-holding-heart', title: 'Outreach & Service', text: 'Sharing hope and serving people in our wider community.' },
 ]
 
-export default function Landing({ onSignIn }) {
+export default function Landing({ onSignIn, onRegister }) {
   return <div className="lb-site">
     <header className="lb-nav">
       <a className="lb-brand" href="#home" aria-label="Living Bells home">
@@ -23,7 +23,7 @@ export default function Landing({ onSignIn }) {
       <nav className="lb-nav-links" aria-label="Main navigation">
         <a href="#welcome">Our church</a><a href="#ministries">Ministries</a><a href="#gather">Get connected</a>
       </nav>
-      <button className="lb-nav-cta" onClick={onSignIn}><i className="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i><span>Staff portal</span></button>
+      <button className="lb-nav-cta" onClick={onRegister}><i className="fa-solid fa-user-plus" aria-hidden="true"></i><span>Register</span></button>
     </header>
 
     <main id="home">
@@ -70,7 +70,7 @@ export default function Landing({ onSignIn }) {
     <footer className="lb-footer">
       <a className="lb-brand" href="#home"><span className="lb-brand-mark">L</span><span><strong>Living Bells</strong><small>Foursquare Gospel Church · The Bells</small></span></a>
       <span className="lb-footer-copy">Growing in faith. Living in love. Serving with purpose.</span>
-      <button className="lb-footer-portal" onClick={onSignIn}><i className="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i> Staff portal</button>
+      <button className="lb-footer-portal" onClick={onRegister}><i className="fa-solid fa-user-plus" aria-hidden="true"></i> Register your church</button>
       <span className="lb-copyright">© {new Date().getFullYear()} The Bells</span>
     </footer>
   </div>
