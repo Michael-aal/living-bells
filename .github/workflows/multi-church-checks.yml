@@ -78,6 +78,8 @@ jobs:
         run: npx prisma db execute --schema=prisma/schema.prisma --file=prisma/migrations/20261010170000_multi_church_foundation/migration.sql
       - name: Apply platform registration policy migration in the disposable database
         run: npx prisma db execute --schema=prisma/schema.prisma --file=prisma/migrations/20261018120000_platform_church_registration_setting/migration.sql
+      - name: Apply church profile branding migration in the disposable database
+        run: npx prisma db execute --schema=prisma/schema.prisma --file=prisma/migrations/20261018133000_add_church_profile_branding/migration.sql
       - run: npx prisma generate
       - run: node scripts/tenant-isolation-smoke.js
 
