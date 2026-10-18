@@ -570,3 +570,26 @@
   :root[data-theme="dark"] .lb-nav *,
   :root[data-theme="dark"] .lb-footer * { transition: none !important; }
 }
+
+
+/* With product branding moved to the footer, keep landing navigation balanced:
+   links sit in the visual center and actions remain aligned to the right. */
+@media (min-width: 761px) {
+  .lb-nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+  .lb-nav-links {
+    grid-column: 2;
+    justify-self: center;
+  }
+  .lb-nav-actions {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+.lb-footer-brand { flex-shrink: 0; }
+.lb-footer-brand .lb-brand-mark { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .lb-footer-brand { max-width: 100%; }
+}
