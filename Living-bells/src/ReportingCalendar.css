@@ -85,3 +85,26 @@
   .week-days{grid-template-columns:1fr}
   .week-day{border-right:0}
 }
+
+
+/* Calendar setup scales across laptop and desktop widths while preserving
+   readable fields and week cards. */
+@media (min-width: 1101px) {
+  .calendar-page { width: 100%; min-width: 0; }
+  .calendar-hero { gap: 32px; }
+  .calendar-hero-copy { flex: 1; min-width: 0; }
+  .calendar-current { flex: 0 0 300px; }
+  .calendar-builder-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .calendar-month-list { grid-template-columns: minmax(0, 1fr); }
+  .calendar-month { padding: 22px; }
+  .week-days { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .week-day { padding: 14px 10px; }
+}
+@media (min-width: 601px) and (max-width: 1100px) {
+  .calendar-page, .calendar-month, .calendar-week-list { min-width: 0; max-width: 100%; }
+  .calendar-hero { gap: 18px; }
+  .calendar-current { min-width: 220px; }
+  .calendar-builder-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .week-day:nth-child(4n) { border-right: 0; }
+}
