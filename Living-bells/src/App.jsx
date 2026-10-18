@@ -512,7 +512,7 @@ function App() {
         </div>
 
         {loading && <section className="card"><p>Loading your church records...</p></section>}
-        {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={attendance} expenses={visibleExpenses} activities={visibleActivities} weeklyReports={weeklyReports} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
+        {!loading && page === 'dashboard' && <Dashboard user={user} reportingContext={reportingContext} attendance={attendance} expenses={visibleExpenses} finances={finances} activities={visibleActivities} weeklyReports={weeklyReports} money={money} open={setModal} go={setPage} isAdmin={isAdmin} />}
         {!loading && page === 'attendance' && <Records title="Service attendance" eyebrow="Attendance records" action="Record attendance" onAdd={() => setModal('attendance')} onCreate={async () => { const name = window.prompt('New attendance option name'); if (!name?.trim()) return; try { const created = await api.createOption({ kind: 'ATTENDANCE', name: name.trim() }); setAttendanceOptions(current => [...current.filter(x => x.name !== created.name), created]); setSync(created.offline ? 'Attendance option saved offline' : 'Backend connected') } catch (error) { setSync(error.message || 'Could not create attendance option') } }} isAdmin={isAdmin} onPrint={() => printReport('Attendance report')}><table><thead><tr><th>Service</th><th>Date</th><th>Total people</th><th>Status</th>{isAdmin && <th>Recorded by</th>}{!isAdmin && <th>Action</th>}</tr></thead><tbody>{visibleAttendance.map(r => <tr key={r.id}><td><b>{r.service}</b></td><td>{r.date}</td><td><b>{r.total}</b></td><td><span className="pill">Recorded</span></td>{isAdmin && <td>{r.recordedBy?.name || 'Unknown'}</td>}{!isAdmin && <td><button type="button" className="danger-button" onClick={()=>deleteAttendanceRecord(r.id)}>Delete</button></td>}</tr>)}</tbody></table>{!attendance.length && <p>No attendance records yet.</p>}</Records>}
         {!loading && page === 'activities' && <ActivitiesPage user={user} initialDate={reportEditDate || reportingContext?.date} onInitialDateHandled={() => setReportEditDate(null)} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
         {!loading && page === 'finance' && <FinancePage user={user} initialDate={financeEditDate || reportingContext?.date} onInitialDateHandled={() => setFinanceEditDate(null)} onChanged={() => { setDataRefreshKey(value => value + 1); setReportRefresh(value => value + 1) }} />}
@@ -570,7 +570,7 @@ function App() {
   </div>
 }
 
-function Dashboard({ user, reportingContext, attendance, expenses, activities, weeklyReports, money, go, isAdmin }) {
+function Dashboard({ user, reportingContext, attendance, expenses, finances, activities, weeklyReports, money, go, isAdmin }) {
   const [duration, setDuration] = useState('weekly')
   const todayValue = reportingContext?.date || new Date().toISOString().slice(0, 10)
   const today = new Date(todayValue + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -663,7 +663,7 @@ function Dashboard({ user, reportingContext, attendance, expenses, activities, w
     </div>
 
     <div className="quick">{!isAdmin && <><Action icon="₦" title="Record money in or out" text="Record income received or expenses paid." onClick={() => go('finance')} /><Action icon="▣" title="Record activity" text="Open the weekly activity report and save it to the shared report." onClick={() => go('activities')} /></>}{isAdmin && <Action icon="▤" title="Print reports" text="Print attendance, expense and activity tables." onClick={() => go('reports')} />}</div>
-    <div className="dash-grid"><ActivityTrend activities={activities} weeklyReports={weeklyReports} /><Card title="Recent spending"><div className="list">{expenses.slice(0, 5).map(e => <div className="row" key={e.id}><span className="mini">{e.title?.[0] || '₦'}</span><div><b>{e.title}</b><small>{e.category}</small></div><strong>{money(e.amount)}</strong></div>)}</div>{!expenses.length && <p>No expenses recorded yet.</p>}</Card></div>
+    <div className="dash-grid"><ActivityTrend activities={activities} weeklyReports={weeklyReports} /><Card title="Recent spending"><div className="list">{finances.filter(record => String(record.type || '').toUpperCase() === 'EXPENSE').slice(0, 5).map(record => <div className="row" key={record.id}><span className="mini">₦</span><div><b>{record.description || record.category || 'Expense'}</b><small>{record.category || 'General'} · {formatDate(record.recordDate)}</small></div><strong>{money(record.amount)}</strong></div>)}</div>{!finances.some(record => String(record.type || '').toUpperCase() === 'EXPENSE') && <p>No spending recorded in finance records yet.</p>}</Card></div>
   </>
 }
 
