@@ -101,7 +101,7 @@ function App() {
   })
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    try { localStorage.setItem('living_bells_theme', theme) } catch {}
+    try { localStorage.setItem('living_bells_theme', theme) } catch (error) { console.warn('Could not save theme preference', error) }
   }, [theme])
   const toggleTheme = () => setTheme(current => current === 'dark' ? 'light' : 'dark')
 
