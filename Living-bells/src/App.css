@@ -898,3 +898,97 @@ main,
 .header-tools { gap:10px; }
 @media(max-width:600px) { .theme-toggle { padding:8px 9px; } .theme-toggle-label { display:none; } .header-tools { gap:7px; } }
 @media print { [data-theme="dark"] body, [data-theme="dark"] #root { background:#fff!important; color:#111!important; } }
+
+
+/* Application-wide interaction polish: clear feedback without changing workflows. */
+button, .nav, .action-card, .stat, .card, .profile-dropdown,
+.mobile-more-panel, .modal, .secondary, .primary, .theme-toggle {
+  -webkit-tap-highlight-color: transparent;
+}
+button, .nav, .action-card, .stat, .card, .profile-dropdown,
+.mobile-more-panel, .modal, .secondary, .primary, .theme-toggle {
+  transition:
+    background-color .18s ease,
+    border-color .18s ease,
+    box-shadow .2s ease,
+    color .18s ease,
+    transform .18s ease,
+    opacity .18s ease;
+}
+button:not(:disabled):active, .action-card:active, .nav:active {
+  transform: scale(.985);
+}
+button:disabled {
+  cursor: not-allowed;
+}
+.nav:hover, .nav:focus-visible {
+  transform: translateX(2px);
+}
+.action-card:hover, .action-card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(76, 29, 149, .12);
+}
+.stat:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139, 92, 246, .35);
+  box-shadow: 0 12px 28px rgba(36, 20, 61, .08);
+}
+.card:hover {
+  border-color: rgba(139, 92, 246, .24);
+}
+.primary:hover:not(:disabled), .secondary:hover:not(:disabled),
+.theme-toggle:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.profile-dropdown {
+  transform-origin: top right;
+  animation: lb-profile-menu-in .16s ease both;
+}
+.backdrop {
+  animation: lb-backdrop-in .16s ease both;
+}
+.modal {
+  animation: lb-modal-in .2s cubic-bezier(.2,.8,.2,1) both;
+}
+.mobile-more-panel {
+  animation: lb-mobile-panel-in .18s ease both;
+}
+@keyframes lb-profile-menu-in {
+  from { opacity: 0; transform: translateY(-5px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes lb-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lb-modal-in {
+  from { opacity: 0; transform: translateY(10px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes lb-mobile-panel-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+:root[data-theme="dark"] .stat:hover,
+:root[data-theme="dark"] .action-card:hover,
+:root[data-theme="dark"] .card:hover {
+  border-color: #594276;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .24);
+}
+:root[data-theme="dark"] .nav:focus-visible,
+:root[data-theme="dark"] button:focus-visible,
+:root[data-theme="dark"] a:focus-visible,
+:root[data-theme="dark"] input:focus-visible,
+:root[data-theme="dark"] select:focus-visible,
+:root[data-theme="dark"] textarea:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, .nav, .action-card, .stat, .card, .profile-dropdown,
+  .mobile-more-panel, .modal, .secondary, .primary, .theme-toggle,
+  .backdrop {
+    animation: none !important;
+    transition: none !important;
+  }
+}

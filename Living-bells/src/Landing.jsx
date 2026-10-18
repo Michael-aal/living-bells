@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import './landing.css'
 
 const highlights = [
@@ -14,13 +15,69 @@ const ministries = [
 ]
 
 export default function Landing({ onRegister, theme = 'light', onToggleTheme = () => {} }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [activeSection, setActiveSection] = useState('home')
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [showBackToTop, setShowBackToTop] = useState(false)
+
+  useEffect(() => {
+    const handleEscape = event => {
+      if (event.key === 'Escape') setMobileMenuOpen(false)
+    }
+    const updateScroll = () => {
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight
+      setScrollProgress(scrollable > 0 ? Math.min(100, (window.scrollY / scrollable) * 100) : 0)
+      setShowBackToTop(window.scrollY > 500)
+      if (window.scrollY < 260) setActiveSection('home')
+    }
+    updateScroll()
+    window.addEventListener('scroll', updateScroll, { passive: true })
+    window.addEventListener('resize', updateScroll)
+    document.addEventListener('keydown', handleEscape)
+
+    const sections = ['welcome', 'ministries', 'gather']
+      .map(id => document.getElementById(id))
+      .filter(Boolean)
+    let observer
+    if ('IntersectionObserver' in window) {
+      observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            if (['welcome', 'ministries', 'gather'].includes(entry.target.id)) setActiveSection(entry.target.id)
+            entry.target.classList.add('is-visible')
+          }
+        })
+      }, { rootMargin: '-18% 0px -55% 0px', threshold: 0 })
+      sections.forEach(section => observer.observe(section))
+      document.querySelectorAll('.lb-reveal').forEach(section => observer.observe(section))
+    } else {
+      document.querySelectorAll('.lb-reveal').forEach(section => section.classList.add('is-visible'))
+    }
+
+    return () => {
+      window.removeEventListener('scroll', updateScroll)
+      window.removeEventListener('resize', updateScroll)
+      document.removeEventListener('keydown', handleEscape)
+      observer?.disconnect()
+    }
+  }, [])
+
+  const closeMobileMenu = () => setMobileMenuOpen(false)
+
   return <div className="lb-site">
+    <div className="lb-scroll-progress" aria-hidden="true"><span style={{ width: scrollProgress + "%" }} /></div>
     <header className="lb-nav">
       <a className="lb-brand lb-nav-brand" href="#home" aria-label="Living Bells platform home"><span className="lb-brand-mark">L</span><span><strong>Living Bells™</strong><small>Church management platform</small></span></a>
-      <nav className="lb-nav-links" aria-label="Main navigation">
-        <a href="#welcome">Our church</a><a href="#ministries">Ministries</a><a href="#gather">Get connected</a>
+      <nav className={'lb-nav-links ' + (mobileMenuOpen ? 'is-open' : '')} id="lb-mobile-navigation" aria-label="Main navigation">
+        <a className={activeSection === 'welcome' ? 'is-active' : ''} href="#welcome" onClick={closeMobileMenu}>Our church</a>
+        <a className={activeSection === 'ministries' ? 'is-active' : ''} href="#ministries" onClick={closeMobileMenu}>Ministries</a>
+        <a className={activeSection === 'gather' ? 'is-active' : ''} href="#gather" onClick={closeMobileMenu}>Get connected</a>
       </nav>
-      <div className="lb-nav-actions"><button type="button" className="theme-toggle landing-theme-toggle" onClick={onToggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light' : 'Dark'}</span></button><button className="lb-nav-cta" onClick={onRegister}><i className="fa-solid fa-user-plus" aria-hidden="true"></i><span>Register</span></button></div>
+      <div className="lb-nav-actions">
+        <button type="button" className="theme-toggle landing-theme-toggle" onClick={onToggleTheme} aria-label={'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' mode'} title={'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' mode'}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light' : 'Dark'}</span></button>
+        <button type="button" className="lb-mobile-menu-toggle" onClick={() => setMobileMenuOpen(value => !value)} aria-expanded={mobileMenuOpen} aria-controls="lb-mobile-navigation" aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}><span></span><span></span><span></span></button>
+        <button className="lb-nav-cta" onClick={() => { closeMobileMenu(); onRegister() }}><i className="fa-solid fa-user-plus" aria-hidden="true"></i><span>Register</span></button>
+      </div>
     </header>
 
     <main id="home">
@@ -30,8 +87,8 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
           <h1>A place to belong.<br/><em>A faith that lives.</em></h1>
           <p className="lb-hero-lead">Welcome to Foursquare Gospel Church, The Bells — a church family growing together in faith, love and service.</p>
           <div className="lb-hero-actions">
-            <a className="lb-button-primary" href="#welcome">Discover our church <span>→</span></a>
-            <a className="lb-button-quiet" href="#gather">Get connected</a>
+            <a className="lb-button-primary" href="#welcome" onClick={closeMobileMenu}>Discover our church <span>→</span></a>
+            <a className="lb-button-quiet" href="#gather" onClick={closeMobileMenu}>Get connected</a>
           </div>
           <div className="lb-hero-note"><span className="lb-note-icon"><i className="fa-solid fa-sparkles" aria-hidden="true"></i></span><span><b>Faith for everyday life</b><small>Growing together, serving together.</small></span></div>
         </div>
@@ -59,7 +116,7 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
       </section>
 
       <section className="lb-gather lb-reveal" id="gather">
-        <div className="lb-gather-inner"><span className="lb-gather-kicker">YOUR NEXT STEP STARTS HERE</span><h2>Let’s grow<br/><em>together.</em></h2><p>We would love to help you find your place in the life of The Bells. Reach out to the church or come along and get to know the community.</p><a className="lb-button-light" href="#welcome">Get in touch <span>→</span></a></div>
+        <div className="lb-gather-inner"><span className="lb-gather-kicker">YOUR NEXT STEP STARTS HERE</span><h2>Let’s grow<br/><em>together.</em></h2><p>We would love to help you find your place in the life of The Bells. Reach out to the church or come along and get to know the community.</p><a className="lb-button-light" href="#welcome" onClick={closeMobileMenu}>Get in touch <span>→</span></a></div>
         <div className="lb-gather-decoration"><i className="fa-solid fa-sparkles" aria-hidden="true"></i></div>
       </section>
     </main>
@@ -70,5 +127,6 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
       <button className="lb-footer-portal" onClick={onRegister}><i className="fa-solid fa-user-plus" aria-hidden="true"></i> Register your church</button>
       <span className="lb-copyright">© {new Date().getFullYear()} The Bells</span>
     </footer>
+    <button type="button" className={"lb-back-to-top " + (showBackToTop ? "is-visible" : "")} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Back to top" tabIndex={showBackToTop ? 0 : -1}>↑<span>Top</span></button>
   </div>
 }

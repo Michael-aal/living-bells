@@ -700,3 +700,195 @@
 
 /* Pure white is deliberately avoided; contrast comes from tonal separation,
    typography, and purple accents rather than large bright surfaces. */
+
+
+/* Comprehensive dark-mode white-surface audit.
+   Keep all corrections scoped to the saved dark theme. Do not alter print output
+   or light-mode styles; semantic alerts retain distinct dark, accessible colors. */
+:root[data-theme="dark"] {
+  --lb-dark-canvas: #100e17;
+  --lb-dark-surface: #191622;
+  --lb-dark-raised: #211c2c;
+  --lb-dark-hover: #302447;
+  --lb-dark-border: #373044;
+  --lb-dark-text: #e7def7;
+  --lb-dark-muted: #b7afc6;
+  --lb-dark-accent: #a78bfa;
+  --lb-dark-accent-surface: #302447;
+  --lb-dark-danger-surface: #3a202b;
+  --lb-dark-success-surface: #18382c;
+}
+
+/* Main workspace and dashboard cards that previously retained light defaults. */
+:root[data-theme="dark"] :is(
+  .mobile-nav, .mobile-more-panel, .mobile-more-head > button,
+  .mobile-more-grid button, .action-card, .ai-assistant-icon, .mini,
+  .frow.header, .total, .duration-select select, .reporting-week-picker,
+  .reporting-period-navigation input, .reporting-period-navigation select,
+  .staff-profile-grid > div, .staff-record-summary, .staff-inactive,
+  .action-menu-panel, .church-logo, .calendar-current, .calendar-month,
+  .calendar-week, .calendar-rule, .calendar-builder, .calendar-readonly,
+  .calendar-empty, .calendar-week summary, .week-day,
+  .record-search-filters select, .record-search-primary-filter select,
+  .record-search-result, .record-search-result time, .record-search-empty,
+  .report-controls > .report-period-tabs, .report-controls > label,
+  .report-controls > .period-summary, .report-period-tabs button.active,
+  .support-intro, .support-card, .support-card-head button, .support-ticket,
+  .support-message, .dev-application-card, .dev-application-note,
+  .dev-review-note textarea, .dev-review-note select,
+  .dev-ticket-reply textarea, .dev-activation-link input,
+  .dev-secondary, .dev-danger, .dev-ticket-item, .dev-ticket-detail,
+  .dev-ticket-message, .dev-activation-link, .dev-registration-policy,
+  .dev-policy-toggle, .dev-bell, .dev-record-grid div, .dev-account-summary div,
+  .dev-notification-panel, .dev-notification, .dev-credentials,
+  .dev-setup-secondary, .dev-recovery-key, .auth-card, .auth-card input,
+  .auth-card select, .auth-card textarea, .dev-setup-card,
+  .dev-setup-card input, .dev-setup-secondary, .dev-console input,
+  .dev-console select, .dev-console textarea
+) {
+  background-color: var(--lb-dark-surface) !important;
+  color: var(--lb-dark-text);
+  border-color: var(--lb-dark-border);
+}
+
+/* Keep page canvases and nested reading surfaces visually distinct. */
+:root[data-theme="dark"] :is(
+  .shell, .content, .dev-console, .auth-shell, .dev-setup-shell,
+  .lb-site, .lb-site main, .lb-welcome, .lb-footer
+) {
+  background-color: var(--lb-dark-canvas);
+  color: var(--lb-dark-text);
+}
+
+:root[data-theme="dark"] :is(
+  .calendar-current, .calendar-rule, .calendar-empty, .calendar-week,
+  .calendar-month, .support-intro, .support-card, .support-ticket,
+  .support-message, .dev-application-card, .dev-ticket-item,
+  .dev-ticket-detail, .dev-ticket-message, .dev-application-note,
+  .dev-account-summary div, .dev-record-grid div, .dev-registration-policy,
+  .dev-policy-toggle, .record-search-card, .record-search-result,
+  .record-search-empty, .report-controls > *, .mobile-nav,
+  .mobile-more-panel, .mobile-more-grid button, .action-card, .mini,
+  .frow.header, .total, .staff-profile-grid > div
+) {
+  background-color: var(--lb-dark-raised);
+  border-color: var(--lb-dark-border);
+}
+
+/* Calendar/reporting and dashboard states use muted tones, never pale panels. */
+:root[data-theme="dark"] :is(
+  .calendar-current, .calendar-rule, .calendar-month, .calendar-week,
+  .calendar-empty, .calendar-week summary, .calendar-week summary:hover,
+  .week-day, .week-actions button, .week-actions button:hover,
+  .coverage-track, .reporting-week-picker, .reporting-period-navigation,
+  .record-search-result:hover, .record-search-result time,
+  .record-search-primary-filter select, .report-period-tabs button.active,
+  .selected-row, .staff-profile-grid > div, .frow.header, .mini
+) {
+  background: var(--lb-dark-raised) !important;
+  color: var(--lb-dark-text);
+  border-color: var(--lb-dark-border);
+}
+
+/* Developer approval, support and account-setup forms had independent white defaults. */
+:root[data-theme="dark"] :is(
+  .dev-health, .dev-status.ok, .dev-notice, .support-alert,
+  .auth-notice, .auth-application-status, .dev-activation-link,
+  .dev-ticket-message.internal
+) {
+  background: var(--lb-dark-accent-surface);
+  border-color: #594276;
+  color: #e7def7;
+}
+
+:root[data-theme="dark"] :is(
+  .dev-status.off, .dev-error, .dev-danger, .danger-button,
+  .support-alert.error, .auth-error, .dev-setup-error
+) {
+  background: var(--lb-dark-danger-surface) !important;
+  border-color: #6b3345;
+  color: #ffd3df;
+}
+
+:root[data-theme="dark"] :is(
+  .save-state.saved, .save-state.unsaved, .calendar-alert.success,
+  .calendar-alert.error, .coverage-warning
+) {
+  background: var(--lb-dark-raised);
+  border-color: var(--lb-dark-border);
+  color: var(--lb-dark-text);
+}
+
+/* Landing page: remove the remaining pale CTA and pure-white navigation accents. */
+:root[data-theme="dark"] .lb-button-light {
+  background: var(--lb-dark-accent-surface) !important;
+  border-color: #594276;
+  color: var(--lb-dark-text) !important;
+}
+:root[data-theme="dark"] .lb-nav-links a:hover,
+:root[data-theme="dark"] .lb-nav-links a:focus-visible,
+:root[data-theme="dark"] .lb-nav-cta,
+:root[data-theme="dark"] .lb-brand-mark,
+:root[data-theme="dark"] .lb-gather p {
+  color: var(--lb-dark-text) !important;
+}
+:root[data-theme="dark"] .lb-brand-mark {
+  background: linear-gradient(145deg, #8b5cf6, #6d28d9);
+}
+:root[data-theme="dark"] .lb-gather {
+  background: linear-gradient(135deg, #302447, #21172f);
+}
+:root[data-theme="dark"] .lb-gather-decoration {
+  color: rgba(167, 139, 250, .09);
+}
+
+/* Normalize remaining buttons without flattening their semantic accent colors. */
+:root[data-theme="dark"] :is(
+  .mobile-more-head > button, .mobile-more-grid button,
+  .week-actions button, .support-card-head button, .dev-secondary,
+  .dev-bell, .dev-setup-secondary, .theme-toggle, .danger-button
+) {
+  box-shadow: none;
+}
+:root[data-theme="dark"] :is(
+  input, select, textarea, option, optgroup,
+  .auth-card input, .auth-card select, .auth-card textarea,
+  .dev-setup-card input, .support-form input, .support-form select,
+  .support-form textarea, .dev-console input, .dev-console select,
+  .dev-console textarea, .dev-review-note input, .dev-review-note select,
+  .dev-ticket-reply textarea, .dev-activation-link input
+) {
+  background-color: #15121d !important;
+  color: var(--lb-dark-text) !important;
+  border-color: #494055;
+  color-scheme: dark;
+}
+:root[data-theme="dark"] :is(input, textarea)::placeholder {
+  color: #9d93ae;
+  opacity: 1;
+}
+:root[data-theme="dark"] :is(
+  .card, .stat, .action-card, .ai-assistant-icon, .mini,
+  .mobile-nav, .mobile-more-panel, .frow.header, .total,
+  .calendar-current, .calendar-month, .calendar-week, .calendar-empty,
+  .record-search-result, .support-card, .dev-application-card,
+  .dev-ticket-item, .dev-ticket-detail, .auth-card, .dev-setup-card
+) {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .14);
+}
+
+/* Pure-white text is replaced only in dark mode; contrast remains high. */
+:root[data-theme="dark"] :is(
+  .lb-nav-links a:hover, .lb-nav-cta, .lb-brand-mark,
+  .primary, .btn-primary, .save-button, .auth-submit,
+  .support-primary, .dev-primary, .toast, .dev-notification-count,
+  .auth-brand > span, .dev-setup-logo
+) {
+  color: var(--lb-dark-text) !important;
+}
+
+/* Keep keyboard focus visible against dark surfaces. */
+:root[data-theme="dark"] :is(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: 2px;
+}
