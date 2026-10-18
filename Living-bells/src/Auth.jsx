@@ -61,7 +61,7 @@ export default function Auth({ onAuthenticated, onBack }) {
           applicantName: application.applicantName.trim(),
           applicantEmail: application.applicantEmail.trim().toLowerCase(),
         })
-        setApplicationSubmitted(result.application)
+        setApplicationSubmitted({ ...result.application, emailDeliveryFailed: result.emailDeliveryFailed === true, activationLink: result.activationLink || '' })
         setNotice(result.message || 'Application submitted for review.')
         return
       }
@@ -142,9 +142,14 @@ export default function Auth({ onAuthenticated, onBack }) {
       {error && <div className="auth-error" role="alert">{error}</div>}
       {notice && <div className="auth-notice" role="status">{notice}</div>}
       {applicationSubmitted && isApplication && <div className="auth-application-status" role="status">
-        <b>Application #{applicationSubmitted.id} received</b>
-        <span>Status: Pending developer review</span>
-        <span>We will review the details before any administrator account is activated.</span>
+        <b>Application #{applicationSubmitted.id} {applicationSubmitted.status === 'APPROVED' ? 'approved' : 'received'}</b>
+        <span>Status: {String(applicationSubmitted.status || 'PENDING').replaceAll('_', ' ')}</span>
+        {applicationSubmitted.status === 'APPROVED'
+          ? applicationSubmitted.emailDeliveryFailed
+            ? <span>Your application was approved, but the activation email could not be sent. Contact Living Bells support for help activating your account.</span>
+            : <span>Your application was approved. Check your email for the secure activation link. Your admin account becomes active after you set your password.</span>
+          : <span>Your application is awaiting developer review. If information needs correction or the application is declined, we will explain what needs attention.</span>}
+        {applicationSubmitted.activationLink && <a href={applicationSubmitted.activationLink}>Open development activation link</a>}
       </div>}
 
       <form onSubmit={submit}>

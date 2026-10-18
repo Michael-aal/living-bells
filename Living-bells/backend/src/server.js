@@ -374,32 +374,113 @@ app.post('/api/church-applications', async (req, res, next) => {
     const denomination = String(req.body?.denomination || '').trim() || null
     const address = String(req.body?.address || '').trim() || null
     const phone = String(req.body?.phone || '').trim() || null
-    if (churchName.length < 2 || applicantName.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applicantEmail)) {
-      return res.status(400).json({ message: 'Church name, applicant name and a valid contact email are required.' })
+    if (churchName.length < 2 || churchName.length > 160 || applicantName.length < 2 || applicantName.length > 80 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applicantEmail)) {
+      return res.status(400).json({ message: 'Enter a church name, your name, and a valid contact email. Please check the fields and try again.' })
+    }
+    if (denomination?.length > 120 || address?.length > 240 || phone?.length > 40) {
+      return res.status(400).json({ message: 'One or more church details are too long. Please shorten them and try again.' })
     }
     if (await prisma.user.findUnique({ where: { email: applicantEmail }, select: { id: true } })) {
-      return res.status(409).json({ message: 'This email already has a Living Bells account. Use an email that is not registered to another church workspace.' })
+      return res.status(409).json({ message: 'This email already has a Living Bells account. Sign in with that account or use a different email address.' })
     }
     const recent = await prisma.churchApplication.findFirst({
       where: { applicantEmail, status: { in: ['PENDING', 'NEEDS_INFO', 'APPROVED', 'ACTIVATED'] } },
       orderBy: { createdAt: 'desc' },
       select: { id: true, status: true, createdAt: true },
     })
-    if (recent) return res.status(409).json({ message: 'An application for this email is already being reviewed or awaiting activation.', application: recent })
+    if (recent) return res.status(409).json({ message: 'An application for this email is already being reviewed or awaiting activation. Check your email or contact Living Bells support.', application: recent })
+
+    const policy = await prisma.platformSetting.findUnique({ where: { key: 'CHURCH_REGISTRATION_AUTO_APPROVE' }, select: { value: true } })
+    const autoApprove = policy?.value === true
+    if (autoApprove && IS_PRODUCTION && (!RESEND_API_KEY || !RESEND_FROM_EMAIL)) {
+      return res.status(503).json({ message: 'Automatic approval is temporarily unavailable because activation email delivery is not configured. Please try again later or contact Living Bells support.' })
+    }
+
     const application = await prisma.churchApplication.create({
       data: { churchName, applicantName, applicantEmail, denomination, address, phone },
       select: { id: true, churchName: true, applicantName: true, applicantEmail: true, status: true, createdAt: true },
     })
+
+    let generatedLink = null
+    let activationEmailSent = false
+    let finalApplication = application
+    if (autoApprove) {
+      const rawToken = crypto.randomBytes(32).toString('base64url')
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
+      finalApplication = await prisma.$transaction(async tx => {
+        const church = await tx.church.create({
+          data: { name: churchName, denomination, address, contactEmail: applicantEmail, phone },
+        })
+        const claimed = await tx.churchApplication.updateMany({
+          where: { id: application.id, status: 'PENDING' },
+          data: { status: 'APPROVED', reviewNote: 'Automatically approved by the platform registration policy.', reviewedAt: new Date(), churchId: church.id, activationTokenHash: tokenHash, activationExpiresAt: expiresAt },
+        })
+        if (claimed.count !== 1) {
+          const conflict = new Error('The application changed before it could be approved. Please submit again or contact support.')
+          conflict.code = 'APPLICATION_APPROVAL_CONFLICT'
+          throw conflict
+        }
+        return tx.churchApplication.findUnique({ where: { id: application.id }, select: { id: true, churchName: true, applicantName: true, applicantEmail: true, status: true, createdAt: true, activationExpiresAt: true, churchId: true } })
+      })
+      generatedLink = `${APP_BASE_URL}/#churchActivation=${encodeURIComponent(rawToken)}`
+    }
+
     const developers = await prisma.user.findMany({ where: { role: 'DEV', isActive: true }, select: { id: true, email: true } })
     if (developers.length) await prisma.notification.createMany({
       data: developers.map(user => ({
         userId: user.id,
         type: 'CHURCH_APPLICATION',
-        title: 'New church application',
-        message: `${churchName} submitted a church registration application.`,
-        metadata: { applicationId: application.id, action: 'review-church-application' },
+        title: autoApprove ? 'Church automatically approved' : 'New church application',
+        message: autoApprove
+          ? `${churchName} was automatically approved. Administrator activation is pending.`
+          : `${churchName} submitted a church registration application.`,
+        metadata: { applicationId: application.id, action: 'review-church-application', autoApproved: autoApprove },
       })),
     })
+
+    if (autoApprove) {
+      try {
+        activationEmailSent = await sendPlatformEmail({
+          to: applicantEmail,
+          subject: `Activate ${churchName} on Living Bells`,
+          text: `Hello ${applicantName}, your church application has been automatically approved. Use this one-time link within 72 hours to verify your email and set your church administrator password: ${generatedLink}`,
+          html: `<p>Hello ${escapeEmailHtml(applicantName)},</p><p>Your application for <strong>${escapeEmailHtml(churchName)}</strong> has been automatically approved.</p><p><a href="${generatedLink}">Activate your Church Admin account</a></p><p>This one-time link expires in 72 hours. Your account is not active until you complete activation.</p>`,
+        })
+      } catch {
+        activationEmailSent = false
+      }
+      if (!activationEmailSent && developers.length) {
+        await prisma.notification.createMany({
+          data: developers.map(user => ({
+            userId: user.id,
+            type: 'CHURCH_APPLICATION',
+            title: 'Activation email needs attention',
+            message: `Automatic approval succeeded for ${churchName}, but the activation email could not be sent. Resend it from the church applications queue.`,
+            metadata: { applicationId: application.id, action: 'resend-church-activation' },
+          })),
+        })
+      }
+      await Promise.allSettled(developers.map(user => sendPlatformEmail({
+        to: user.email,
+        subject: autoApprove && !activationEmailSent ? 'Living Bells activation email needs attention' : 'Church registration automatically approved',
+        text: autoApprove && !activationEmailSent
+          ? `${churchName} was automatically approved, but its activation email could not be delivered. Review application #${application.id} in the Developer Console and resend activation.`
+          : `${churchName} was automatically approved. Review application #${application.id} in the Developer Console if needed.`,
+        html: autoApprove && !activationEmailSent
+          ? `<p><strong>${escapeEmailHtml(churchName)}</strong> was automatically approved, but its activation email could not be delivered. Review application #${application.id} and resend activation.</p>`
+          : `<p><strong>${escapeEmailHtml(churchName)}</strong> was automatically approved. Review application #${application.id} in the Developer Console if needed.</p>`,
+      })))
+      return res.status(201).json({
+        message: activationEmailSent
+          ? 'Your church registration was automatically approved. Check your email for a one-time activation link; your admin account becomes active after you set your password.'
+          : 'Your church registration was automatically approved, but the activation email could not be sent. Please contact Living Bells support for help activating your account.',
+        application: finalApplication,
+        emailDeliveryFailed: !activationEmailSent,
+        activationLink: !IS_PRODUCTION && !activationEmailSent ? generatedLink : null,
+      })
+    }
+
     await Promise.allSettled([
       ...developers.map(user => sendPlatformEmail({
         to: user.email,
@@ -414,8 +495,11 @@ app.post('/api/church-applications', async (req, res, next) => {
         html: `<p>Hello ${escapeEmailHtml(applicantName)},</p><p>We received the application for <strong>${escapeEmailHtml(churchName)}</strong>. It is pending developer review; no administrator account is active yet.</p>`,
       }),
     ])
-    res.status(201).json({ message: 'Application submitted. It will remain pending until the Living Bells developer team reviews it.', application })
-  } catch (error) { next(error) }
+    res.status(201).json({ message: 'Application submitted successfully and is awaiting developer review. You will be notified when a decision is made.', application: finalApplication })
+  } catch (error) {
+    if (error?.code === 'APPLICATION_APPROVAL_CONFLICT') return res.status(409).json({ message: error.message })
+    next(error)
+  }
 })
 
 app.post('/api/church-applications/activate', async (req, res, next) => {
@@ -1418,6 +1502,32 @@ app.post('/api/admin/staff/:staffId/reviews', requireAdmin, async (req, res, nex
   } catch (error) { next(error) }
 })
 
+
+app.get('/api/dev/settings/church-registration', requireDevReady, async (_req, res, next) => {
+  try {
+    const setting = await prisma.platformSetting.findUnique({ where: { key: 'CHURCH_REGISTRATION_AUTO_APPROVE' }, select: { value: true, updatedAt: true, updatedById: true } })
+    res.set('Cache-Control', 'no-store')
+    res.json({ autoApprove: setting?.value === true, updatedAt: setting?.updatedAt || null, updatedById: setting?.updatedById || null })
+  } catch (error) { next(error) }
+})
+
+app.patch('/api/dev/settings/church-registration', requireDevReady, async (req, res, next) => {
+  try {
+    if (typeof req.body?.autoApprove !== 'boolean') return res.status(400).json({ message: 'Choose whether new church applications should require manual approval or be automatically approved.' })
+    const autoApprove = req.body.autoApprove
+    if (autoApprove && IS_PRODUCTION && (!RESEND_API_KEY || !RESEND_FROM_EMAIL)) {
+      return res.status(503).json({ message: 'Configure RESEND_API_KEY and RESEND_FROM_EMAIL on the backend before enabling automatic approval. Approved applicants must receive a secure activation link.' })
+    }
+    const setting = await prisma.platformSetting.upsert({
+      where: { key: 'CHURCH_REGISTRATION_AUTO_APPROVE' },
+      create: { key: 'CHURCH_REGISTRATION_AUTO_APPROVE', value: autoApprove, updatedById: currentUserId(req) },
+      update: { value: autoApprove, updatedById: currentUserId(req) },
+      select: { key: true, value: true, updatedAt: true, updatedById: true },
+    })
+    res.set('Cache-Control', 'no-store')
+    res.json({ autoApprove: setting.value === true, updatedAt: setting.updatedAt, updatedById: setting.updatedById, message: autoApprove ? 'Automatic church approval enabled. New valid applications will be approved automatically after submission.' : 'Manual church approval enabled. New applications will wait for a developer decision.' })
+  } catch (error) { next(error) }
+})
 
 app.get('/api/dev/church-applications', requireDevReady, async (_req, res, next) => {
   try {

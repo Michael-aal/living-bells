@@ -53,6 +53,8 @@ export default function DevDashboard({ user, onLogout }) {
   const [recoveryVisible, setRecoveryVisible] = useState(false)
   const [applications, setApplications] = useState([])
   const [applicationNotes, setApplicationNotes] = useState({})
+  const [autoApproveChurches, setAutoApproveChurches] = useState(false)
+  const [registrationPolicySaving, setRegistrationPolicySaving] = useState(false)
   const [activationLink, setActivationLink] = useState('')
   const [activationEmailRetryId, setActivationEmailRetryId] = useState(null)
   const [tickets, setTickets] = useState([])
@@ -67,7 +69,7 @@ export default function DevDashboard({ user, onLogout }) {
       setError('')
     }
     try {
-      const [overviewData, directoryData, invitationData, developerData, notificationData, applicationData, ticketData] = await Promise.all([
+      const [overviewData, directoryData, invitationData, developerData, notificationData, applicationData, ticketData, registrationPolicyData] = await Promise.all([
         api.devOverview(),
         request('/api/dev/users'),
         request('/api/admin/staff/invitations'),
@@ -75,6 +77,7 @@ export default function DevDashboard({ user, onLogout }) {
         api.notifications(),
         api.churchApplications(),
         api.supportTickets(),
+        api.churchRegistrationPolicy(),
       ])
       setOverview({ ...overviewData, users: directoryData?.counts || overviewData?.users || {} })
       setDirectory(directoryData?.users || [])
@@ -82,6 +85,7 @@ export default function DevDashboard({ user, onLogout }) {
       setDevelopers(developerData || [])
       setNotifications(notificationData || [])
       setApplications(applicationData || [])
+      setAutoApproveChurches(registrationPolicyData?.autoApprove === true)
       setTickets(ticketData || [])
     } catch (err) {
       setError(err.message || 'Could not load the developer console')
@@ -148,6 +152,21 @@ export default function DevDashboard({ user, onLogout }) {
     }
   }
 
+
+  async function saveRegistrationPolicy(nextValue) {
+    setError('')
+    setNotice('')
+    setRegistrationPolicySaving(true)
+    try {
+      const result = await api.updateChurchRegistrationPolicy({ autoApprove: nextValue })
+      setAutoApproveChurches(result.autoApprove === true)
+      setNotice(result.message || 'Church registration policy updated.')
+    } catch (err) {
+      setError(err.message || 'Could not update church registration policy')
+    } finally {
+      setRegistrationPolicySaving(false)
+    }
+  }
 
   async function reviewApplication(id, action) {
     setError('')
@@ -309,6 +328,20 @@ export default function DevDashboard({ user, onLogout }) {
 
         {tab === 'applications' && <section className="dev-panel">
           <div className="dev-panel-head"><div><span className="dev-eyebrow">Approval queue</span><h2>Church applications</h2><p>New churches remain pending until a developer reviews them. Approval creates a church workspace and a time-limited activation link.</p></div><span className="dev-live">{applications.filter(item => item.status === 'PENDING' || item.status === 'NEEDS_INFO').length} awaiting review</span></div>
+          <section className="dev-registration-policy" aria-labelledby="church-registration-policy-title">
+            <div>
+              <span className="dev-eyebrow">Platform-wide setting</span>
+              <h3 id="church-registration-policy-title">Church registration approval</h3>
+              <p>{autoApproveChurches
+                ? 'New valid applications are approved automatically. Applicants must still activate their account using the secure email link before they can sign in.'
+                : 'New applications wait for a DEV to approve, request more information, or decline them with a reason.'}</p>
+            </div>
+            <label className="dev-policy-toggle">
+              <input type="checkbox" checked={autoApproveChurches} disabled={registrationPolicySaving} onChange={event => saveRegistrationPolicy(event.target.checked)} />
+              <span>{registrationPolicySaving ? 'Saving policy…' : autoApproveChurches ? 'Auto-approval enabled' : 'Manual approval enabled'}</span>
+            </label>
+            <small>Manual approval is the default. Enabling auto-approval in production requires working activation email configuration.</small>
+          </section>
           {activationLink && <div className="dev-activation-link"><strong>One-time activation link</strong><p>Share this link privately with the applicant. It expires in 72 hours and can be used once.</p><input readOnly value={activationLink} aria-label="Church administrator activation link" /><button type="button" className="dev-primary" onClick={() => navigator.clipboard?.writeText(activationLink)}>Copy activation link</button></div>}
           {activationEmailRetryId && <div className="dev-activation-link"><strong>Activation email delivery needs a retry</strong><p>The application is approved, but the email provider did not confirm delivery. The one-time link is not shown here in production.</p><button type="button" className="dev-primary" onClick={() => resendActivationEmail(activationEmailRetryId)}>Retry activation email</button></div>}
           <div className="dev-application-grid">
@@ -316,6 +349,7 @@ export default function DevDashboard({ user, onLogout }) {
               <div className="dev-panel-head"><div><span className="dev-eyebrow">Application #{item.id}</span><h3>{item.churchName}</h3></div><span className={item.status === 'ACTIVATED' ? 'dev-status ok' : item.status === 'REJECTED' ? 'dev-status off' : 'dev-status'}>{item.status.replaceAll('_', ' ')}</span></div>
               <div className="dev-application-details"><span><b>Applicant</b>{item.applicantName}</span><span><b>Email</b>{item.applicantEmail}</span><span><b>Denomination</b>{item.denomination || '—'}</span><span><b>Location</b>{item.address || '—'}</span><span><b>Phone</b>{item.phone || '—'}</span><span><b>Submitted</b>{date(item.createdAt)}</span></div>
               {item.reviewNote && <p className="dev-application-note"><b>Review note:</b> {item.reviewNote}</p>}
+              {item.status === 'APPROVED' && !item.activatedAt && <div className="dev-actions"><button type="button" className="dev-secondary" onClick={() => resendActivationEmail(item.id)}>Resend activation email</button></div>}
               {(item.status === 'PENDING' || item.status === 'NEEDS_INFO') && <>
                 <label className="dev-review-note">Review note / reason<textarea value={applicationNotes[item.id] || ''} onChange={e => setApplicationNotes(current => ({ ...current, [item.id]: e.target.value }))} placeholder="Optional note; required for rejection or more information." rows="2" /></label>
                 <div className="dev-actions"><button type="button" className="dev-primary" onClick={() => reviewApplication(item.id, 'APPROVE')}>Approve</button><button type="button" className="dev-secondary" onClick={() => reviewApplication(item.id, 'NEEDS_INFO')}>Request information</button><button type="button" className="dev-danger" onClick={() => reviewApplication(item.id, 'REJECT')}>Reject</button></div>
