@@ -892,3 +892,85 @@
   outline: 2px solid #c4b5fd;
   outline-offset: 2px;
 }
+
+
+/* Follow-up cascade audit: override light-theme declarations marked !important.
+   These rules only run in dark mode and target actual UI surfaces, not print. */
+:root[data-theme="dark"] .sidebar {
+  background: #171420 !important;
+  border-right-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .shell > main > header {
+  background: rgba(25, 22, 34, .96) !important;
+  border-bottom-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .search {
+  background: #15121d !important;
+  border-color: var(--lb-dark-border) !important;
+  color: var(--lb-dark-muted) !important;
+}
+:root[data-theme="dark"] .secondary,
+:root[data-theme="dark"] .welcome-actions button {
+  background: var(--lb-dark-raised) !important;
+  color: var(--lb-dark-text) !important;
+  border-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .secondary:hover,
+:root[data-theme="dark"] .welcome-actions button:hover {
+  background: var(--lb-dark-hover) !important;
+  border-color: #594276 !important;
+}
+:root[data-theme="dark"] .welcome-card {
+  background: linear-gradient(135deg, #191622 0%, #211c2c 100%) !important;
+  border-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .mobile-nav {
+  background: rgba(25, 22, 34, .98) !important;
+  border-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .reporting-calendar .reporting-hero {
+  background: linear-gradient(135deg, #191622 0%, #211c2c 100%) !important;
+  border-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .reporting-calendar .reporting-week {
+  background: var(--lb-dark-surface) !important;
+  border-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .reporting-calendar .week-day {
+  background: var(--lb-dark-raised) !important;
+  border-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .reporting-calendar .current-period {
+  background: var(--lb-dark-accent-surface) !important;
+  border-color: #594276 !important;
+}
+:root[data-theme="dark"] .reporting-calendar .reporting-week summary:hover,
+:root[data-theme="dark"] tbody tr:hover td {
+  background: var(--lb-dark-hover) !important;
+}
+:root[data-theme="dark"] .staff-counts > div,
+:root[data-theme="dark"] .today-money > div,
+:root[data-theme="dark"] .reporting-week-picker,
+:root[data-theme="dark"] .reporting-week-tab,
+:root[data-theme="dark"] .reporting-day-strip button,
+:root[data-theme="dark"] .action-menu-panel {
+  background: var(--lb-dark-raised) !important;
+  color: var(--lb-dark-text) !important;
+  border-color: var(--lb-dark-border) !important;
+}
+:root[data-theme="dark"] .reporting-week-tab.selected,
+:root[data-theme="dark"] .reporting-day-strip button.selected,
+:root[data-theme="dark"] .reporting-day-strip button.current.selected {
+  background: var(--lb-dark-accent-surface) !important;
+  color: var(--lb-dark-text) !important;
+  border-color: #7c5ba8 !important;
+}
+:root[data-theme="dark"] .reporting-day-strip button.current {
+  color: var(--lb-dark-text) !important;
+}
+:root[data-theme="dark"] .lb-hero {
+  background: linear-gradient(135deg, #100e17 0%, #191622 100%) !important;
+}
+:root[data-theme="dark"] .lb-ministries {
+  background: #15121d !important;
+}
