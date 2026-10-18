@@ -16,6 +16,7 @@ const ministries = [
 export default function Landing({ onRegister, theme = 'light', onToggleTheme = () => {} }) {
   return <div className="lb-site">
     <header className="lb-nav">
+      <a className="lb-brand lb-nav-brand" href="#home" aria-label="Living Bells platform home"><span className="lb-brand-mark">L</span><span><strong>Living Bells™</strong><small>Church management platform</small></span></a>
       <nav className="lb-nav-links" aria-label="Main navigation">
         <a href="#welcome">Our church</a><a href="#ministries">Ministries</a><a href="#gather">Get connected</a>
       </nav>
