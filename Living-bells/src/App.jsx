@@ -127,7 +127,7 @@ function App() {
     let active = true
     api.churchProfile().then(profile => { if (active) setChurchProfile(profile) }).catch(() => {})
     return () => { active = false }
-  }, [user?.id, user?.demo])
+  }, [user])
 
   useEffect(() => {
     if (!user || user.demo) return
