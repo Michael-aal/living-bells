@@ -13,7 +13,7 @@ const ministries = [
   { icon: 'fa-solid fa-hand-holding-heart', title: 'Outreach & Service', text: 'Sharing hope and serving people in our wider community.' },
 ]
 
-export default function Landing({ onSignIn, onRegister }) {
+export default function Landing({ onRegister }) {
   return <div className="lb-site">
     <header className="lb-nav">
       <a className="lb-brand" href="#home" aria-label="Living Bells home">
