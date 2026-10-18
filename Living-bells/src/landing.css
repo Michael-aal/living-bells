@@ -390,3 +390,12 @@
     transition: none !important;
   }
 }
+
+
+/* The app dashboard uses a fixed sidebar and a global main offset.
+   The public landing page has no sidebar, so reset that offset here. */
+.lb-site > main {
+  margin-left: 0 !important;
+  width: 100%;
+  max-width: 100%;
+}
