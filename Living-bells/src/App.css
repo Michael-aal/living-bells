@@ -696,3 +696,63 @@ main,
 .reporting-period-navigation input,.reporting-period-navigation select{width:100%;min-height:36px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--text);padding:7px 9px;font:inherit;font-size:11px}
 .reporting-period-navigation button{min-height:36px;white-space:nowrap}
 @media(max-width:480px){.reporting-period-navigation{gap:7px}.reporting-period-navigation label{min-width:calc(50% - 5px)}.reporting-period-navigation button{width:100%}}
+
+
+/* Desktop and laptop layout correction: keep the workspace spacious without
+   forcing laptop-sized screens into the tablet's single-column layout. */
+@media (min-width: 768px) and (max-width: 1000px) {
+  .sidebar { width: 218px; padding: 22px 13px; }
+  main { margin-left: 218px; }
+  header { padding-inline: 22px; }
+  .content { width: 100%; max-width: none; padding: 26px 22px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .action-card { min-width: 0; }
+  .dash-grid { grid-template-columns: minmax(0, 1fr); }
+  .report-grid, .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .heading { align-items: flex-start; }
+  .heading h1 { overflow-wrap: anywhere; }
+}
+
+@media (min-width: 1001px) and (max-width: 1199px) {
+  .content { width: 100%; max-width: 1500px; padding: 28px 26px; }
+  .sidebar { width: 232px; padding-inline: 15px; }
+  main { margin-left: 232px; }
+  header { padding-inline: 26px; }
+  .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
+  .stat { padding: 14px 12px; gap: 10px; }
+  .stat strong { font-size: clamp(17px, 1.8vw, 21px); overflow-wrap: anywhere; }
+  .quick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .dash-grid { grid-template-columns: minmax(0, 1fr); }
+  .report-grid, .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1200px) {
+  .content { width: 100%; max-width: 1600px; padding: 32px clamp(28px, 2.5vw, 44px); }
+  .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .stat { min-width: 0; padding: 20px; }
+  .stat > div:last-child { min-width: 0; }
+  .quick { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 15px; margin-block: 16px; }
+  .action-card { min-width: 0; padding: 17px; }
+  .dash-grid { grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); gap: 16px; }
+  .report-grid, .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .card { padding: 24px; }
+  .heading { margin-bottom: 28px; }
+}
+
+@media (min-width: 1600px) {
+  .sidebar { width: 270px; padding-inline: 22px; }
+  main { margin-left: 270px; }
+  header { padding-inline: 42px; }
+  .content { max-width: 1800px; padding-inline: 48px; }
+  .heading h1 { font-size: 32px; }
+  .stats, .quick, .dash-grid { gap: 18px; }
+}
+
+/* Long labels and wide report data should wrap or scroll inside their own panel,
+   never stretch the entire desktop viewport. */
+.content, .heading, .heading > *, .card, .card-head, .report-grid,
+.form-grid, .dash-grid, .stats, .quick, .staff-layout { min-width: 0; }
+.card-head { flex-wrap: wrap; }
+.table-wrap { max-width: 100%; min-width: 0; }
+.table-wrap table { min-width: 620px; }
