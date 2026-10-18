@@ -9,3 +9,21 @@
 .auth-card input,.auth-card select,.auth-card textarea{max-width:100%}
 .auth-switch{line-height:1.8}
 @media(max-width:480px){.auth-shell{padding:14px}.auth-card{padding:22px 18px}.auth-switch{display:flex;flex-wrap:wrap;gap:4px;align-items:center}}
+
+
+/* Login, church application and invitation flows inherit the same saved theme. */
+:root[data-theme="dark"] .auth-shell { background:radial-gradient(circle at 15% 15%,#302447 0,transparent 32%),radial-gradient(circle at 85% 80%,#261b35 0,transparent 28%),#111018; color:#f4f0fb; }
+:root[data-theme="dark"] .auth-card { background:#1b1824; border-color:#393244; color:#f4f0fb; box-shadow:0 24px 70px rgba(0,0,0,.28); }
+:root[data-theme="dark"] .auth-brand small,
+:root[data-theme="dark"] .auth-subtitle,
+:root[data-theme="dark"] .auth-loading,
+:root[data-theme="dark"] .auth-switch { color:#b7afc4; }
+:root[data-theme="dark"] .auth-card input,
+:root[data-theme="dark"] .auth-card select,
+:root[data-theme="dark"] .auth-card textarea { background:#15121d; color:#f4f0fb; border-color:#494055; }
+:root[data-theme="dark"] .auth-notice,
+:root[data-theme="dark"] .auth-application-status { background:#302447; border-color:#594276; color:#e5dcf5; }
+:root[data-theme="dark"] .auth-error { background:#3a202b; border-color:#6b3345; color:#ffd3df; }
+:root[data-theme="dark"] .auth-back { color:#ddd0ff; }
+.auth-theme-toggle { position:absolute; top:20px; right:20px; z-index:2; }
+@media(max-width:520px) { .auth-theme-toggle { top:10px; right:10px; } .auth-theme-toggle .theme-toggle-label { display:none; } }
