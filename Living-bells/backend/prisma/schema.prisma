@@ -24,6 +24,16 @@ enum SupportTicketStatus {
   CLOSED
 }
 
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  updatedById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
 model Church {
   id                Int       @id @default(autoincrement())
   name              String
