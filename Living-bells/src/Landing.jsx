@@ -21,6 +21,9 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
   const [showBackToTop, setShowBackToTop] = useState(false)
 
   useEffect(() => {
+    const handleEscape = event => {
+      if (event.key === 'Escape') setMobileMenuOpen(false)
+    }
     const updateScroll = () => {
       const scrollable = document.documentElement.scrollHeight - window.innerHeight
       setScrollProgress(scrollable > 0 ? Math.min(100, (window.scrollY / scrollable) * 100) : 0)
@@ -29,6 +32,7 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
     updateScroll()
     window.addEventListener('scroll', updateScroll, { passive: true })
     window.addEventListener('resize', updateScroll)
+    document.addEventListener('keydown', handleEscape)
 
     const sections = ['home', 'welcome', 'ministries', 'gather']
       .map(id => document.getElementById(id))
@@ -38,7 +42,7 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
       observer = new IntersectionObserver(entries => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
-            setActiveSection(entry.target.id)
+            if (entry.target.id) setActiveSection(entry.target.id)
             entry.target.classList.add('is-visible')
           }
         })
@@ -52,6 +56,7 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
     return () => {
       window.removeEventListener('scroll', updateScroll)
       window.removeEventListener('resize', updateScroll)
+      document.removeEventListener('keydown', handleEscape)
       observer?.disconnect()
     }
   }, [])
