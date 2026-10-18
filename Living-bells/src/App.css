@@ -769,3 +769,30 @@ main,
   .search { width: clamp(180px, 30vw, 260px); min-width: 0; flex: 0 1 260px; }
   .header-tools { flex: 0 0 auto; }
 }
+
+/* Church identity is prominent; Living Bells remains a compact platform signature. */
+.church-brand{align-items:flex-start;gap:11px;padding-bottom:28px;min-width:0}
+.church-logo{width:42px;height:42px;flex:0 0 42px;border-radius:12px;background:#f3efff;color:#7047c6;display:grid;place-items:center;overflow:hidden;font-size:22px;font-weight:800}
+.church-logo img{width:100%;height:100%;object-fit:cover;display:block}
+.church-brand-copy{min-width:0;flex:1}
+.church-brand-copy>b,.mobile-brand-copy>b{display:block;font-size:14px;line-height:1.35;overflow-wrap:anywhere}
+.church-brand-copy>small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.platform-brand{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:10px;margin-top:7px}
+.platform-brand-icon{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:5px;background:var(--p);color:#fff;font-size:9px;font-weight:800;flex:0 0 auto}
+.mobile-brand{gap:8px;min-width:0}
+.mobile-church-logo{width:32px;height:32px;flex-basis:32px;border-radius:9px;font-size:17px}
+.mobile-brand-copy{min-width:0;max-width:44vw}
+.mobile-brand-copy>b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mobile-brand-copy>small{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:9px;margin-top:2px}
+.church-settings-preview,.church-logo-upload-preview{display:flex;align-items:center;gap:13px;margin:18px 0}
+.settings-church-logo{width:54px;height:54px;flex-basis:54px}
+.church-settings-preview>b,.church-settings-preview div>b,.church-logo-upload-preview b{display:block}
+.church-settings-preview small,.church-logo-upload-preview small{display:block;color:var(--muted);font-size:11px;margin-top:5px}
+.church-settings-preview small{display:flex;align-items:center;gap:5px}
+.upload-church-logo{width:58px;height:58px;flex-basis:58px}
+.platform-brand-note{display:flex;align-items:center;gap:10px;padding:11px 12px;margin:14px 0;border:1px solid var(--border);border-radius:12px}
+.platform-brand-note>b,.platform-brand-note span>b{display:block;font-size:12px}
+.platform-brand-note small{display:block;color:var(--muted);font-size:10px;margin-top:3px}
+.church-settings-card{min-width:0}
+.form-error{color:#b42318;font-size:12px}
+@media(max-width:700px){.church-brand{padding-bottom:20px}.church-logo{width:36px;height:36px;flex-basis:36px}.church-brand-copy>b{font-size:13px}.mobile-brand-copy{max-width:39vw}}
