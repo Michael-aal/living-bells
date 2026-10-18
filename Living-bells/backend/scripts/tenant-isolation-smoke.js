@@ -4,6 +4,7 @@ import { prisma, tenantContext } from '../src/db.js'
 
 const runAs = (churchId, callback) => tenantContext.run({ churchId, role: 'ADMIN' }, async () => await callback())
 const suffix = randomUUID()
+const platformSettingKey = 'TENANT_SMOKE_' + suffix
 let churchA
 let churchB
 let userA
@@ -22,6 +23,11 @@ let reportA
 let reportB
 
 try {
+  const testSetting = await prisma.platformSetting.create({ data: { key: platformSettingKey, value: false } })
+  assert.equal(testSetting.value, false, 'platform settings must persist the manual-approval default value')
+  const updatedSetting = await prisma.platformSetting.update({ where: { key: platformSettingKey }, data: { value: true } })
+  assert.equal(updatedSetting.value, true, 'platform settings must persist an updated approval policy')
+
   churchA = await prisma.church.create({ data: { name: 'Tenant test A ' + suffix } })
   churchB = await prisma.church.create({ data: { name: 'Tenant test B ' + suffix } })
   userA = await prisma.user.create({
@@ -75,7 +81,7 @@ try {
   const unchangedForeignActivity = await prisma.activity.findUnique({ where: { id: activityB.id } })
   assert.equal(unchangedForeignActivity.name, 'B activity', 'cross-tenant update must not alter church B data')
 
-  process.stdout.write('Tenant isolation smoke test passed: list, identifier lookup, update, users, and support tickets.\n')
+  process.stdout.write('Tenant isolation smoke test passed: tenant scoping, forged tenant IDs, users, support tickets, and platform setting persistence.\n')
 } finally {
   const ticketIds = [ticketA?.id, ticketB?.id].filter(Boolean)
   if (ticketIds.length) await prisma.supportTicket.deleteMany({ where: { id: { in: ticketIds } } })
@@ -93,5 +99,6 @@ try {
   if (userIds.length) await prisma.user.deleteMany({ where: { id: { in: userIds } } })
   const churchIds = [churchA?.id, churchB?.id].filter(Boolean)
   if (churchIds.length) await prisma.church.deleteMany({ where: { id: { in: churchIds } } })
+  await prisma.platformSetting.deleteMany({ where: { key: platformSettingKey } })
   await prisma.$disconnect()
 }
