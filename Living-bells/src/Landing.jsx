@@ -28,13 +28,14 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
       const scrollable = document.documentElement.scrollHeight - window.innerHeight
       setScrollProgress(scrollable > 0 ? Math.min(100, (window.scrollY / scrollable) * 100) : 0)
       setShowBackToTop(window.scrollY > 500)
+      if (window.scrollY < 260) setActiveSection('home')
     }
     updateScroll()
     window.addEventListener('scroll', updateScroll, { passive: true })
     window.addEventListener('resize', updateScroll)
     document.addEventListener('keydown', handleEscape)
 
-    const sections = ['home', 'welcome', 'ministries', 'gather']
+    const sections = ['welcome', 'ministries', 'gather']
       .map(id => document.getElementById(id))
       .filter(Boolean)
     let observer
@@ -42,7 +43,7 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
       observer = new IntersectionObserver(entries => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
-            if (entry.target.id) setActiveSection(entry.target.id)
+            if (['welcome', 'ministries', 'gather'].includes(entry.target.id)) setActiveSection(entry.target.id)
             entry.target.classList.add('is-visible')
           }
         })
