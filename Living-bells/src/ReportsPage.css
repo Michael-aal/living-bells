@@ -85,3 +85,24 @@
   table{font-size:10px}
 }
 
+
+
+/* Reports workspace: desktop filters use the available width; table overflow
+   remains local to the table container instead of widening the page. */
+@media (min-width: 1101px) {
+  .reports-page { width: 100%; min-width: 0; }
+  .record-search-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .report-controls { grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr); }
+  .report-controls > .period-summary { grid-column: 1 / -1; }
+  .report-subtable-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .finance-total-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 681px) and (max-width: 1100px) {
+  .reports-page, .report-section, .record-search { min-width: 0; max-width: 100%; }
+  .record-search-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-controls { grid-template-columns: minmax(0, 1fr); }
+  .report-subtable-grid { grid-template-columns: minmax(0, 1fr); }
+  .finance-total-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.record-search-filters > *, .report-controls > *, .report-subtable-grid > * { min-width: 0; }
+.report-table, .report-mini-table { max-width: 100%; min-width: 0; }
