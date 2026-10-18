@@ -570,7 +570,7 @@ function App() {
   </div>
 }
 
-function Dashboard({ user, reportingContext, attendance, expenses, finances, activities, weeklyReports, money, go, isAdmin }) {
+function Dashboard({ user, reportingContext, attendance, finances, activities, weeklyReports, money, go, isAdmin }) {
   const [duration, setDuration] = useState('weekly')
   const todayValue = reportingContext?.date || new Date().toISOString().slice(0, 10)
   const today = new Date(todayValue + 'T12:00:00Z').toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
