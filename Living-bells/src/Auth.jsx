@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from './api'
 import './auth.css'
 
-export default function Auth({ onAuthenticated, onBack, initialMode = 'login' }) {
+export default function Auth({ onAuthenticated, onBack, initialMode = 'login', theme = 'light', onToggleTheme = () => {} }) {
   const activationTokenFromUrl = new URLSearchParams(window.location.hash.slice(1)).get('churchActivation') || ''
   const [mode, setMode] = useState(activationTokenFromUrl ? 'activate' : initialMode)
   const [application, setApplication] = useState({ churchName: '', denomination: '', address: '', applicantName: '', applicantEmail: '', phone: '' })
