@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from './api'
 import './DevPasswordSetup.css'
 
-export default function DevPasswordSetup({ user, onCompleted, onLogout, theme = 'light', onToggleTheme = () => {} }) {
+export default function DevPasswordSetup({ user, onCompleted, onLogout }) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [saving, setSaving] = useState(false)
@@ -33,7 +33,7 @@ export default function DevPasswordSetup({ user, onCompleted, onLogout, theme = 
     onCompleted({ ...user, mustChangePassword: false })
   }
 
-  if (recoveryKey) return <main className="dev-setup-shell"><button type="button" className="theme-toggle dev-setup-theme-toggle" onClick={onToggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span></button>
+  if (recoveryKey) return <main className="dev-setup-shell">
     <section className="dev-setup-card recovery-card">
       <div className="dev-setup-logo">L</div>
       <span className="dev-setup-eyebrow">Security key generated</span>
