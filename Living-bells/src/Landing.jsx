@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import './landing.css'
 import './landing-focus.css'
+import './landing-light-refinement.css'
 
 const features = [
   { icon: 'fa-regular fa-calendar-check', number: '01', title: 'Attendance', text: 'Keep Sunday services and attendance records organised in one dependable place.' },
@@ -9,7 +10,7 @@ const features = [
   { icon: 'fa-solid fa-people-group', number: '04', title: 'People & staff', text: 'Give church teams the access they need, with roles that keep responsibilities clear.' },
 ]
 
-export default function Landing({ onRegister, theme = 'light', onToggleTheme = () => {} }) {
+export default function Landing({ onRegister }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('platform')
   const [scrollProgress, setScrollProgress] = useState(0)
@@ -63,7 +64,7 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
     <header className="lb-nav lb-platform-nav">
       <a className="lb-brand lb-nav-brand" href="#platform" aria-label="Living Bells platform home">
         <span className="lb-brand-mark"><i className="fa-solid fa-bell" aria-hidden="true"></i></span>
-        <span><strong>Living Bells™</strong><small>Church management platform</small></span>
+        <span><strong>Church workspace</strong><small>Management platform</small></span>
       </a>
       <nav className={'lb-nav-links ' + (mobileMenuOpen ? 'is-open' : '')} id="lb-mobile-navigation" aria-label="Main navigation">
         <a className={activeSection === 'platform' ? 'is-active' : ''} href="#platform" onClick={closeMobileMenu}>Overview</a>
@@ -71,7 +72,6 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
         <a className={activeSection === 'how-it-works' ? 'is-active' : ''} href="#how-it-works" onClick={closeMobileMenu}>How it works</a>
       </nav>
       <div className="lb-nav-actions">
-        <button type="button" className="theme-toggle landing-theme-toggle" onClick={onToggleTheme} aria-label={'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' mode'} title={'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' mode'}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light' : 'Dark'}</span></button>
         <button type="button" className="lb-mobile-menu-toggle" onClick={() => setMobileMenuOpen(value => !value)} aria-expanded={mobileMenuOpen} aria-controls="lb-mobile-navigation" aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}><span></span><span></span><span></span></button>
         <button type="button" className="lb-nav-cta" onClick={() => { closeMobileMenu(); onRegister() }}><i className="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i><span>Register your church</span></button>
       </div>
@@ -138,7 +138,7 @@ export default function Landing({ onRegister, theme = 'light', onToggleTheme = (
     <footer className="lb-platform-footer">
       <span className="lb-footer-mark"><i className="fa-solid fa-bell" aria-hidden="true"></i></span>
       <span className="lb-footer-description"><b>Made for church teams.</b><small>Organise the details. Make more room for ministry.</small></span>
-      <span className="lb-platform-footer-copy">© {new Date().getFullYear()} Living Bells</span>
+      <span className="lb-platform-footer-copy">© {new Date().getFullYear()} Living Bells™</span>
     </footer>
     <button type="button" className={'lb-back-to-top ' + (showBackToTop ? 'is-visible' : '')} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Back to top" tabIndex={showBackToTop ? 0 : -1}>↑<span>Top</span></button>
   </div>

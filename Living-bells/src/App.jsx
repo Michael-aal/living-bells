@@ -4,6 +4,7 @@ import ActivitiesPage from './ActivitiesPage'
 import ReportsPage from './ReportsPage'
 import ReportingCalendar from './ReportingCalendar'
 import './App.css'
+import './appearance-settings.css'
 import DevDashboard from './DevDashboard'
 import SupportPage from './SupportPage'
 import DevPasswordSetup from './DevPasswordSetup'
@@ -276,10 +277,10 @@ function App() {
   }, [user, selectedStaff])
 
   if (!user) return showAuth
-    ? <Auth theme={theme} onToggleTheme={toggleTheme} initialMode={authMode} onAuthenticated={setUser} onBack={() => { setShowAuth(false); setAuthMode('login') }} />
-    : <Landing theme={theme} onToggleTheme={toggleTheme} onSignIn={() => { setAuthMode('login'); setShowAuth(true) }} onRegister={() => { setAuthMode('apply'); setShowAuth(true) }} />
-  if (user.role === 'DEV' && user.mustChangePassword) return <DevPasswordSetup user={user} theme={theme} onToggleTheme={toggleTheme} onCompleted={setUser} onLogout={logout} />
-  if (user.role === 'DEV') return <DevDashboard user={user} theme={theme} onToggleTheme={toggleTheme} onLogout={logout} />
+    ? <Auth initialMode={authMode} onAuthenticated={setUser} onBack={() => { setShowAuth(false); setAuthMode('login') }} />
+    : <Landing onSignIn={() => { setAuthMode('login'); setShowAuth(true) }} onRegister={() => { setAuthMode('apply'); setShowAuth(true) }} />
+  if (user.role === 'DEV' && user.mustChangePassword) return <DevPasswordSetup user={user} onCompleted={setUser} onLogout={logout} />
+  if (user.role === 'DEV') return <DevDashboard user={user} onLogout={logout} />
 
   function logout() {
     localStorage.removeItem('living_bells_token')
@@ -550,7 +551,7 @@ function App() {
     </aside>
 
     <main>
-      <header><div className="mobile-brand"><div className="church-logo mobile-church-logo">{churchProfile?.logoDataUrl ? <img src={churchProfile.logoDataUrl} alt="Church logo" /> : <span>✦</span>}</div><div className="mobile-brand-copy"><b>{churchProfile?.name || 'Church workspace'}</b><small>{dashboardLabel}</small></div></div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><div className="header-tools"><button type="button" className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span></button><div className="profile-menu"><button className="avatar" title="Open profile menu" onClick={() => setModal(modal === 'profile-menu' ? null : 'profile-menu')} aria-haspopup="menu" aria-expanded={modal === 'profile-menu'}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button>{modal === 'profile-menu' && <div className="profile-dropdown" role="menu"><div className="profile-summary"><strong>{user.name || 'User'}</strong><span>{user.email}</span><small>{user.role === 'ADMIN' ? 'Administrator' : 'Staff'}</small></div><button type="button" role="menuitem" onClick={() => setModal('profile')}>Edit profile</button><button type="button" role="menuitem" onClick={() => { setModal(null); setPage('settings') }}>Settings</button><button type="button" role="menuitem" className="profile-logout" onClick={() => { setModal(null); logout() }}>Log out</button></div>}</div></div></header>
+      <header><div className="mobile-brand"><div className="church-logo mobile-church-logo">{churchProfile?.logoDataUrl ? <img src={churchProfile.logoDataUrl} alt="Church logo" /> : <span>✦</span>}</div><div className="mobile-brand-copy"><b>{churchProfile?.name || 'Church workspace'}</b><small>{dashboardLabel}</small></div></div><label className="search">⌕ <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search records..." aria-label="Search records" /></label><div className="header-tools"><div className="profile-menu"><button className="avatar" title="Open profile menu" onClick={() => setModal(modal === 'profile-menu' ? null : 'profile-menu')} aria-haspopup="menu" aria-expanded={modal === 'profile-menu'}>{user.name?.slice(0, 2).toUpperCase() || 'ST'}</button>{modal === 'profile-menu' && <div className="profile-dropdown" role="menu"><div className="profile-summary"><strong>{user.name || 'User'}</strong><span>{user.email}</span><small>{user.role === 'ADMIN' ? 'Administrator' : 'Staff'}</small></div><button type="button" role="menuitem" onClick={() => setModal('profile')}>Edit profile</button><button type="button" role="menuitem" onClick={() => { setModal(null); setPage('settings') }}>Settings</button><button type="button" role="menuitem" className="profile-logout" onClick={() => { setModal(null); logout() }}>Log out</button></div>}</div></div></header>
       <section className="content">
         <div className="heading">
           <div><span className="eyebrow">{dashboardLabel}</span><h1>{page === 'dashboard' ? (isAdmin ? 'Admin dashboard' : 'Staff dashboard') : title(page)}</h1><p>{page === 'dashboard' ? (isAdmin ? 'Manage church operations, finances, activities and reports.' : 'Record and review the church activities assigned to your team.') : subtitle(page)}</p></div>
@@ -565,7 +566,7 @@ function App() {
         {!loading && page === 'staff' && isAdmin && <StaffPage staff={staff} invitations={staffInvitations} staffCount={staffCount} selectedStaff={selectedStaff} setSelectedStaff={setSelectedStaff} reviews={reviews} attendance={attendance} expenses={expenses} activities={activities} finances={finances} weeklyReports={weeklyReports} onReview={() => setModal('review')} onInvite={() => setModal('invite-staff')} onPrint={() => printReport(selectedStaff ? selectedStaff.name + ' Sunday reviews' : 'Staff report')} onToggleStatus={toggleStaffStatus} onDelete={deleteStaff} />}
         {!loading && page === 'calendar' && <ReportingCalendar user={user} current={reportingContext} />}
         {!loading && page === 'support' && isAdmin && <SupportPage />}
-        {!loading && page === 'settings' && <SettingsPage user={user} churchProfile={churchProfile} onEditProfile={() => setModal('profile')} onEditChurch={() => setModal('church-profile')} onLogout={logout} />}
+        {!loading && page === 'settings' && <SettingsPage user={user} theme={theme} onToggleTheme={toggleTheme} churchProfile={churchProfile} onEditProfile={() => setModal('profile')} onEditChurch={() => setModal('church-profile')} onLogout={logout} />}
         {!loading && page === 'reports' && <ReportsPage refreshKey={reportRefresh} user={user} onEdit={openReportEditor} onEditFinance={openFinanceEditor} onEditActivity={openActivityEditor} onEditAttendance={openAttendanceEditor} onOpenRecord={openRecordFromSearch} />}
         
       </section>
@@ -753,8 +754,35 @@ function title(p) { return ({ attendance: 'Attendance', finance: 'Finance', acti
 function subtitle(p) { return ({ dashboard: 'A clear view of what is happening across your church.', attendance: 'Record and review service attendance.', finance: 'Track money in, money out and the net result.', activities: 'Complete the numerical and spiritual sections of the official weekly report.', reports: 'Turn records into useful summaries.', staff: 'Review and support every staff member.', support: 'Contact the Living Bells developer team and track issues.', })[p] }
 
 
-function SettingsPage({ user, churchProfile, onEditProfile, onEditChurch, onLogout }) {
+function SettingsPage({ user, theme, onToggleTheme, churchProfile, onEditProfile, onEditChurch, onLogout }) {
   return <div className="settings-layout">
+    <section className="card full appearance-settings-card">
+      <div className="card-head">
+        <div>
+          <span className="eyebrow">Appearance</span>
+          <h2>Theme preference</h2>
+          <p className="card-subtitle">Choose the look that feels right. Your choice is saved on this device and used across Living Bells.</p>
+        </div>
+      </div>
+      <div className="appearance-choice-row">
+        <div className="appearance-choice-copy">
+          <span className="appearance-preview-mark" aria-hidden="true">{theme === 'dark' ? '☾' : '☼'}</span>
+          <div><b>{theme === 'dark' ? 'Dark appearance' : 'Light appearance'}</b><small>{theme === 'dark' ? 'Deep charcoal surfaces with soft purple accents.' : 'Warm, clear surfaces with elegant purple accents.'}</small></div>
+        </div>
+        <button type="button" className="appearance-switch" role="switch" aria-checked={theme === 'dark'} onClick={onToggleTheme}>
+          <span className="appearance-switch-track" aria-hidden="true"><span /></span>
+          <span>{theme === 'dark' ? 'Switch to light' : 'Switch to dark'}</span>
+        </button>
+      </div>
+      <div className="appearance-options" aria-label="Available themes">
+        <button type="button" className={theme === 'light' ? 'appearance-option is-selected' : 'appearance-option'} aria-pressed={theme === 'light'} onClick={() => { if (theme !== 'light') onToggleTheme() }}>
+          <span className="appearance-swatch appearance-swatch-light" aria-hidden="true"><i /></span><span><b>Light</b><small>Recommended default</small></span>{theme === 'light' && <span aria-hidden="true">✓</span>}
+        </button>
+        <button type="button" className={theme === 'dark' ? 'appearance-option is-selected' : 'appearance-option'} aria-pressed={theme === 'dark'} onClick={() => { if (theme !== 'dark') onToggleTheme() }}>
+          <span className="appearance-swatch appearance-swatch-dark" aria-hidden="true"><i /></span><span><b>Dark</b><small>Low-light workspace</small></span>{theme === 'dark' && <span aria-hidden="true">✓</span>}
+        </button>
+      </div>
+    </section>
     {user.role === 'ADMIN' && <section className="card full church-settings-card">
       <div className="card-head"><div><span className="eyebrow">Church identity</span><h2>{churchProfile?.name || 'Church profile'}</h2><p className="card-subtitle">Your church name and logo appear across your workspace. Living Bells remains the platform brand.</p></div></div>
       <div className="church-settings-preview"><div className="church-logo settings-church-logo">{churchProfile?.logoDataUrl ? <img src={churchProfile.logoDataUrl} alt="Church logo" /> : <span>✦</span>}</div><div><b>{churchProfile?.name || 'Church workspace'}</b><small><span className="platform-brand-icon">L</span> Living Bells</small></div></div>
