@@ -34,7 +34,7 @@ function Stat({ label, value, hint }) {
   </article>
 }
 
-export default function DevDashboard({ user, onLogout }) {
+export default function DevDashboard({ user, onLogout, theme = 'light', onToggleTheme = () => {} }) {
   const [tab, setTab] = useState('overview')
   const [overview, setOverview] = useState(null)
   const [invitations, setInvitations] = useState([])
@@ -257,7 +257,7 @@ export default function DevDashboard({ user, onLogout }) {
             <strong>Developer Console</strong>
           </div>
         </div>
-        <div className="dev-account">
+        <div className="dev-account"><button type="button" className="theme-toggle" onClick={onToggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span></button>
           <div className="dev-account-copy">
             <strong>{user.name || 'Developer'}</strong>
             <span>{user.email}</span>
